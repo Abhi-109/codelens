@@ -1,122 +1,373 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect, useMemo, useRef, useState } from "react";
+import { onEngineStatus, runTrace } from "./tracer/client";
+import "./App.css";
 
-function App() {
-  const [count, setCount] = useState(0)
+const EXAMPLES = [
+  {
+    name: "Variables",
+    code: 'name = "Asha"\nage = 12\nheight = 1.52\nis_student = True\nnothing = None\nprint(name, age)\n',
+  },
+  {
+    name: "if / else",
+    code: 'marks = 68\nif marks >= 90:\n    grade = "A"\nelif marks >= 60:\n    grade = "B"\nelse:\n    grade = "C"\nprint(grade)\n',
+  },
+  {
+    name: "for loop",
+    code: "total = 0\nfor n in range(1, 6):\n    total = total + n\nprint(total)\n",
+  },
+  {
+    name: "Recursion",
+    code: "def fact(n):\n    if n <= 1:\n        return 1\n    return n * fact(n - 1)\n\n\nprint(fact(5))\n",
+  },
+  {
+    name: "List",
+    code: 'fruits = ["apple", "banana"]\nfruits.append("cherry")\nprint(fruits[2])\n',
+  },
+  {
+    name: "Class",
+    code:
+      "class Dog:\n    def __init__(self, name):\n        self.name = name\n        self.tricks = []\n\n    def learn(self, trick):\n        self.tricks.append(trick)\n\n\nrex = Dog('Rex')\nrex.learn('sit')\nprint(rex.tricks)\n",
+  },
+];
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+// Output and input events don't carry the stack; use the last event that did.
+function stateAt(trace, index) {
+  for (let i = index; i >= 0; i -= 1) {
+    if (trace[i].frames) return trace[i];
+  }
+  return null;
 }
 
-export default App
+function formatValue(value, heap) {
+  if (!value) return "?";
+  switch (value.type) {
+    case "none":
+      return "None";
+    case "bool":
+      return value.value ? "True" : "False";
+    case "int":
+    case "float":
+      return String(value.value);
+    case "str":
+      return JSON.stringify(value.value);
+    case "ref": {
+      const object = heap?.[value.id];
+      if (!object) return value.id;
+      const inner = formatValue(object, heap);
+      return `${inner} (${value.id})`;
+    }
+    case "function":
+      return `${value.name}()`;
+    case "class":
+      return `class ${value.name}`;
+    case "module":
+      return value.name;
+    default:
+      return value.repr ?? value.class ?? "?";
+  }
+}
+
+function describeObject(object, heap) {
+  if (!object) return "?";
+  if (object.type === "list" || object.type === "tuple" || object.type === "set") {
+    return `[${object.items.map((item) => formatValue(item, heap)).join(", ")}]`;
+  }
+  if (object.type === "dict") {
+    const body = object.entries
+      .map((entry) => `${formatValue(entry.key, heap)}: ${formatValue(entry.value, heap)}`)
+      .join(", ");
+    return `{${body}}`;
+  }
+  if (object.type === "object") {
+    const body = object.attrs
+      .map((attr) => `${attr.name}=${formatValue(attr.value, heap)}`)
+      .join(", ");
+    return `${object.class}(${body})`;
+  }
+  return object.repr ?? "?";
+}
+
+function VariableBoxes({ variables, heap, changed }) {
+  const names = Object.keys(variables ?? {});
+  if (names.length === 0) return <p className="empty">No variables yet</p>;
+  return (
+    <div className="boxes">
+      {names.map((name) => {
+        const value = variables[name];
+        const isRef = value.type === "ref";
+        const object = isRef ? heap?.[value.id] : null;
+        return (
+          <div key={name} className={`box${changed?.has(name) ? " changed" : ""}`}>
+            <div className="box-name">{name}</div>
+            <div className="box-value">
+              {isRef ? describeObject(object, heap) : formatValue(value, heap)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function App() {
+  const [source, setSource] = useState(EXAMPLES[3].code);
+  const [result, setResult] = useState(null);
+  const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [engine, setEngine] = useState("idle");
+  const [running, setRunning] = useState(false);
+  const [showJson, setShowJson] = useState(false);
+  const timer = useRef(null);
+
+  useEffect(() => onEngineStatus(setEngine), []);
+
+  const trace = useMemo(() => result?.trace ?? [], [result]);
+  const current = trace[index] ?? null;
+  const state = useMemo(() => stateAt(trace, index), [trace, index]);
+  const previous = useMemo(() => stateAt(trace, Math.max(index - 1, 0)), [trace, index]);
+
+  const changed = useMemo(() => {
+    if (!state || !previous || state === previous) return null;
+    const now = state.frames?.[state.frames.length - 1]?.variables ?? {};
+    const before = previous.frames?.[previous.frames.length - 1]?.variables ?? {};
+    const names = new Set();
+    for (const name of Object.keys(now)) {
+      if (JSON.stringify(now[name]) !== JSON.stringify(before[name])) names.add(name);
+    }
+    return names;
+  }, [state, previous]);
+
+  const output = useMemo(
+    () =>
+      trace
+        .slice(0, index + 1)
+        .filter((event) => event.event === "output")
+        .map((event) => event.text)
+        .join(""),
+    [trace, index],
+  );
+
+  async function handleRun() {
+    setPlaying(false);
+    setRunning(true);
+    try {
+      const r = await runTrace(source);
+      setResult(r);
+      setIndex(0);
+    } catch (error) {
+      setResult({
+        status: "engine_error",
+        trace: [],
+        output: "",
+        error: { type: "EngineError", message: error.message },
+      });
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!playing || trace.length === 0) {
+      clearInterval(timer.current);
+      return undefined;
+    }
+    timer.current = setInterval(() => {
+      setIndex((i) => {
+        if (i >= trace.length - 1) {
+          setPlaying(false);
+          return i;
+        }
+        return i + 1;
+      });
+    }, 800 / speed);
+    return () => clearInterval(timer.current);
+  }, [playing, speed, trace.length]);
+
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (event.target.tagName === "TEXTAREA") return;
+      if (event.key === "ArrowRight") {
+        setIndex((i) => Math.min(i + 1, trace.length - 1));
+      } else if (event.key === "ArrowLeft") {
+        setIndex((i) => Math.max(i - 1, 0));
+      } else if (event.key === " ") {
+        event.preventDefault();
+        setPlaying((p) => !p);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [trace.length]);
+
+  const frames = state?.frames ?? [];
+  const line = current?.line ?? state?.line ?? null;
+
+  return (
+    <div className="app">
+      <header>
+        <h1>CodeLens</h1>
+        <span className={`engine engine-${engine}`}>
+          Python engine: {engine === "ready" ? "ready" : engine}
+        </span>
+      </header>
+
+      <div className="columns">
+        <section className="panel editor">
+          <div className="panel-title">
+            Your Python code
+            <select
+              value=""
+              onChange={(event) => {
+                const example = EXAMPLES.find((e) => e.name === event.target.value);
+                if (example) setSource(example.code);
+              }}
+            >
+              <option value="">Load an example…</option>
+              {EXAMPLES.map((example) => (
+                <option key={example.name} value={example.name}>
+                  {example.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <textarea
+            value={source}
+            onChange={(event) => setSource(event.target.value)}
+            spellCheck="false"
+            rows={12}
+          />
+          <div className="actions">
+            <button type="button" className="run" onClick={handleRun} disabled={running}>
+              {running ? "Starting…" : "▶ Run"}
+            </button>
+            <label>
+              <input
+                type="checkbox"
+                checked={showJson}
+                onChange={(event) => setShowJson(event.target.checked)}
+              />
+              Show raw trace JSON
+            </label>
+          </div>
+        </section>
+
+        <section className="panel viewer">
+          <div className="panel-title">
+            {result ? (
+              <>
+                Step {index + 1} of {trace.length}
+                <span className={`status status-${result.status}`}>{result.status}</span>
+              </>
+            ) : (
+              "Run your code to see it step by step"
+            )}
+          </div>
+
+          <div className="code-view">
+            {source.split("\n").map((text, i) => (
+              <div
+                key={i}
+                className={`code-line${line === i + 1 ? " current" : ""}`}
+              >
+                <span className="ln">{i + 1}</span>
+                <span>{text || " "}</span>
+              </div>
+            ))}
+          </div>
+
+          {current && (
+            <div className={`event event-${current.event}`}>
+              <strong>{current.event}</strong>
+              {current.function ? ` in ${current.function}()` : ""}
+              {current.exception ? ` — ${current.exception.type}: ${current.exception.message}` : ""}
+              {current.return_value ? ` → ${formatValue(current.return_value, current.heap)}` : ""}
+            </div>
+          )}
+
+          <div className="controls">
+            <button type="button" onClick={() => setIndex(0)} disabled={!trace.length}>
+              ⏮
+            </button>
+            <button
+              type="button"
+              onClick={() => setIndex((i) => Math.max(i - 1, 0))}
+              disabled={!trace.length}
+            >
+              ◀ Back
+            </button>
+            <button
+              type="button"
+              onClick={() => setPlaying((p) => !p)}
+              disabled={!trace.length}
+            >
+              {playing ? "⏸ Pause" : "▶ Play"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIndex((i) => Math.min(i + 1, trace.length - 1))}
+              disabled={!trace.length}
+            >
+              Next ▶
+            </button>
+            <button type="button" onClick={() => setIndex(trace.length - 1)} disabled={!trace.length}>
+              ⏭
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={Math.max(trace.length - 1, 0)}
+              value={index}
+              onChange={(event) => setIndex(Number(event.target.value))}
+              disabled={!trace.length}
+            />
+            <select value={speed} onChange={(event) => setSpeed(Number(event.target.value))}>
+              <option value={0.5}>0.5×</option>
+              <option value={1}>1×</option>
+              <option value={2}>2×</option>
+              <option value={4}>4×</option>
+            </select>
+          </div>
+
+          <div className="split">
+            <div>
+              <h3>Variables</h3>
+              <VariableBoxes
+                variables={state?.frames?.[frames.length - 1]?.variables}
+                heap={state?.heap}
+                changed={changed}
+              />
+            </div>
+            <div>
+              <h3>Call stack</h3>
+              {frames.length === 0 ? (
+                <p className="empty">Empty</p>
+              ) : (
+                <div className="stack">
+                  {[...frames].reverse().map((frame) => (
+                    <div key={frame.frame_id} className="frame">
+                      <span className="frame-name">{frame.function}()</span>
+                      <span className="frame-line">line {frame.line}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <h3>Output</h3>
+          <pre className="output">{output || <span className="empty">(nothing printed yet)</span>}</pre>
+
+          {result?.error && (
+            <div className="error">
+              <strong>{result.error.type}</strong> on line {result.error.line ?? "?"}:{" "}
+              {result.error.message}
+            </div>
+          )}
+
+          {showJson && <pre className="json">{JSON.stringify(result, null, 2)}</pre>}
+        </section>
+      </div>
+    </div>
+  );
+}
