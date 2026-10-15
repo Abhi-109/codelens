@@ -32,8 +32,8 @@ const EXAMPLES = [
 
 // Output and input events don't carry the stack; use the last event that did.
 function stateAt(trace, index) {
-  for (let i = index; i >= 0; i -= 1) {
-    if (trace[i].frames) return trace[i];
+  for (let i = Math.min(index, trace.length - 1); i >= 0; i -= 1) {
+    if (trace[i]?.frames) return trace[i];
   }
   return null;
 }
