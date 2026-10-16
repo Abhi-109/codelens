@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildFlowchart, onEngineStatus, runTrace } from "./tracer/client";
 import { CONCEPTS, explainStep, isNewConcept } from "./tracer/explain";
 import { countFor, flowFor, pathToLine, runsByLine } from "./tracer/flow";
-import { describeObject, formatValue } from "./tracer/values";
+import { namesById, objectChanges, slotEntries } from "./tracer/objects";
+import { formatValue } from "./tracer/values";
 import "./App.css";
 
 const EXAMPLES = [
@@ -49,17 +50,80 @@ function VariableBoxes({ variables, heap, changed }) {
       {names.map((name) => {
         const value = variables[name];
         const isRef = value.type === "ref";
-        const object = isRef ? heap?.[value.id] : null;
         return (
           <div key={name} className={`box${changed?.has(name) ? " changed" : ""}`}>
             <div className="box-name">{name}</div>
             <div className="box-value">
-              {isRef ? describeObject(object, heap) : formatValue(value, heap)}
+              {isRef ? (
+                <span className="ref-pointer">
+                  → {value.id}
+                </span>
+              ) : (
+                formatValue(value, heap)
+              )}
             </div>
           </div>
         );
       })}
     </div>
+  );
+}
+
+function SlotLabel({ label, heap }) {
+  if (label === null || label === undefined) return null;
+  const text = typeof label === "object" ? formatValue(label, heap) : String(label);
+  return <div className="slot-label">{text}</div>;
+}
+
+function SlotValue({ value, heap }) {
+  if (value?.type === "ref") {
+    return <span className="ref-pointer">→ {value.id}</span>;
+  }
+  return formatValue(value, heap);
+}
+
+function HeapObjects({ heap, names, changes }) {
+  const ids = Object.keys(heap ?? {});
+  if (ids.length === 0) return null;
+  return (
+    <>
+      <h3>Objects</h3>
+      <div className="objects">
+        {ids.map((id) => {
+          const object = heap[id];
+          const changed = changes?.get(id);
+          const labels = names.get(id) ?? [];
+          const slots = slotEntries(object);
+          const typeLabel = object.class ?? object.type;
+          return (
+            <div key={id} className={`object-card${changed ? " changed" : ""}`}>
+              <div className="object-head">
+                <span className="object-names">{labels.length > 0 ? labels.join(", ") : id}</span>
+                <span className="ref-pointer">→ {id}</span>
+                <span className="object-type">{typeLabel}</span>
+              </div>
+              <div className="slots">
+                {slots.map((entry) => (
+                  <div
+                    key={entry.key}
+                    className={`slot${changed?.has(entry.key) ? " changed" : ""}`}
+                  >
+                    <SlotLabel label={entry.label} heap={heap} />
+                    <div className="slot-value">
+                      <SlotValue value={entry.value} heap={heap} />
+                    </div>
+                  </div>
+                ))}
+                {object.more ? (
+                  <div className="slot slot-more">+{object.more} more</div>
+                ) : null}
+                {slots.length === 0 ? <div className="slot slot-empty">empty</div> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -183,6 +247,12 @@ export default function App() {
     }
     return names;
   }, [state, previous]);
+
+  const heapNames = useMemo(() => namesById(state?.frames, state?.heap), [state]);
+  const objectChanged = useMemo(
+    () => objectChanges(previous?.heap, state?.heap),
+    [state, previous],
+  );
 
   const output = useMemo(
     () =>
@@ -395,6 +465,7 @@ export default function App() {
                 heap={state?.heap}
                 changed={changed}
               />
+              <HeapObjects heap={state?.heap} names={heapNames} changes={objectChanged} />
             </div>
             <div>
               <h3>Call stack</h3>
