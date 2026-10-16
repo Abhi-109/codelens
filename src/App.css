@@ -215,6 +215,82 @@ button:disabled {
   border-color: var(--accent-border);
 }
 
+.explain {
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: var(--accent-bg);
+}
+
+.explain-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.explain-text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-h);
+  margin: 0;
+}
+
+.concept-card {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--accent-border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 13px;
+  animation: flash 1.2s ease-out;
+}
+
+.concept-card strong {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.concept-card span {
+  color: var(--text-h);
+}
+
+.glossary {
+  font-size: 13px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text-h);
+}
+
+.glossary summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.glossary-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 8px;
+}
+
+.glossary-item strong {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.glossary-item span {
+  color: var(--text);
+}
+
 .controls {
   display: flex;
   align-items: center;

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { onEngineStatus, runTrace } from "./tracer/client";
+import { CONCEPTS, explainStep, isNewConcept } from "./tracer/explain";
+import { describeObject, formatValue } from "./tracer/values";
 import "./App.css";
 
 const EXAMPLES = [
@@ -36,55 +38,6 @@ function stateAt(trace, index) {
     if (trace[i]?.frames) return trace[i];
   }
   return null;
-}
-
-function formatValue(value, heap) {
-  if (!value) return "?";
-  switch (value.type) {
-    case "none":
-      return "None";
-    case "bool":
-      return value.value ? "True" : "False";
-    case "int":
-    case "float":
-      return String(value.value);
-    case "str":
-      return JSON.stringify(value.value);
-    case "ref": {
-      const object = heap?.[value.id];
-      if (!object) return value.id;
-      const inner = formatValue(object, heap);
-      return `${inner} (${value.id})`;
-    }
-    case "function":
-      return `${value.name}()`;
-    case "class":
-      return `class ${value.name}`;
-    case "module":
-      return value.name;
-    default:
-      return value.repr ?? value.class ?? "?";
-  }
-}
-
-function describeObject(object, heap) {
-  if (!object) return "?";
-  if (object.type === "list" || object.type === "tuple" || object.type === "set") {
-    return `[${object.items.map((item) => formatValue(item, heap)).join(", ")}]`;
-  }
-  if (object.type === "dict") {
-    const body = object.entries
-      .map((entry) => `${formatValue(entry.key, heap)}: ${formatValue(entry.value, heap)}`)
-      .join(", ");
-    return `{${body}}`;
-  }
-  if (object.type === "object") {
-    const body = object.attrs
-      .map((attr) => `${attr.name}=${formatValue(attr.value, heap)}`)
-      .join(", ");
-    return `${object.class}(${body})`;
-  }
-  return object.repr ?? "?";
 }
 
 function VariableBoxes({ variables, heap, changed }) {
@@ -126,6 +79,12 @@ export default function App() {
   const current = trace[index] ?? null;
   const state = useMemo(() => stateAt(trace, index), [trace, index]);
   const previous = useMemo(() => stateAt(trace, Math.max(index - 1, 0)), [trace, index]);
+  const explanation = useMemo(() => explainStep(trace, index, source), [trace, index, source]);
+  const concept = explanation.concept ? CONCEPTS[explanation.concept] : null;
+  const showConcept = useMemo(
+    () => isNewConcept(trace, index, source, explanation.concept),
+    [trace, index, source, explanation.concept],
+  );
 
   const changed = useMemo(() => {
     if (!state || !previous || state === previous) return null;
@@ -285,6 +244,17 @@ export default function App() {
             </div>
           )}
 
+          <div className="explain">
+            <div className="explain-label">What happens here</div>
+            <p className="explain-text">{explanation.text}</p>
+            {showConcept && concept && (
+              <div className="concept-card">
+                <strong>{concept.term}</strong>
+                <span>{concept.blurb}</span>
+              </div>
+            )}
+          </div>
+
           <div className="controls">
             <button type="button" onClick={() => setIndex(0)} disabled={!trace.length}>
               ⏮
@@ -364,6 +334,16 @@ export default function App() {
               {result.error.message}
             </div>
           )}
+
+          <details className="glossary">
+            <summary>Glossary</summary>
+            {Object.entries(CONCEPTS).map(([id, entry]) => (
+              <div key={id} className="glossary-item">
+                <strong>{entry.term}</strong>
+                <span>{entry.blurb}</span>
+              </div>
+            ))}
+          </details>
 
           {showJson && <pre className="json">{JSON.stringify(result, null, 2)}</pre>}
         </section>

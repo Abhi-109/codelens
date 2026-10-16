@@ -9,7 +9,9 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test:tracer": "python -m unittest discover -s tracer-poc -p \"test_*.py\"",
-    "test:pyodide": "node scripts/pyodide-check.mjs"
+    "test:explain": "node --test src/tracer/explain.test.mjs",
+    "test:pyodide": "node scripts/pyodide-check.mjs",
+    "check:explain": "node scripts/explain-check.mjs"
   },
   "dependencies": {
     "pyodide": "^314.0.7",
