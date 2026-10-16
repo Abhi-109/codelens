@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { onEngineStatus, runTrace } from "./tracer/client";
+import { buildFlowchart, onEngineStatus, runTrace } from "./tracer/client";
 import { CONCEPTS, explainStep, isNewConcept } from "./tracer/explain";
+import { countFor, flowFor, pathToLine, runsByLine } from "./tracer/flow";
 import { describeObject, formatValue } from "./tracer/values";
 import "./App.css";
 
@@ -62,9 +63,95 @@ function VariableBoxes({ variables, heap, changed }) {
   );
 }
 
+function FlowNode({ node, runs, activeSet }) {
+  const active = activeSet.has(node);
+  const count = countFor(node, runs);
+  const badge = count > 0 ? <span className="flow-count">×{count}</span> : null;
+
+  if (node.kind === "statement") {
+    return (
+      <div className={`flow-node flow-statement${active ? " flow-active" : ""}`}>
+        <code>{node.text}</code>
+        {badge}
+      </div>
+    );
+  }
+
+  if (node.kind === "branch") {
+    return (
+      <div className={`flow-node flow-branch${active ? " flow-active" : ""}`}>
+        {node.arms.map((arm, i) => (
+          <div key={i} className="flow-arm">
+            <div className={`flow-arm-label${arm.test === null ? " flow-else" : ""}`}>
+              {arm.test === null ? "else" : `if ${arm.test}`}
+            </div>
+            <div className="flow-body">
+              {arm.body.length === 0 ? (
+                <p className="empty">(nothing)</p>
+              ) : (
+                arm.body.map((child, j) => (
+                  <FlowNode key={j} node={child} runs={runs} activeSet={activeSet} />
+                ))
+              )}
+            </div>
+          </div>
+        ))}
+        {badge}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flow-node flow-loop${active ? " flow-active" : ""}`}>
+      <div className="flow-loop-header">
+        <span className="flow-loop-arrow">↻</span>
+        <code>{node.header}</code>
+        {badge}
+      </div>
+      <div className="flow-body">
+        {node.body.length === 0 ? (
+          <p className="empty">(nothing)</p>
+        ) : (
+          node.body.map((child, j) => (
+            <FlowNode key={j} node={child} runs={runs} activeSet={activeSet} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Flowchart({ flow, functionName, trace, line }) {
+  const chart = flowFor(flow, functionName);
+  const runs = useMemo(() => runsByLine(trace, functionName), [trace, functionName]);
+  const activeSet = useMemo(
+    () => new Set(pathToLine(chart?.nodes ?? [], line)),
+    [chart, line],
+  );
+
+  if (flow?.error) {
+    return (
+      <p className="empty">
+        The code has a syntax error on line {flow.error.line ?? "?"}, so there is no flowchart yet.
+      </p>
+    );
+  }
+  if (!chart || chart.nodes.length === 0) {
+    return <p className="empty">Nothing to draw yet</p>;
+  }
+  return (
+    <div className="flow">
+      {chart.nodes.map((node, i) => (
+        <FlowNode key={i} node={node} runs={runs} activeSet={activeSet} />
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [source, setSource] = useState(EXAMPLES[3].code);
   const [result, setResult] = useState(null);
+  const [flow, setFlow] = useState(null);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -111,8 +198,9 @@ export default function App() {
     setPlaying(false);
     setRunning(true);
     try {
-      const r = await runTrace(source);
+      const [r, f] = await Promise.all([runTrace(source), buildFlowchart(source)]);
       setResult(r);
+      setFlow(f);
       setIndex(0);
     } catch (error) {
       setResult({
@@ -324,6 +412,19 @@ export default function App() {
               )}
             </div>
           </div>
+
+          <h3>
+            Flowchart
+            {frames.length > 0 && (
+              <span className="flow-of"> — {frames[frames.length - 1].function}()</span>
+            )}
+          </h3>
+          <Flowchart
+            flow={flow}
+            functionName={frames[frames.length - 1]?.function ?? "<module>"}
+            trace={trace}
+            line={line}
+          />
 
           <h3>Output</h3>
           <pre className="output">{output || <span className="empty">(nothing printed yet)</span>}</pre>

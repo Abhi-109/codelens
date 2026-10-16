@@ -47,6 +47,7 @@ Notes and known limits
     * Sets are listed in sorted order so traces are deterministic.
 """
 
+import ast
 import builtins
 import io
 import json
@@ -56,6 +57,7 @@ import types
 from contextlib import redirect_stdout
 
 FORMAT_VERSION = 2
+FLOWCHART_VERSION = 1
 USER_FILE = "<user>"
 
 MAX_ITEMS = 30            # items shown per container
@@ -462,6 +464,145 @@ def run_trace(source, max_steps=1500, max_seconds=5.0, inputs=None):
         builtins.input = original_input
 
     return result()
+
+
+def build_flowchart(source):
+    """Summarises a program's structure for the flowchart view.
+
+    Returns a JSON-friendly tree built with Python's own ast module:
+
+        {"format_version": 1,
+         "functions": {"<module>": {"name": "<module>", "params": [],
+                                    "nodes": [...]},
+                       "fact": {"name": "fact", "params": ["n"], "nodes": [...]}}}
+
+    One entry per function (the module included), so the UI can show the
+    flowchart of whichever function is at the top of the call stack. Each
+    "nodes" list holds, in source order:
+
+        {"kind": "statement", "line", "end_line", "text"}
+        {"kind": "branch", "line", "end_line",
+         "arms": [{"test": "marks >= 90" | None, "body": [nodes]}, ...]}
+        {"kind": "loop", "loop": "for" | "while", "line", "end_line",
+         "header": "for n in range(1, 6)", "body": [nodes]}
+
+    elif chains are flattened into one branch with several arms; the else
+    branch is the last arm with test None. Function definitions appear as a
+    statement at their definition site, and their bodies live under the
+    function's own entry.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        return {
+            "format_version": FLOWCHART_VERSION,
+            "functions": {},
+            "error": {
+                "type": type(exc).__name__,
+                "message": getattr(exc, "msg", None) or _safe_str(exc),
+                "line": getattr(exc, "lineno", None),
+            },
+        }
+
+    functions = {}
+
+    def add_function(name, args, body):
+        params = [a.arg for a in args.args]
+        params += [a.arg for a in args.kwonlyargs]
+        if args.vararg:
+            params.append("*" + args.vararg.arg)
+        if args.kwarg:
+            params.append("**" + args.kwarg.arg)
+        nodes = []
+        functions[name] = {"name": name, "params": params, "nodes": nodes}
+        fill_nodes(body, nodes)
+
+    def fill_nodes(statements, out):
+        for stmt in statements:
+            line = stmt.lineno
+            end_line = getattr(stmt, "end_lineno", None) or line
+
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                params = ", ".join(a.arg for a in stmt.args.args)
+                out.append({
+                    "kind": "statement", "line": line, "end_line": line,
+                    "text": f"define {stmt.name}({params})",
+                })
+                add_function(stmt.name, stmt.args, stmt.body)
+                continue
+
+            if isinstance(stmt, ast.ClassDef):
+                out.append({
+                    "kind": "statement", "line": line, "end_line": line,
+                    "text": f"class {stmt.name}",
+                })
+                for sub in stmt.body:
+                    if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        add_function(sub.name, sub.args, sub.body)
+                continue
+
+            if isinstance(stmt, ast.If):
+                arms = []
+                node = stmt
+                while True:
+                    body = []
+                    arms.append({
+                        "test": _flow_text(source, node.test),
+                        "body": body,
+                        "line": node.lineno,
+                    })
+                    fill_nodes(node.body, body)
+                    if len(node.orelse) == 1 and isinstance(node.orelse[0], ast.If):
+                        node = node.orelse[0]
+                        continue
+                    if node.orelse:
+                        else_body = []
+                        arms.append({"test": None, "body": else_body, "line": None})
+                        fill_nodes(node.orelse, else_body)
+                    break
+                out.append({
+                    "kind": "branch", "line": line, "end_line": end_line,
+                    "arms": arms,
+                })
+                continue
+
+            if isinstance(stmt, (ast.For, ast.AsyncFor, ast.While)):
+                body = []
+                if isinstance(stmt, ast.While):
+                    loop = "while"
+                    header = "while " + _flow_text(source, stmt.test)
+                else:
+                    loop = "for"
+                    header = (
+                        "for "
+                        + _flow_text(source, stmt.target)
+                        + " in "
+                        + _flow_text(source, stmt.iter)
+                    )
+                out.append({
+                    "kind": "loop", "loop": loop, "line": line,
+                    "end_line": end_line, "header": header, "body": body,
+                })
+                fill_nodes(stmt.body, body)
+                continue
+
+            # Everything else: one statement box with its source text.
+            out.append({
+                "kind": "statement", "line": line, "end_line": end_line,
+                "text": _flow_text(source, stmt),
+            })
+
+    module_nodes = []
+    functions["<module>"] = {"name": "<module>", "params": [], "nodes": module_nodes}
+    fill_nodes(tree.body, module_nodes)
+
+    return {"format_version": FLOWCHART_VERSION, "functions": functions, "error": None}
+
+
+def _flow_text(source, node):
+    """One-line source text for an ast node, with newlines collapsed."""
+    segment = ast.get_source_segment(source, node) or ""
+    return " ".join(segment.split())
 
 
 DEMO = """def fact(n):

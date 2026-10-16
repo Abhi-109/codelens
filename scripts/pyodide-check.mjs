@@ -41,6 +41,10 @@ const runTraceJson = pyodide.runPython(
   "import json\nlambda source: json.dumps(tracer.run_trace(source))\n",
 );
 
+const buildFlowchartJson = pyodide.runPython(
+  "import json\nlambda source: json.dumps(tracer.build_flowchart(source))\n",
+);
+
 let failed = 0;
 for (const name of Object.keys(EXPECTED).sort()) {
   const source = readFileSync(join(exampleDir, name), "utf8");
@@ -51,6 +55,13 @@ for (const name of Object.keys(EXPECTED).sort()) {
     ? `${parsed.steps} steps`
     : `status=${parsed.status} output=${JSON.stringify(parsed.output)}`;
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}  (${detail})`);
+
+  const flow = JSON.parse(buildFlowchartJson(source));
+  const flowOk = flow.error === null && "<module>" in flow.functions;
+  if (!flowOk) failed += 1;
+  console.log(
+    `${flowOk ? "PASS" : "FAIL"}  ${name}  (flowchart: ${Object.keys(flow.functions).length} chart(s))`,
+  );
 }
 
 console.log(failed === 0 ? "\nAll examples trace correctly inside Pyodide." : `\n${failed} example(s) failed.`);

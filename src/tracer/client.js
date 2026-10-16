@@ -75,6 +75,27 @@ export function runTrace(source, { inputs = [], ...limits } = {}) {
 }
 
 /**
+ * Builds the flowchart structure for a source without running it. Cached
+ * per source, since it depends on nothing else.
+ */
+const flowCache = new Map();
+export function buildFlowchart(source) {
+  if (flowCache.has(source)) return Promise.resolve(flowCache.get(source));
+  const w = ensureWorker();
+  const id = nextId++;
+  return new Promise((resolve, reject) => {
+    pending.set(id, {
+      resolve: (value) => {
+        flowCache.set(source, value);
+        resolve(value);
+      },
+      reject,
+    });
+    w.postMessage({ type: "flowchart", id, source });
+  });
+}
+
+/**
  * Kills the worker. This is the hard stop for a program the tracer's own
  * limits failed to contain, and it also frees the Pyodide memory.
  */

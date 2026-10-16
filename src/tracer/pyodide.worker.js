@@ -32,6 +32,9 @@ spec.loader.exec_module(tracer)
 def run_trace_json(source, max_steps=1500, max_seconds=5.0, inputs=None):
     return json.dumps(tracer.run_trace(source, max_steps=max_steps,
                                        max_seconds=max_seconds, inputs=inputs))
+
+def build_flowchart_json(source):
+    return json.dumps(tracer.build_flowchart(source))
 `);
       post({ type: "status", status: "ready" });
       return pyodide;
@@ -54,24 +57,22 @@ self.onmessage = async (event) => {
     return;
   }
 
-  if (message.type === "run") {
+  if (message.type === "run" || message.type === "flowchart") {
     if (bootError) {
       post({ type: "error", id: message.id, error: String(bootError?.message ?? bootError) });
       return;
     }
     try {
       const pyodide = await getPyodide();
-      const runTrace = pyodide.globals.get("run_trace_json");
+      const name = message.type === "run" ? "run_trace_json" : "build_flowchart_json";
+      const call = pyodide.globals.get(name);
       try {
-        const json = runTrace(
-          message.source,
-          message.maxSteps,
-          message.maxSeconds,
-          message.inputs,
-        );
+        const json = message.type === "run"
+          ? call(message.source, message.maxSteps, message.maxSeconds, message.inputs)
+          : call(message.source);
         post({ type: "result", id: message.id, result: JSON.parse(json) });
       } finally {
-        runTrace.destroy();
+        call.destroy();
       }
     } catch (error) {
       post({ type: "error", id: message.id, error: String(error?.message ?? error) });
