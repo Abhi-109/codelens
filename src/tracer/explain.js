@@ -650,9 +650,29 @@ export function explainStepView(trace, index, source = "") {
   }
   const about = explainStep(trace, index, source);
   return {
-    justHappened: index > 0 ? explainStep(trace, index - 1, source).text : null,
+    justHappened: justHappened(trace, index, source),
     aboutToHappen: about.text,
     why: explainTransition(trace, index, source),
     concept: about.concept,
   };
+}
+
+/**
+ * What the step before this one actually did. A line that is still running —
+ * because it called a function — must not be described as finished, so calls
+ * and returns get their own wording instead of the line rule's prediction.
+ */
+function justHappened(trace, index, source) {
+  if (index <= 0) return null;
+  const event = trace[index];
+  const previous = trace[index - 1];
+  if (event.event === "call" && event.function !== "<module>") {
+    const frame = event.frames?.[event.frames.length - 1];
+    const at = frame?.call_line;
+    return at != null ? `line ${at} called ${event.function}().` : `${event.function}() was called.`;
+  }
+  if (event.event === "return" && previous?.event === "line" && event.return_value) {
+    return `line ${previous.line} handed back ${showValue(event.return_value, event.heap)} from ${event.function}().`;
+  }
+  return explainStep(trace, index - 1, source).text;
 }

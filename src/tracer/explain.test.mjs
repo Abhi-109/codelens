@@ -403,3 +403,21 @@ test("a call to a function that is already running is taught as recursion", () =
   assert.equal(explainStep(trace, 1, source).text, "Calls fact() with n = 2.");
   assert.equal(explainStep(trace, 1, source).concept, "recursion");
 });
+
+test("just happened says a line called a function, not that the line finished", () => {
+  const view = explainStepView(GREET_TRACE, 2, GREET_SOURCE);
+  assert.equal(view.justHappened, "line 4 called greet().");
+});
+
+test("just happened reports the value a finished call handed back", () => {
+  const source = "def fact(n):\n    if n <= 1:\n        return 1\n    return n * fact(n - 1)\n";
+  const inside = frame({ n: int(1) }, { fn: "fact", id: 2, call_line: 4, line: 3 });
+  const trace = [
+    framesEvent(0, "call", [frame({})]),
+    framesEvent(1, "line", [inside], { line: 3 }),
+    framesEvent(2, "return", [inside], { line: 3, returnValue: int(1) }),
+  ];
+  const view = explainStepView(trace, 2, source);
+  assert.equal(view.justHappened, "line 3 handed back 1 from fact().");
+  assert.match(view.why, /reached a return/);
+});
