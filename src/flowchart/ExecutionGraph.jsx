@@ -4,7 +4,9 @@ import {
   buildExecutionGraph,
   functionLabel,
   layoutExecutionGraph,
+  nodeRuns,
 } from "./executionGraph.js";
+import { decisionResult, edgeReason } from "./reasons.js";
 import {
   centreOn,
   clampPan,
@@ -22,6 +24,8 @@ const IDENTITY = { scale: 1, x: 0, y: 0 };
 const TIP_GAP = 10;
 const TIP_MAX_W = 260;
 const TIP_CHAR_W = 6.7;
+/** How many runs to offer before summarising the rest. */
+const MAX_RUN_CHOICES = 12;
 
 const ease = (p) => (p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
 
@@ -31,24 +35,35 @@ function edgePath(points) {
   return [`M ${first.x} ${first.y}`, ...rest.map((p) => `L ${p.x} ${p.y}`)].join(" ");
 }
 
-/** The opaque box. Handles hover, focus and the tooltip so text stays clickable-free. */
-function NodeBox({ node, current, visited, onOpenTip, onCloseTip }) {
+/** The opaque box. Handles hover, focus, the tooltip and click-to-jump. */
+function NodeBox({ node, current, visited, badges, onOpenTip, onCloseTip, onPick }) {
   const halfW = node.width / 2;
   const halfH = node.height / 2;
   const state = current ? "current" : visited ? "visited" : "ahead";
   const label = `${functionLabel(node.function)} line ${node.line}: ${node.text}`;
   return (
     <g
-      className={`exec-node exec-node-${state}`}
+      className={`exec-node exec-node-${state}${onPick ? " exec-clickable" : ""}`}
       transform={`translate(${node.x} ${node.y})`}
       tabIndex={0}
-      role="img"
+      role="button"
       aria-label={label}
       onMouseEnter={() => onOpenTip(node.id)}
       onMouseLeave={() => onCloseTip(node.id)}
       onFocus={() => onOpenTip(node.id)}
       onBlur={() => onCloseTip(node.id)}
+      onClick={(event) => {
+        event.stopPropagation();
+        onPick?.(node.id);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onPick?.(node.id);
+        }
+      }}
     >
+      <title>{label}</title>
       <rect
         className="exec-node-box"
         x={-halfW}
@@ -57,6 +72,11 @@ function NodeBox({ node, current, visited, onOpenTip, onCloseTip }) {
         height={node.height}
         rx={7}
       />
+      {badges.includes("you are here") ? (
+        <text className="exec-here" x={-halfW} y={-halfH - 5}>
+          you are here
+        </text>
+      ) : null}
     </g>
   );
 }
@@ -87,12 +107,46 @@ function NodeText({ node, current, visited }) {
   );
 }
 
-function GraphEdge({ edge, markerId, index }) {
+/**
+ * The reasons layer: "came from"/"next" tags, the run count, and the real
+ * values behind a decision once it has been passed.
+ */
+function NodeDecor({ node, badges, chip, runs }) {
+  const halfW = node.width / 2;
+  const halfH = node.height / 2;
+  const others = badges.filter((badge) => badge !== "you are here");
+  return (
+    <g className="exec-decor" aria-hidden="true">
+      {others.length > 0 ? (
+        <text className="exec-tag" x={node.x} y={node.y - halfH - 5} textAnchor="middle">
+          {others.join(" · ")}
+        </text>
+      ) : null}
+      {runs > 1 ? (
+        <text className="exec-runs" x={node.x + halfW - 3} y={node.y - halfH + 10} textAnchor="end">
+          ×{runs}
+        </text>
+      ) : null}
+      {chip ? (
+        <text
+          className={`exec-chip${chip.yes ? " exec-chip-yes" : " exec-chip-no"}`}
+          x={node.x}
+          y={node.y + halfH + 11}
+          textAnchor="middle"
+        >
+          {chip.text}
+        </text>
+      ) : null}
+    </g>
+  );
+}
+
+function GraphEdge({ edge, markerId, index, reason, nodesById }) {
   const d = edgePath(edge.points);
   if (!d) return null;
   const traveled = edge.steps.length > 0 && edge.steps[0] <= index;
   const justTraveled = edge.steps.includes(index);
-  const mid = edge.points[Math.floor(edge.points.length / 2)];
+  const mid = edge.points[Math.floor(edge.points.length / 2)] ?? nodesById.get(edge.from);
   const classes = [
     "exec-edge",
     `exec-edge-${edge.kind}`,
@@ -101,12 +155,18 @@ function GraphEdge({ edge, markerId, index }) {
   ]
     .filter(Boolean)
     .join(" ");
+  const label = edge.count > 1 ? `${reason} ×${edge.count}` : reason;
   return (
     <g className={classes}>
       <path className="exec-edge-line" d={d} markerEnd={`url(#${markerId}-${edge.kind})`} />
-      {edge.count > 1 && mid ? (
-        <text className="exec-edge-count" x={mid.x} y={mid.y - 4} textAnchor="middle">
-          {edge.count}
+      {mid ? (
+        <text className="exec-edge-label" x={mid.x} y={mid.y - 4} textAnchor="middle">
+          {label}
+        </text>
+      ) : null}
+      {justTraveled && mid ? (
+        <text className="exec-edge-step" x={mid.x} y={mid.y + 9} textAnchor="middle">
+          step {index + 1}
         </text>
       ) : null}
     </g>
@@ -115,16 +175,23 @@ function GraphEdge({ edge, markerId, index }) {
 
 /**
  * The execution graph: a node for every line that ran (keyed by the call it ran
- * in) and an edge for how control moved. The pane fits the whole chart on load,
- * zooms and pans without native scrollbars, and can follow the current node.
+ * in) and an edge for how control moved, labelled with the reason. The pane fits
+ * the whole chart, zooms and pans without native scrollbars, follows the current
+ * node, and jumps to the step you click.
  *
  * @param {Object} props
  * @param {Array} props.trace the trace from docs/trace-format.md
- * @param {string} props.source the user's code, for line text
+ * @param {string} props.source the user's code, for line text and conditions
  * @param {number} props.index which trace step is current
+ * @param {Object} [props.graph] buildExecutionGraph output, so the node here is
+ *   the very same node the step view reads
+ * @param {(index: number) => void} [props.onJump] called when a node is clicked
  */
-export default function ExecutionGraph({ trace, source, index }) {
-  const graph = useMemo(() => buildExecutionGraph(trace, source), [trace, source]);
+export default function ExecutionGraph({ trace, source, index, graph: given, onJump }) {
+  const graph = useMemo(
+    () => given ?? buildExecutionGraph(trace, source),
+    [given, trace, source],
+  );
   const laid = useMemo(() => layoutExecutionGraph(graph), [graph]);
   const bounds = useMemo(() => ({ width: laid.width, height: laid.height }), [laid]);
   const markerId = `exec-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
@@ -134,6 +201,7 @@ export default function ExecutionGraph({ trace, source, index }) {
   const [follow, setFollow] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const [tipId, setTipId] = useState(null);
+  const [picker, setPicker] = useState(null); // { nodeId, runs }
 
   const viewRef = useRef(null);
   const dragState = useRef(null);
@@ -146,6 +214,12 @@ export default function ExecutionGraph({ trace, source, index }) {
     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
     [],
   );
+
+  const nodesById = useMemo(
+    () => new Map(laid.nodes.map((node) => [node.id, node])),
+    [laid],
+  );
+  const runs = useMemo(() => nodeRuns(graph), [graph]);
 
   // Size of the pane the graph is drawn inside. Measured before paint so the
   // first frame is already the fitted graph, not an empty box.
@@ -223,6 +297,24 @@ export default function ExecutionGraph({ trace, source, index }) {
       if (graph.steps[i]) seen.add(graph.steps[i]);
     }
     return seen;
+  }, [graph, index]);
+
+  // Who to point at: here, where we came from, and (when the trace already
+  // knows it) where control goes next.
+  const badges = useMemo(() => {
+    const map = new Map();
+    const add = (id, label) => {
+      if (!id) return;
+      const list = map.get(id) ?? [];
+      if (!list.includes(label)) list.push(label);
+      map.set(id, list);
+    };
+    add(graph.steps[index], "you are here");
+    if (graph.steps[index - 1] !== graph.steps[index]) add(graph.steps[index - 1], "came from");
+    if (graph.steps[index + 1] && graph.steps[index + 1] !== graph.steps[index]) {
+      add(graph.steps[index + 1], "next");
+    }
+    return map;
   }, [graph, index]);
 
   // Follow the current node, keeping the zoom level. `dragging` is a ref on
@@ -323,6 +415,19 @@ export default function ExecutionGraph({ trace, source, index }) {
     setTipId((current) => (current === id ? null : current));
   }
 
+  function pickNode(id) {
+    const list = runs.get(id) ?? [];
+    if (list.length === 0) return;
+    if (list.length === 1) {
+      setPicker(null);
+      onJump?.(list[0]);
+      return;
+    }
+    setPicker((current) => (current?.nodeId === id ? null : { nodeId: id, runs: list }));
+  }
+
+  const pickerNode = picker ? nodesById.get(picker.nodeId) ?? null : null;
+
   return (
     <div className={`exec-graph${expanded ? " exec-expanded" : ""}`}>
       <div
@@ -360,7 +465,19 @@ export default function ExecutionGraph({ trace, source, index }) {
             </defs>
 
             {laid.edges.map((edge, i) => (
-              <GraphEdge key={edge.id ?? i} edge={edge} markerId={markerId} index={index} />
+              <GraphEdge
+                key={edge.id ?? i}
+                edge={edge}
+                markerId={markerId}
+                index={index}
+                nodesById={nodesById}
+                reason={edgeReason(
+                  edge,
+                  nodesById.get(edge.from),
+                  nodesById.get(edge.to),
+                  source,
+                )}
+              />
             ))}
             <g className="exec-boxes">
               {laid.nodes.map((node) => (
@@ -369,8 +486,10 @@ export default function ExecutionGraph({ trace, source, index }) {
                   node={node}
                   current={node.id === currentNodeId}
                   visited={visited.has(node.id)}
+                  badges={badges.get(node.id) ?? []}
                   onOpenTip={openTip}
                   onCloseTip={closeTip}
+                  onPick={onJump ? pickNode : null}
                 />
               ))}
             </g>
@@ -390,6 +509,18 @@ export default function ExecutionGraph({ trace, source, index }) {
                 />
               ))}
             </g>
+
+            <g className="exec-decor-layer">
+              {laid.nodes.map((node) => (
+                <NodeDecor
+                  key={node.id}
+                  node={node}
+                  badges={badges.get(node.id) ?? []}
+                  chip={decisionResult(node, trace, graph, source, index)}
+                  runs={(runs.get(node.id) ?? []).length}
+                />
+              ))}
+            </g>
           </svg>
         ) : (
           <p className="empty exec-empty">
@@ -403,6 +534,44 @@ export default function ExecutionGraph({ trace, source, index }) {
               {functionLabel(tip.node.function)} · line {tip.node.line}
             </span>
             <code>{tip.node.text}</code>
+            <span className="exec-tip-runs">
+              ran {(runs.get(tip.node.id) ?? []).length} time
+              {(runs.get(tip.node.id) ?? []).length === 1 ? "" : "s"}
+            </span>
+          </div>
+        ) : null}
+
+        {picker && pickerNode ? (
+          <div className="exec-runs-pop" onPointerDown={(event) => event.stopPropagation()}>
+            <div className="exec-runs-head">
+              <span>
+                {functionLabel(pickerNode.function)} line {pickerNode.line}
+              </span>
+              <button type="button" className="ghost" onClick={() => setPicker(null)}>
+                ✕
+              </button>
+            </div>
+            <p className="panel-hint">This line ran {picker.runs.length} times. Jump to:</p>
+            <ol className="exec-runs-list">
+              {picker.runs.slice(0, MAX_RUN_CHOICES).map((run) => (
+                <li key={run}>
+                  <button
+                    type="button"
+                    className={run === index ? "on" : ""}
+                    onClick={() => {
+                      onJump?.(run);
+                      setPicker(null);
+                    }}
+                  >
+                    step {run + 1}
+                    {run === index ? " (here)" : ""}
+                  </button>
+                </li>
+              ))}
+            </ol>
+            {picker.runs.length > MAX_RUN_CHOICES ? (
+              <p className="empty">+{picker.runs.length - MAX_RUN_CHOICES} more</p>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -433,13 +602,27 @@ export default function ExecutionGraph({ trace, source, index }) {
             {expanded ? "Close" : "Expand"}
           </button>
 
-          <ul className="exec-legend">
-            <li className="exec-legend-next">moves on</li>
-            <li className="exec-legend-call">call</li>
-            <li className="exec-legend-return">return</li>
-            <li className="exec-legend-back">loop</li>
-            <li className="exec-legend-error">error</li>
-          </ul>
+          <details className="exec-legend-menu">
+            <summary>Legend</summary>
+            <dl className="exec-legend">
+              <dt className="exec-legend-here">you are here</dt>
+              <dd>the line running now</dd>
+              <dt className="exec-legend-next">next</dt>
+              <dd>the next line in the same function</dd>
+              <dt className="exec-legend-cond">Yes / No</dt>
+              <dd>which way a condition went</dd>
+              <dt className="exec-legend-call">call</dt>
+              <dd>enters a function</dd>
+              <dt className="exec-legend-return">return</dt>
+              <dd>hands a result back to the caller</dd>
+              <dt className="exec-legend-back">loop</dt>
+              <dd>goes back to the top of a loop</dd>
+              <dt className="exec-legend-error">error</dt>
+              <dd>the run stopped here</dd>
+              <dt className="exec-legend-runs">×N</dt>
+              <dd>the line has run N times</dd>
+            </dl>
+          </details>
         </div>
       ) : null}
     </div>

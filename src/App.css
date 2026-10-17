@@ -307,17 +307,58 @@ button:disabled {
   padding: 6px 0;
 }
 
+/* Each line is a button, so clicking it jumps to a step that runs it. */
 .code-line {
   display: flex;
-  gap: 12px;
-  padding: 0 12px;
-  white-space: pre;
-  min-width: max-content;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 0 12px 0 6px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-h);
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: left;
+  cursor: pointer;
 }
 
+.code-line:hover {
+  background: var(--accent-bg);
+}
+
+/* The line about to run, and a quiet mark on the line that just ran. */
 .code-line.current {
   background: var(--accent-bg);
   box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.code-line.just-ran:not(.current) {
+  box-shadow: inset 3px 0 0 var(--border);
+}
+
+.code-mark {
+  flex: none;
+  width: 1.4ch;
+  color: var(--accent);
+  font-size: 11px;
+  user-select: none;
+}
+
+.code-line.just-ran:not(.current) .code-mark {
+  color: var(--text);
+  opacity: 0.5;
+}
+
+/* Long lines wrap, so a trailing comment is never cut off out of reach. */
+.code-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .ln {
@@ -326,6 +367,24 @@ button:disabled {
   user-select: none;
   min-width: 2ch;
   text-align: right;
+  flex: none;
+}
+
+/* A variable name in the code shows its value on hover. */
+.code-ident {
+  border-bottom: 1px dotted var(--accent-border);
+  cursor: help;
+}
+
+/* The result of the highlighted line, taken from the trace. */
+.code-hint {
+  margin-left: 10px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 /* The main teaching element, so it stays the biggest text on the page. It can
@@ -340,20 +399,64 @@ button:disabled {
   background: var(--accent-bg);
 }
 
+.explain-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
 .explain-label {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text);
-  margin-bottom: 4px;
+}
+
+/* Which line and which call the card is talking about. */
+.explain-where {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  text-align: right;
+}
+
+/* Three labelled parts: just happened / about to happen / why now. */
+.explain-part + .explain-part {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--accent-border);
+}
+
+.explain-part-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  margin-bottom: 2px;
 }
 
 .explain-text {
-  font-size: 17px;
-  line-height: 1.45;
-  color: var(--text-h);
   margin: 0;
+  color: var(--text-h);
+  line-height: 1.45;
+}
+
+.explain-text.just {
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* The biggest text on the page: what the highlighted line is about to do. */
+.explain-text.about {
+  font-size: 18px;
+}
+
+.explain-text.why {
+  font-size: 14px;
 }
 
 .error-inline {
@@ -382,6 +485,11 @@ button:disabled {
 
 .concept-card span {
   color: var(--text-h);
+}
+
+.concept-card button {
+  margin-left: auto;
+  flex: none;
 }
 
 .glossary-item {
@@ -742,24 +850,336 @@ button:disabled {
   color: var(--text);
 }
 
+/* --- Panel headings, "?" help, and the synced value panels ---------------- */
+
+.panel-head {
+  margin-bottom: 8px;
+}
+
+.panel-head-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel-head h3 {
+  margin: 0;
+}
+
+.panel-hint {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.help {
+  position: relative;
+  display: inline-flex;
+}
+
+.help-dot {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.help-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+.help-pop {
+  position: absolute;
+  z-index: 31;
+  top: calc(100% + 4px);
+  left: 0;
+  width: min(280px, 70vw);
+  padding: 8px 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
+}
+
+/* The before/after switch over the highlighted line. */
+.state-toggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.state-toggle button {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.state-toggle button.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.vars,
+.changes,
+.calls,
+.watch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.var-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.var-row.changed {
+  border-color: var(--accent);
+  animation: flash 0.6s ease-out;
+}
+
+@keyframes flash {
+  0% {
+    background: var(--accent-bg);
+  }
+
+  100% {
+    background: transparent;
+  }
+}
+
+.var-name {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.var-name[aria-pressed="true"] {
+  text-decoration: underline;
+}
+
+.var-eq {
+  color: var(--text);
+}
+
+.var-value {
+  color: var(--text-h);
+  word-break: break-word;
+}
+
+.var-delta,
+.var-after {
+  flex-basis: 100%;
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.var-after {
+  color: var(--accent);
+}
+
+.var-jump {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tag {
+  font-family: var(--sans);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.tag-new {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tag-changed {
+  border-color: #d97706;
+  color: #d97706;
+}
+
+.preview {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.shared-note {
+  margin: 6px 0 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--accent-border);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.watch {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.watch-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.watch-head .ghost {
+  margin-left: auto;
+}
+
+.watch-list {
+  margin-top: 6px;
+  gap: 3px;
+}
+
+.watch-list li,
+.changes li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.watch-step,
+.change-jump {
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.watch-step.on,
+.change-jump:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.watch-line {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.change-name {
+  font-family: var(--mono);
+  color: var(--accent);
+}
+
+.change-values {
+  font-family: var(--mono);
+  color: var(--text-h);
+}
+
+.calls li.call {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.calls li.call.top {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.calls li.call.on {
+  border-color: var(--accent);
+}
+
+.call-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.call-name {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-h);
+}
+
+.call-args {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  word-break: break-word;
+}
+
+.call-where {
+  font-size: 11px;
+  color: var(--text);
+}
+
+.call-return {
+  font-size: 11px;
+  color: #14b8a6;
+}
+
+.object-wrap {
+  margin-top: 10px;
+}
+
 h3 {
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text);
   margin: 0 0 8px;
-}
-
-.boxes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.ref-pointer {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--accent);
 }
 
 .objects {
@@ -848,74 +1268,6 @@ h3 {
   color: var(--text);
   font-size: 12px;
   padding: 5px 8px;
-}
-
-.box {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  min-width: 90px;
-  overflow: hidden;
-}
-
-.box.changed {
-  border-color: var(--accent);
-  animation: flash 0.6s ease-out;
-}
-
-@keyframes flash {
-  0% {
-    background: var(--accent-bg);
-  }
-  100% {
-    background: transparent;
-  }
-}
-
-.box-name {
-  font-family: var(--mono);
-  font-size: 12px;
-  padding: 3px 8px;
-  background: var(--code-bg);
-  border-bottom: 1px solid var(--border);
-  color: var(--text-h);
-}
-
-.box-value {
-  font-family: var(--mono);
-  font-size: 13px;
-  padding: 6px 8px;
-  color: var(--text-h);
-  word-break: break-word;
-}
-
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.frame {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 13px;
-}
-
-.stack .frame:first-child {
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
-}
-
-.frame-name {
-  font-family: var(--mono);
-  color: var(--text-h);
-}
-
-.frame-line {
-  color: var(--text);
 }
 
 .empty {
@@ -1050,6 +1402,60 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.exec-tip-runs {
+  font-size: 11px;
+  color: var(--text);
+}
+
+/* Clicking a node that ran many times asks which run to jump to. */
+.exec-runs-pop {
+  position: absolute;
+  z-index: 6;
+  top: 8px;
+  left: 8px;
+  width: min(260px, 82%);
+  padding: 8px 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
+  cursor: default;
+}
+
+.exec-runs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-h);
+}
+
+.exec-runs-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.exec-runs-list button {
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.exec-runs-list button.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.exec-runs-pop .panel-hint {
+  margin-top: 4px;
+}
+
 .exec-tools {
   display: flex;
   flex-wrap: wrap;
@@ -1177,13 +1583,66 @@ h3 {
   fill: #dc2626;
 }
 
-.exec-edge-count {
-  font-family: var(--sans);
-  font-size: 10px;
-  fill: var(--text);
+/* Edge labels say *why* control moved, not just that it did. */
+.exec-edge-label,
+.exec-edge-step,
+.exec-here,
+.exec-tag,
+.exec-runs,
+.exec-chip {
   paint-order: stroke;
   stroke: var(--code-bg);
   stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.exec-edge-label,
+.exec-edge-step {
+  font-family: var(--sans);
+  font-size: 9px;
+  fill: var(--text);
+}
+
+.exec-edge-step {
+  fill: var(--accent);
+}
+
+.exec-decor-layer {
+  pointer-events: none;
+}
+
+.exec-here {
+  font-family: var(--sans);
+  font-size: 9px;
+  font-weight: 600;
+  fill: var(--accent);
+}
+
+.exec-tag {
+  font-family: var(--sans);
+  font-size: 9px;
+  fill: var(--text);
+}
+
+/* "ran N times" sits inside the box so it can never spill past the pane. */
+.exec-runs {
+  font-family: var(--sans);
+  font-size: 10px;
+  fill: var(--accent);
+}
+
+.exec-chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  fill: var(--text-h);
+}
+
+.exec-chip-no {
+  fill: #d97706;
+}
+
+.exec-clickable {
+  cursor: pointer;
 }
 
 /* The travelling dot: small, and drawn under the label layer. */
@@ -1191,45 +1650,88 @@ h3 {
   fill: var(--accent);
 }
 
-.exec-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  list-style: none;
-  margin: 0 0 0 auto;
-  padding: 0;
+/* The legend explains the reasons in words, not just colours. */
+.exec-legend-menu {
+  position: relative;
+  margin-left: auto;
+}
+
+.exec-legend-menu > summary {
+  cursor: pointer;
   font-size: 11px;
+  color: var(--text);
+  list-style: none;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.exec-legend-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.exec-legend {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  width: min(320px, 80vw);
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 18%);
+  font-size: 11px;
+}
+
+.exec-legend dt {
+  color: var(--text-h);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.exec-legend dt::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  margin-right: 5px;
+  border-top: 2px solid var(--text);
+  vertical-align: middle;
+}
+
+.exec-legend dd {
+  margin: 0;
   color: var(--text);
 }
 
-.exec-legend li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.exec-legend .exec-legend-here::before {
+  border-color: var(--accent);
 }
 
-.exec-legend li::before {
-  content: "";
-  width: 14px;
-  border-top: 2px solid var(--text);
-}
-
-.exec-legend-call::before {
+.exec-legend .exec-legend-call::before {
   border-color: #8b5cf6;
 }
 
-.exec-legend-return::before {
+.exec-legend .exec-legend-return::before {
   border-color: #14b8a6;
 }
 
-.exec-legend-back::before {
+.exec-legend .exec-legend-back::before {
   border-color: #ca8a04;
   border-top-style: dashed;
 }
 
-.exec-legend-error::before {
+.exec-legend .exec-legend-error::before {
   border-color: #dc2626;
   border-top-style: dotted;
+}
+
+.exec-legend .exec-legend-runs::before {
+  border-top-style: none;
 }
 
 /* --- Narrow windows: the panels fold into tabs --------------------------- */
@@ -1239,6 +1741,7 @@ h3 {
   .layout:not([data-tab="graph"]) [data-pane="graph"],
   .layout[data-tab="graph"] [data-pane="side"],
   .layout[data-tab="variables"] [data-card]:not([data-card="variables"]),
+  .layout[data-tab="changes"] [data-card]:not([data-card="changes"]),
   .layout[data-tab="stack"] [data-card]:not([data-card="stack"]),
   .layout[data-tab="output"] [data-card]:not([data-card="output"]) {
     display: none;
@@ -1317,9 +1820,17 @@ h3 {
 
   .layout:not([data-tab="code"]) [data-pane="code"],
   .layout:not([data-tab="graph"]) [data-pane="graph"],
-  .layout:not([data-tab="variables"]):not([data-tab="stack"]):not([data-tab="output"])
+  .layout:not([data-tab="variables"]):not([data-tab="changes"]):not([data-tab="stack"]):not(
+      [data-tab="output"]
+    )
     [data-pane="side"] {
     display: none;
+  }
+
+  /* Six tabs on a phone: let them scroll sideways rather than wrap. */
+  .tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
   }
 
   [data-pane="graph"] .exec-graph {
@@ -1329,7 +1840,7 @@ h3 {
 
 @media (prefers-reduced-motion: reduce) {
   .concept-card,
-  .box.changed,
+  .var-row.changed,
   .object-card.changed,
   .slot.changed,
   .flow-statement.flow-active code {

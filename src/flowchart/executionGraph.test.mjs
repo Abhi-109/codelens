@@ -10,6 +10,7 @@ import {
   fitLines,
   layoutExecutionGraph,
   measureNode,
+  nodeRuns,
   wrapText,
 } from "./executionGraph.js";
 
@@ -156,6 +157,16 @@ test("buildExecutionGraph is empty for no trace", () => {
   assert.deepEqual(graph.nodes, []);
   assert.deepEqual(graph.edges, []);
   assert.deepEqual(graph.steps, []);
+});
+
+test("nodeRuns lists every step index a node is current, in order", () => {
+  const graph = buildExecutionGraph(loopTrace, "");
+  const runs = nodeRuns(graph);
+  // The token sits on line 2 at steps 2, 4 and 6, then leaves for line 4.
+  assert.deepEqual(runs.get("f1l2"), [2, 4, 6]);
+  assert.deepEqual(runs.get("f1l1"), [1]);
+  assert.deepEqual(runs.get("f1l4"), [7, 8]);
+  assert.equal(nodeRuns(null).size, 0);
 });
 
 test("measureNode sizes a compact box from its label", () => {

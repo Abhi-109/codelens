@@ -146,6 +146,23 @@ export function buildExecutionGraph(trace, source = "") {
   return { nodes: order.map((nodeId) => nodes.get(nodeId)), edges: [...edges.values()], steps };
 }
 
+/**
+ * Every step index at which each node is the current one, in order. Powers the
+ * "ran N times" badge and the click-a-node run picker.
+ * @param {{ steps: Array<string|null> }} graph from buildExecutionGraph
+ * @returns {Map<string, number[]>}
+ */
+export function nodeRuns(graph) {
+  const runs = new Map();
+  (graph?.steps ?? []).forEach((id, i) => {
+    if (!id) return;
+    const list = runs.get(id) ?? [];
+    list.push(i);
+    runs.set(id, list);
+  });
+  return runs;
+}
+
 /** Trims a line and marks it as cut short. */
 function ellipsize(text, maxChars) {
   const cut = text.length > maxChars - 1 ? text.slice(0, maxChars - 1) : text;
