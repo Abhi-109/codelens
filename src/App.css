@@ -1,20 +1,39 @@
+/* The playground is one screen tall: the page itself never scrolls, and each
+   panel scrolls internally only when its own content is too long. */
+html,
+body,
+#root {
+  height: 100%;
+}
+
 .app {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 24px 16px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100vh;
+  height: 100dvh;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 header {
   display: flex;
   align-items: baseline;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 12px;
+  flex: none;
 }
 
 header h1 {
-  font-size: 28px;
+  font-size: 20px;
   letter-spacing: -0.5px;
   margin: 0;
+}
+
+.step-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text);
 }
 
 .engine {
@@ -39,15 +58,94 @@ header h1 {
   border-color: #dc2626;
 }
 
-.columns {
+/* Columns are sized in percentages so the splitter can remember them. */
+.layout {
   display: grid;
-  grid-template-columns: minmax(320px, 2fr) 3fr;
-  gap: 16px;
-  align-items: start;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
 
-  @media (max-width: 900px) {
-    grid-template-columns: 1fr;
-  }
+.layout.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pane.panel {
+  padding: 10px 12px;
+  overflow: hidden;
+}
+
+.splitter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+/* A small grip so the divider is visible without being a heavy grey bar. */
+.splitter::after {
+  content: "";
+  width: 2px;
+  height: 36px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.splitter:hover::after,
+.layout.resizing .splitter::after {
+  background: var(--accent);
+}
+
+.pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: none;
+}
+
+.pane-head h3 {
+  margin: 0;
+}
+
+.pane-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.pane-foot select {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.pane-foot .run {
+  flex: none;
+}
+
+.pane-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .panel {
@@ -58,23 +156,13 @@ header h1 {
   text-align: left;
 }
 
-.panel-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-h);
-  margin-bottom: 10px;
+.pane-head h3 {
+  margin: 0;
 }
 
-.panel-title select {
-  font-size: 13px;
-  font-weight: 400;
-}
-
-.editor textarea {
+.code-pane textarea {
+  flex: 1;
+  min-height: 0;
   width: 100%;
   font-family: var(--mono);
   font-size: 14px;
@@ -84,25 +172,9 @@ header h1 {
   border-radius: 8px;
   background: var(--code-bg);
   color: var(--text-h);
-  resize: vertical;
+  resize: none;
   box-sizing: border-box;
   tab-size: 4;
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 10px;
-  font-size: 13px;
-}
-
-.actions label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
 }
 
 button {
@@ -163,15 +235,16 @@ button:disabled {
 }
 
 .code-view {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   font-family: var(--mono);
   font-size: 14px;
   line-height: 1.6;
   background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px 0;
-  overflow-x: auto;
-  margin-bottom: 12px;
+  padding: 6px 0;
 }
 
 .code-line {
@@ -179,6 +252,7 @@ button:disabled {
   gap: 12px;
   padding: 0 12px;
   white-space: pre;
+  min-width: max-content;
 }
 
 .code-line.current {
@@ -194,32 +268,15 @@ button:disabled {
   text-align: right;
 }
 
-.event {
-  font-size: 13px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  margin-bottom: 12px;
-  color: var(--text-h);
-}
-
-.event-exception,
-.event-unwind,
-.event-error {
-  border-color: #dc2626;
-  color: #dc2626;
-}
-
-.event-output,
-.event-input {
-  border-color: var(--accent-border);
-}
-
+/* The main teaching element, so it stays the biggest text on the page. It can
+   still shrink and scroll if an explanation plus concept card gets long. */
 .explain {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
   border: 1px solid var(--accent-border);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 10px 12px;
-  margin-bottom: 12px;
   background: var(--accent-bg);
 }
 
@@ -233,10 +290,16 @@ button:disabled {
 }
 
 .explain-text {
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 17px;
+  line-height: 1.45;
   color: var(--text-h);
   margin: 0;
+}
+
+.error-inline {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #dc2626;
 }
 
 .concept-card {
@@ -261,25 +324,11 @@ button:disabled {
   color: var(--text-h);
 }
 
-.glossary {
-  font-size: 13px;
-  margin-bottom: 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  color: var(--text-h);
-}
-
-.glossary summary {
-  cursor: pointer;
-  font-weight: 600;
-}
-
 .glossary-item {
   display: flex;
   gap: 8px;
   align-items: baseline;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .glossary-item strong {
@@ -302,7 +351,7 @@ button:disabled {
   border-radius: 8px;
   background: var(--code-bg);
   padding: 12px;
-  margin-bottom: 16px;
+  margin: 0;
   font-family: var(--mono);
   font-size: 13px;
   overflow-x: auto;
@@ -432,17 +481,105 @@ button:disabled {
   }
 }
 
+/* The control bar is pinned to the bottom and always reachable. */
+.controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
+}
+
 .controls {
   display: flex;
   align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.controls button {
+  font-size: 13px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.controls .play {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.bar-actions {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
+  flex: none;
+}
+
+.ghost {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+}
+
+.ghost:hover:not(:disabled) {
+  color: var(--text-h);
+  border-color: var(--accent);
+}
+
+.dev-menu {
+  position: relative;
+}
+
+.dev-menu > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  list-style: none;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.dev-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dev-pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  width: min(560px, 80vw);
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+
+.dev-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.dev-pop .json {
+  max-height: 40vh;
+  margin: 8px 0 0;
 }
 
 .controls input[type="range"] {
   flex: 1;
-  min-width: 120px;
+  min-width: 80px;
   accent-color: var(--accent);
 }
 
@@ -456,15 +593,71 @@ button:disabled {
   color: var(--text-h);
 }
 
-.split {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: 16px;
-  margin-bottom: 16px;
+/* Glossary lives in a drawer so it never takes permanent space. */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.35);
+}
 
-  @media (max-width: 600px) {
-    grid-template-columns: 1fr;
-  }
+.drawer {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 90vw);
+  height: 100%;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.18);
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.drawer-head h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-h);
+}
+
+.drawer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 6px 14px 14px;
+}
+
+/* The right column scrolls as one, so long variable lists never push the
+   output off screen. */
+.side-pane .side-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.side-scroll .panel {
+  padding: 10px 12px;
+}
+
+.side-scroll .output {
+  margin: 0;
+  max-height: none;
+}
+
+.defined {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text);
 }
 
 h3 {
@@ -658,7 +851,7 @@ h3 {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px;
-  margin: 0 0 16px;
+  margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
   text-align: left;
@@ -671,15 +864,6 @@ h3 {
   max-height: 400px;
 }
 
-.error {
-  border: 1px solid #dc2626;
-  border-radius: 8px;
-  padding: 10px;
-  color: #dc2626;
-  font-size: 14px;
-  margin-bottom: 16px;
-}
-
 /* --- Execution graph: control flow actually taken (from the trace) --- */
 
 .flow-head {
@@ -687,7 +871,7 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
+  flex: none;
 }
 
 .flow-head h3 {
@@ -832,7 +1016,7 @@ h3 {
 
 .exec-node-text {
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 13px;
   fill: var(--text-h);
 }
 
