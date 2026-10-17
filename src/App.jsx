@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { buildFlowchart, buildFlowchartGraph, onEngineStatus, runTrace } from "./tracer/client";
+import { buildFlowchart, onEngineStatus, runTrace } from "./tracer/client";
 import { CONCEPTS, explainStep, isNewConcept } from "./tracer/explain";
 import { countFor, flowFor, pathToLine, runsByLine } from "./tracer/flow";
 import { namesById, objectChanges, slotEntries } from "./tracer/objects";
 import { formatValue } from "./tracer/values";
-import FlowchartGraph from "./flowchart/FlowchartGraph.jsx";
+import ExecutionGraph from "./flowchart/ExecutionGraph.jsx";
 import "./App.css";
 
 const EXAMPLES = [
@@ -217,7 +217,6 @@ export default function App() {
   const [source, setSource] = useState(EXAMPLES[3].code);
   const [result, setResult] = useState(null);
   const [flow, setFlow] = useState(null);
-  const [graph, setGraph] = useState(null);
   const [simpleView, setSimpleView] = useState(false);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -271,14 +270,9 @@ export default function App() {
     setPlaying(false);
     setRunning(true);
     try {
-      const [r, f, g] = await Promise.all([
-        runTrace(source),
-        buildFlowchart(source),
-        buildFlowchartGraph(source),
-      ]);
+      const [r, f] = await Promise.all([runTrace(source), buildFlowchart(source)]);
       setResult(r);
       setFlow(f);
-      setGraph(g);
       setIndex(0);
     } catch (error) {
       setResult({
@@ -494,7 +488,7 @@ export default function App() {
 
           <div className="flow-head">
             <h3>
-              Flowchart
+              Execution graph
               {frames.length > 0 && (
                 <span className="flow-of"> — {frames[frames.length - 1].function}()</span>
               )}
@@ -516,10 +510,7 @@ export default function App() {
               line={line}
             />
           ) : (
-            <FlowchartGraph
-              flow={graph}
-              functionName={frames[frames.length - 1]?.function ?? "<module>"}
-            />
+            <ExecutionGraph trace={trace} source={source} index={index} />
           )}
 
           <h3>Output</h3>

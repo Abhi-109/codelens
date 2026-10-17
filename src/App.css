@@ -680,7 +680,7 @@ h3 {
   margin-bottom: 16px;
 }
 
-/* --- Flowchart diagram: the SVG graph (format version 2) --- */
+/* --- Execution graph: control flow actually taken (from the trace) --- */
 
 .flow-head {
   display: flex;
@@ -703,7 +703,7 @@ h3 {
   cursor: pointer;
 }
 
-.flow-diagram {
+.exec-graph {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--code-bg);
@@ -713,78 +713,159 @@ h3 {
   max-height: 60vh;
 }
 
-.flow-diagram svg {
+.exec-graph svg {
   display: block;
   width: 100%;
   height: auto;
 }
 
-/* Node text sits above the shapes. */
-.flow-node-g .flow-text {
+.exec-node-box {
+  fill: var(--bg);
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+.exec-node-fn {
   font-family: var(--sans);
+  font-size: 10px;
+  fill: var(--text);
+}
+
+.exec-node-text {
+  font-family: var(--mono);
   font-size: 12px;
   fill: var(--text-h);
 }
 
-.flow-shape {
-  stroke-width: 1.5;
+/* Not reached yet sits back; visited is solid; the current node glows. */
+.exec-node-ahead {
+  opacity: 0.35;
 }
 
-/* Tinted fills, never flat neon, so every shape reads in both themes. */
-.flow-shape-start,
-.flow-shape-end,
-.flow-shape-return {
-  fill: rgba(20, 184, 166, 0.16);
+.exec-node-current .exec-node-box {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 6px var(--accent-border));
+}
+
+/* Edge colour by kind, so calls, returns and loops are told apart. */
+.exec-edge-line {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.4;
+  opacity: 0.35;
+}
+
+.exec-edge-traveled .exec-edge-line {
+  opacity: 1;
+}
+
+.exec-edge-call .exec-edge-line {
+  stroke: #8b5cf6;
+}
+
+.exec-edge-return .exec-edge-line {
   stroke: #14b8a6;
 }
 
-.flow-shape-io {
-  fill: rgba(217, 119, 6, 0.16);
-  stroke: #d97706;
-}
-
-.flow-shape-process {
-  fill: rgba(100, 116, 139, 0.16);
-  stroke: #64748b;
-}
-
-.flow-shape-decision,
-.flow-shape-loop {
-  fill: rgba(234, 179, 8, 0.18);
+.exec-edge-back .exec-edge-line {
   stroke: #ca8a04;
+  stroke-dasharray: 5 4;
 }
 
-.flow-shape-call {
-  fill: rgba(139, 92, 246, 0.16);
-  stroke: #8b5cf6;
+.exec-edge-error .exec-edge-line {
+  stroke: #dc2626;
+  stroke-dasharray: 2 3;
 }
 
-.flow-call-bar {
-  stroke: #8b5cf6;
-  stroke-width: 1.5;
+.exec-edge-just .exec-edge-line {
+  stroke-width: 2.5;
 }
 
-.flow-edge-line {
-  fill: none;
-  stroke: var(--text);
-  stroke-width: 1.5;
-}
-
-.flow-edge-back .flow-edge-line {
-  stroke: var(--accent);
-  stroke-dasharray: 4 3;
-}
-
-.flow-arrow {
+.exec-arrow {
   fill: var(--text);
 }
 
-.flow-edge-label {
+.exec-arrow-call {
+  fill: #8b5cf6;
+}
+
+.exec-arrow-return {
+  fill: #14b8a6;
+}
+
+.exec-arrow-back {
+  fill: #ca8a04;
+}
+
+.exec-arrow-error {
+  fill: #dc2626;
+}
+
+.exec-edge-count {
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 10px;
   fill: var(--text);
   paint-order: stroke;
   stroke: var(--code-bg);
   stroke-width: 3px;
 }
+
+.exec-token {
+  transition: transform 0.25s ease-out;
+}
+
+.exec-token-dot {
+  fill: var(--accent);
+  stroke: var(--bg);
+  stroke-width: 2;
+}
+
+.exec-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.exec-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exec-legend li::before {
+  content: "";
+  width: 14px;
+  border-top: 2px solid var(--text);
+}
+
+.exec-legend-call::before {
+  border-color: #8b5cf6;
+}
+
+.exec-legend-return::before {
+  border-color: #14b8a6;
+}
+
+.exec-legend-back::before {
+  border-color: #ca8a04;
+  border-top-style: dashed;
+}
+
+.exec-legend-error::before {
+  border-color: #dc2626;
+  border-top-style: dotted;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .exec-token {
+    transition: none;
+  }
+}
+
 
