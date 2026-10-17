@@ -771,15 +771,9 @@ h3 {
   stroke-width: 1.5;
 }
 
-.exec-node-fn {
-  font-family: var(--sans);
-  font-size: 10px;
-  fill: var(--text);
-}
-
 .exec-node-text {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 12.5px;
   fill: var(--text-h);
 }
 

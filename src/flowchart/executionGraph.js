@@ -21,11 +21,15 @@
 import { graphlib, layout } from "@dagrejs/dagre";
 
 const MODULE = "<module>";
-const CHAR_W = 6.6;
+/** Advance width of the 13px monospace label, plus a little slack. */
+const CHAR_W = 7.6;
+/** Labels stay to one or two short lines, so nodes stay small on screen. */
+const MAX_CHARS = 22;
+const MAX_LINES = 2;
 
 // Box metrics, shared with the renderer so text lands in the right place.
 // Kept small on purpose: the graph must stay compact enough to sit in a pane.
-export const NODE = { PAD: 8, HEADER_H: 15, LINE_H: 14 };
+export const NODE = { PAD: 6, LINE_H: 15 };
 
 /** Greedy word-wrap, hard-splitting a single overlong word, never empty. */
 export function wrapText(text, maxChars) {
@@ -142,17 +146,31 @@ export function buildExecutionGraph(trace, source = "") {
   return { nodes: order.map((nodeId) => nodes.get(nodeId)), edges: [...edges.values()], steps };
 }
 
-/** The box size and wrapped text lines for one execution node. */
+/** Trims a line and marks it as cut short. */
+function ellipsize(text, maxChars) {
+  const cut = text.length > maxChars - 1 ? text.slice(0, maxChars - 1) : text;
+  return `${cut.trimEnd()}…`;
+}
+
+/**
+ * Wraps a label to at most `maxLines` lines. Anything that will not fit is
+ * folded into an ellipsis on the last line, so text is never clipped by the box.
+ */
+export function fitLines(text, maxChars = MAX_CHARS, maxLines = MAX_LINES) {
+  const wrapped = wrapText(text, maxChars);
+  if (wrapped.length <= maxLines) return { lines: wrapped, truncated: false };
+  const lines = wrapped.slice(0, maxLines);
+  lines[maxLines - 1] = ellipsize(lines[maxLines - 1], maxChars);
+  return { lines, truncated: true };
+}
+
+/** The box size and (possibly truncated) label lines for one execution node. */
 export function measureNode(node) {
-  const lines = wrapText(node.text, 24);
+  const { lines, truncated } = fitLines(node.text);
   const longest = lines.reduce((n, l) => Math.max(n, l.length), 1);
-  const header = functionLabel(node.function).length;
-  const width = Math.min(
-    Math.max(Math.max(longest, header) * CHAR_W + NODE.PAD * 2, 132),
-    232,
-  );
-  const height = NODE.HEADER_H + lines.length * NODE.LINE_H + NODE.PAD * 2;
-  return { width: Math.round(width), height: Math.round(height), displayLines: lines };
+  const width = Math.min(Math.max(longest * CHAR_W + NODE.PAD * 2, 84), 200);
+  const height = lines.length * NODE.LINE_H + NODE.PAD * 2;
+  return { width: Math.round(width), height: Math.round(height), displayLines: lines, truncated };
 }
 
 /**
@@ -167,7 +185,7 @@ export function layoutExecutionGraph(graph) {
   }
 
   const g = new graphlib.Graph({ multigraph: true });
-  g.setGraph({ rankdir: "TB", nodesep: 18, ranksep: 30, marginx: 10, marginy: 10 });
+  g.setGraph({ rankdir: "TB", nodesep: 14, ranksep: 18, marginx: 8, marginy: 8 });
   g.setDefaultEdgeLabel(() => ({}));
 
   const measured = new Map();

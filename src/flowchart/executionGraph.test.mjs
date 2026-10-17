@@ -5,7 +5,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  NODE,
   buildExecutionGraph,
+  fitLines,
   layoutExecutionGraph,
   measureNode,
   wrapText,
@@ -156,12 +158,35 @@ test("buildExecutionGraph is empty for no trace", () => {
   assert.deepEqual(graph.steps, []);
 });
 
-test("measureNode sizes a box and wraps its line", () => {
+test("measureNode sizes a compact box from its label", () => {
   const node = { function: "fact", text: "return n * fact(n - 1)" };
   const size = measureNode(node);
-  assert.ok(size.width >= 132);
-  assert.ok(size.height > 30);
+  assert.ok(size.width >= 84);
+  assert.ok(size.width <= 200);
+  assert.equal(size.height, NODE.LINE_H + NODE.PAD * 2, "one line tall");
   assert.deepEqual(size.displayLines, ["return n * fact(n - 1)"]);
+  assert.equal(size.truncated, false);
+});
+
+test("measureNode drops the function header, so box width follows the label", () => {
+  const short = measureNode({ function: "verylongfunctionname", text: "x = 1" });
+  const wide = measureNode({ function: "f", text: "total = total + n" });
+  assert.equal(short.width, 84, "clamped to the minimum, not the function name");
+  assert.ok(wide.width > short.width);
+});
+
+test("fitLines keeps two lines and ellipsizes the rest", () => {
+  const { lines, truncated } = fitLines("result = first_value + second_value + third_value");
+  assert.equal(lines.length, 2);
+  assert.equal(truncated, true);
+  assert.ok(lines[1].endsWith("…"));
+  assert.ok(lines.every((line) => line.length <= 22), "never wider than the box");
+});
+
+test("fitLines leaves short labels alone", () => {
+  const { lines, truncated } = fitLines("x = 1");
+  assert.deepEqual(lines, ["x = 1"]);
+  assert.equal(truncated, false);
 });
 
 test("layoutExecutionGraph positions every node and edge", () => {

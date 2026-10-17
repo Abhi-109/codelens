@@ -73,17 +73,14 @@ function GraphNode({ node, current, visited }) {
         y={-halfH}
         width={node.width}
         height={node.height}
-        rx={8}
+        rx={7}
       />
-      <text className="exec-node-fn" x={-halfW + NODE.PAD} y={top + 11}>
-        {functionLabel(node.function)}
-      </text>
       {node.displayLines.map((text, i) => (
         <text
           key={i}
           className="exec-node-text"
           x={-halfW + NODE.PAD}
-          y={top + NODE.HEADER_H + 11 + i * NODE.LINE_H}
+          y={top + 11 + i * NODE.LINE_H}
         >
           {text}
         </text>
