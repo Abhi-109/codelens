@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { buildFlowchart, onEngineStatus, runTrace } from "./tracer/client";
+import { buildFlowchart, buildFlowchartGraph, onEngineStatus, runTrace } from "./tracer/client";
 import { CONCEPTS, explainStep, isNewConcept } from "./tracer/explain";
 import { countFor, flowFor, pathToLine, runsByLine } from "./tracer/flow";
 import { namesById, objectChanges, slotEntries } from "./tracer/objects";
 import { formatValue } from "./tracer/values";
+import FlowchartGraph from "./flowchart/FlowchartGraph.jsx";
 import "./App.css";
 
 const EXAMPLES = [
@@ -216,6 +217,8 @@ export default function App() {
   const [source, setSource] = useState(EXAMPLES[3].code);
   const [result, setResult] = useState(null);
   const [flow, setFlow] = useState(null);
+  const [graph, setGraph] = useState(null);
+  const [simpleView, setSimpleView] = useState(false);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -268,9 +271,14 @@ export default function App() {
     setPlaying(false);
     setRunning(true);
     try {
-      const [r, f] = await Promise.all([runTrace(source), buildFlowchart(source)]);
+      const [r, f, g] = await Promise.all([
+        runTrace(source),
+        buildFlowchart(source),
+        buildFlowchartGraph(source),
+      ]);
       setResult(r);
       setFlow(f);
+      setGraph(g);
       setIndex(0);
     } catch (error) {
       setResult({
@@ -484,18 +492,35 @@ export default function App() {
             </div>
           </div>
 
-          <h3>
-            Flowchart
-            {frames.length > 0 && (
-              <span className="flow-of"> — {frames[frames.length - 1].function}()</span>
-            )}
-          </h3>
-          <Flowchart
-            flow={flow}
-            functionName={frames[frames.length - 1]?.function ?? "<module>"}
-            trace={trace}
-            line={line}
-          />
+          <div className="flow-head">
+            <h3>
+              Flowchart
+              {frames.length > 0 && (
+                <span className="flow-of"> — {frames[frames.length - 1].function}()</span>
+              )}
+            </h3>
+            <label className="flow-view">
+              <input
+                type="checkbox"
+                checked={simpleView}
+                onChange={(event) => setSimpleView(event.target.checked)}
+              />
+              Simple view
+            </label>
+          </div>
+          {simpleView ? (
+            <Flowchart
+              flow={flow}
+              functionName={frames[frames.length - 1]?.function ?? "<module>"}
+              trace={trace}
+              line={line}
+            />
+          ) : (
+            <FlowchartGraph
+              flow={graph}
+              functionName={frames[frames.length - 1]?.function ?? "<module>"}
+            />
+          )}
 
           <h3>Output</h3>
           <pre className="output">{output || <span className="empty">(nothing printed yet)</span>}</pre>

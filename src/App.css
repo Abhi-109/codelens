@@ -679,3 +679,112 @@ h3 {
   font-size: 14px;
   margin-bottom: 16px;
 }
+
+/* --- Flowchart diagram: the SVG graph (format version 2) --- */
+
+.flow-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.flow-head h3 {
+  margin: 0;
+}
+
+.flow-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.flow-diagram {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--code-bg);
+  padding: 12px;
+  margin-bottom: 16px;
+  overflow: auto;
+  max-height: 60vh;
+}
+
+.flow-diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Node text sits above the shapes. */
+.flow-node-g .flow-text {
+  font-family: var(--sans);
+  font-size: 12px;
+  fill: var(--text-h);
+}
+
+.flow-shape {
+  stroke-width: 1.5;
+}
+
+/* Tinted fills, never flat neon, so every shape reads in both themes. */
+.flow-shape-start,
+.flow-shape-end,
+.flow-shape-return {
+  fill: rgba(20, 184, 166, 0.16);
+  stroke: #14b8a6;
+}
+
+.flow-shape-io {
+  fill: rgba(217, 119, 6, 0.16);
+  stroke: #d97706;
+}
+
+.flow-shape-process {
+  fill: rgba(100, 116, 139, 0.16);
+  stroke: #64748b;
+}
+
+.flow-shape-decision,
+.flow-shape-loop {
+  fill: rgba(234, 179, 8, 0.18);
+  stroke: #ca8a04;
+}
+
+.flow-shape-call {
+  fill: rgba(139, 92, 246, 0.16);
+  stroke: #8b5cf6;
+}
+
+.flow-call-bar {
+  stroke: #8b5cf6;
+  stroke-width: 1.5;
+}
+
+.flow-edge-line {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+
+.flow-edge-back .flow-edge-line {
+  stroke: var(--accent);
+  stroke-dasharray: 4 3;
+}
+
+.flow-arrow {
+  fill: var(--text);
+}
+
+.flow-edge-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  fill: var(--text);
+  paint-order: stroke;
+  stroke: var(--code-bg);
+  stroke-width: 3px;
+}
+
