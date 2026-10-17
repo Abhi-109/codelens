@@ -58,17 +58,164 @@ header h1 {
   border-color: #dc2626;
 }
 
-/* Columns are sized in percentages so the splitter can remember them. */
+/* Columns are sized in percentages so the splitter can remember them. The wide
+   layout is three columns; narrower windows fold the panels into tabs. */
 .layout {
   display: grid;
   flex: 1;
   min-height: 0;
   gap: 0;
+  grid-template-columns: var(--col-left, 30%) 8px var(--col-mid, 44%) 8px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .layout.resizing {
   cursor: col-resize;
   user-select: none;
+}
+
+/* Wide: code | graph | explanation above variables / stack / output. */
+[data-pane="code"] {
+  grid-area: 1 / 1 / 3 / 2;
+}
+
+[data-split="left"] {
+  grid-area: 1 / 2 / 3 / 3;
+}
+
+[data-pane="graph"] {
+  grid-area: 1 / 3 / 3 / 4;
+}
+
+[data-split="mid"] {
+  grid-area: 1 / 4 / 3 / 5;
+}
+
+[data-pane="teach"] {
+  grid-area: 1 / 5 / 2 / 6;
+}
+
+[data-pane="side"] {
+  grid-area: 2 / 5 / 3 / 6;
+}
+
+/* The tab bar only exists once the columns stop fitting side by side. */
+.tabs {
+  display: none;
+  align-items: flex-end;
+  gap: 4px;
+  flex: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  display: inline-block;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tab.on {
+  border-color: var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.tab-code {
+  display: none;
+}
+
+/* One panel at a time, chosen by the tab. */
+@media (max-width: 1279px) {
+  .layout:not([data-tab="graph"]) [data-pane="graph"],
+  .layout[data-tab="graph"] [data-pane="side"],
+  .layout[data-tab="variables"] [data-card]:not([data-card="variables"]),
+  .layout[data-tab="stack"] [data-card]:not([data-card="stack"]),
+  .layout[data-tab="output"] [data-card]:not([data-card="output"]) {
+    display: none;
+  }
+}
+
+/* Two columns: the code, and an explanation above a tabbed panel. */
+@media (max-width: 1279px) {
+  .layout {
+    grid-template-columns: var(--col-left, 32%) 8px minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  [data-pane="code"] {
+    grid-area: 1 / 1 / 4 / 2;
+  }
+
+  [data-split="left"] {
+    grid-area: 1 / 2 / 4 / 3;
+  }
+
+  [data-pane="teach"] {
+    grid-area: 1 / 3 / 2 / 4;
+  }
+
+  .tabs {
+    display: flex;
+    grid-area: 2 / 3 / 3 / 4;
+  }
+
+  [data-pane="graph"],
+  [data-pane="side"] {
+    grid-area: 3 / 3 / 4 / 4;
+  }
+
+  [data-split="mid"] {
+    display: none;
+  }
+}
+
+/* Phones: one column, everything behind the tab bar, graph capped. */
+@media (max-width: 899px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  [data-pane="teach"] {
+    grid-area: 1 / 1 / 2 / 2;
+  }
+
+  .tabs {
+    grid-area: 2 / 1 / 3 / 2;
+  }
+
+  .tab-code {
+    display: inline-block;
+  }
+
+  [data-pane="code"],
+  [data-pane="graph"],
+  [data-pane="side"] {
+    grid-area: 3 / 1 / 4 / 2;
+  }
+
+  .splitter {
+    display: none;
+  }
+
+  .layout:not([data-tab="code"]) [data-pane="code"],
+  .layout:not([data-tab="graph"]) [data-pane="graph"],
+  .layout:not([data-tab="variables"]):not([data-tab="stack"]):not([data-tab="output"])
+    [data-pane="side"] {
+    display: none;
+  }
+
+  [data-pane="graph"] .exec-graph {
+    max-height: 50vh;
+  }
 }
 
 .pane {
@@ -271,8 +418,8 @@ button:disabled {
 /* The main teaching element, so it stays the biggest text on the page. It can
    still shrink and scroll if an explanation plus concept card gets long. */
 .explain {
-  flex: 0 1 auto;
   min-height: 0;
+  max-height: 38vh;
   overflow: auto;
   border: 1px solid var(--accent-border);
   border-radius: 12px;
@@ -517,6 +664,28 @@ button:disabled {
   align-items: center;
   gap: 8px;
   flex: none;
+}
+
+/* On a phone the bar wraps: step slider on its own line, buttons centred. */
+@media (max-width: 899px) {
+  .controls-bar {
+    flex-wrap: wrap;
+  }
+
+  .controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .controls input[type="range"] {
+    flex: 1 0 100%;
+    order: -1;
+  }
+
+  .bar-actions {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .ghost {
@@ -1151,8 +1320,12 @@ h3 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .exec-graph {
-    scroll-behavior: auto;
+  .concept-card,
+  .box.changed,
+  .object-card.changed,
+  .slot.changed,
+  .flow-statement.flow-active code {
+    animation: none;
   }
 }
 

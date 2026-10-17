@@ -44,6 +44,16 @@ const MIN_LEFT = 18;
 const MIN_MID = 26;
 const MIN_RIGHT = 18;
 
+// Below 1280px the columns become tabs. "Code" is only reachable as a tab on
+// phones; from 900px up the code column is always on screen.
+const TABS = [
+  { id: "code", label: "Code", phoneOnly: true },
+  { id: "graph", label: "Graph" },
+  { id: "variables", label: "Variables" },
+  { id: "stack", label: "Stack" },
+  { id: "output", label: "Output" },
+];
+
 // Variables holding a function, class or module are not values — they are
 // summarised on one muted line instead of taking a box each.
 const DEFINED_TYPES = new Set(["function", "class", "module"]);
@@ -256,10 +266,11 @@ function Flowchart({ flow, functionName, trace, line }) {
   );
 }
 
-function Splitter({ onGrab, onMove, onRelease }) {
+function Splitter({ name, onGrab, onMove, onRelease }) {
   return (
     <div
       className="splitter"
+      data-split={name}
       role="separator"
       aria-orientation="vertical"
       aria-label="Resize column"
@@ -286,6 +297,7 @@ export default function App() {
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [columns, setColumns] = useState(loadColumns);
   const [resizing, setResizing] = useState(false);
+  const [tab, setTab] = useState("graph");
 
   const timer = useRef(null);
   const layoutRef = useRef(null);
@@ -448,9 +460,8 @@ export default function App() {
       <main
         className={`layout${resizing ? " resizing" : ""}`}
         ref={layoutRef}
-        style={{
-          gridTemplateColumns: `${columns.left}% 8px ${columns.mid}% 8px minmax(0, 1fr)`,
-        }}
+        data-tab={tab}
+        style={{ "--col-left": `${columns.left}%`, "--col-mid": `${columns.mid}%` }}
       >
         <section className="pane code-pane panel" data-pane="code">
           <div className="pane-head">
@@ -510,10 +521,47 @@ export default function App() {
         </section>
 
         <Splitter
+          name="left"
           onGrab={grabSplitter("left")}
           onMove={moveSplitter}
           onRelease={releaseSplitter}
         />
+
+        <div className="explain" data-pane="teach">
+          <div className="explain-label">What happens here</div>
+          <p className="explain-text">
+            {result
+              ? explanation.text
+              : "Press Run and this will explain each step in plain English."}
+          </p>
+          {showConcept && concept && (
+            <div className="concept-card">
+              <strong>{concept.term}</strong>
+              <span>{concept.blurb}</span>
+            </div>
+          )}
+          {result?.error && (
+            <p className="error-inline">
+              <strong>{result.error.type}</strong> on line {result.error.line ?? "?"}:{" "}
+              {result.error.message}
+            </p>
+          )}
+        </div>
+
+        <div className="tabs" role="tablist" aria-label="Panels">
+          {TABS.map(({ id, label, phoneOnly }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
+              className={`tab${tab === id ? " on" : ""}${phoneOnly ? " tab-code" : ""}`}
+              onClick={() => setTab(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         <section className="pane graph-pane" data-pane="graph">
           <div className="flow-head">
@@ -545,33 +593,15 @@ export default function App() {
         </section>
 
         <Splitter
+          name="mid"
           onGrab={grabSplitter("mid")}
           onMove={moveSplitter}
           onRelease={releaseSplitter}
         />
 
         <section className="pane side-pane" data-pane="side">
-          <div className="explain panel">
-            <div className="explain-label">What happens here</div>
-            <p className="explain-text">
-              {result ? explanation.text : "Press Run and this will explain each step in plain English."}
-            </p>
-            {showConcept && concept && (
-              <div className="concept-card">
-                <strong>{concept.term}</strong>
-                <span>{concept.blurb}</span>
-              </div>
-            )}
-            {result?.error && (
-              <p className="error-inline">
-                <strong>{result.error.type}</strong> on line {result.error.line ?? "?"}:{" "}
-                {result.error.message}
-              </p>
-            )}
-          </div>
-
           <div className="side-scroll">
-            <section className="panel">
+            <section className="panel" data-card="variables">
               <h3>Variables</h3>
               <VariableBoxes
                 variables={frames[frames.length - 1]?.variables}
@@ -581,7 +611,7 @@ export default function App() {
               <HeapObjects heap={state?.heap} names={heapNames} changes={objectChanged} />
             </section>
 
-            <section className="panel">
+            <section className="panel" data-card="stack">
               <h3>Call stack</h3>
               {frames.length === 0 ? (
                 <p className="empty">Empty</p>
@@ -597,7 +627,7 @@ export default function App() {
               )}
             </section>
 
-            <section className="panel">
+            <section className="panel" data-card="output">
               <h3>Output</h3>
               <pre className="output">
                 {output || <span className="empty">(nothing printed yet)</span>}
