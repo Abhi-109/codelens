@@ -152,12 +152,14 @@ function variableChanges(before, after, line) {
   return changes;
 }
 
-/** The exact slot that changed inside a list, dict, set or object. */
+/** The exact slot that changed inside an object the program already had. */
 function slotChanges(before, after, names) {
   const beforeHeap = before?.heap ?? {};
   const afterHeap = after?.heap ?? {};
   const changes = [];
   for (const [id, object] of Object.entries(afterHeap)) {
+    // A brand new list is one "data is new" change, not one per slot.
+    if (!beforeHeap[id]) continue;
     const changed = changedSlots(beforeHeap[id], object);
     if (changed.size === 0) continue;
     const label = (names.get(id) ?? [id])[0];
@@ -219,10 +221,8 @@ function printedAfter(trace, index) {
 /** A short result hint for the highlighted line, taken from the trace. */
 function lineHint(event, changes, trace, index) {
   if (event?.event !== "line") return null;
-  if (changes.length === 1) return `${changes[0].name} = ${changes[0].to}`;
-  if (changes.length > 1) {
-    return `${changes.map((c) => `${c.name} = ${c.to}`).join(", ")}`;
-  }
+  if (changes.length === 1) return changes[0].to;
+  if (changes.length > 1) return changes.map((change) => `${change.name} = ${change.to}`).join(", ");
   const printed = printedAfter(trace, index);
   return printed ? `prints ${printed}` : null;
 }
@@ -329,6 +329,29 @@ function sourceLine(source, line) {
   if (line == null) return null;
   const raw = (source ?? "").split("\n")[line - 1] ?? "";
   return { line, text: raw.trim(), indent: raw.length - raw.trimStart().length };
+}
+
+/**
+ * Every value change the program made, in step order: the Changes list and its
+ * click-to-jump targets. One entry per changed variable or list slot.
+ * @returns {Array<{ index: number, kind: string, name: string, from: string|null, to: string, line: number|null }>}
+ */
+export function changeLog(trace) {
+  const list = Array.isArray(trace) ? trace : [];
+  const out = [];
+  for (let i = 0; i < list.length; i += 1) {
+    const event = list[i];
+    if (event.event !== "line") continue;
+    const after = sameFrameAfter(list, i, event.frame_id);
+    if (!after) continue;
+    for (const change of variableChanges(event, after, event.line)) {
+      out.push({ index: i, ...change });
+    }
+    for (const change of slotChanges(event, after, namesById(after.frames, after.heap))) {
+      out.push({ index: i, ...change });
+    }
+  }
+  return out;
 }
 
 /**

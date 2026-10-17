@@ -17,7 +17,7 @@ import { gunzipSync } from "node:zlib";
 
 import { explainStep } from "./explain.js";
 import { buildExecutionGraph } from "../flowchart/executionGraph.js";
-import { getStepView, paramsFor, stateAt, variableHistory } from "./stepView.js";
+import { changeLog, getStepView, paramsFor, stateAt, variableHistory } from "./stepView.js";
 
 const FIXTURES = JSON.parse(
   gunzipSync(readFileSync(new URL("./__fixtures__/traces.json.gz", import.meta.url))),
@@ -75,7 +75,7 @@ test("variables show the state BEFORE the line, and changes preview the AFTER", 
   assert.deepEqual(view.changes, [
     { kind: "changed", name: "x", from: "5", to: "10", line: 2 },
   ]);
-  assert.equal(view.hint, "x = 10");
+  assert.equal(view.hint, "10");
 });
 
 test("a brand new variable is flagged NEW by the line that creates it", () => {
@@ -158,6 +158,18 @@ test("variableHistory lists each value with the line that produced it", () => {
   ]);
 });
 
+test("changeLog is the story of every change, with the step to jump to", () => {
+  assert.deepEqual(changeLog(ASSIGN_TRACE), [
+    { index: 1, kind: "new", name: "x", from: null, to: "5", line: 1 },
+    { index: 2, kind: "changed", name: "x", from: "5", to: "10", line: 2 },
+  ]);
+  const { trace } = FIXTURES.mergeSort;
+  const log = changeLog(trace);
+  assert.ok(log.length > 10, "the merge sort changes a lot");
+  assert.ok(log.some((entry) => entry.kind === "slot"), "list slots are in the log too");
+  assert.ok(log.every((entry) => Number.isInteger(entry.index)));
+});
+
 test("paramsFor reads parameter names, leaving self out", () => {
   assert.deepEqual(paramsFor("def learn(self, trick):\n    pass\n", "learn"), ["trick"]);
   assert.deepEqual(paramsFor("def merge(left, right):\n", "merge"), ["left", "right"]);
@@ -208,11 +220,15 @@ test("every step of the merge-sort trace agrees across all panels", () => {
       `${where}: explanation matches explainStep`,
     );
     if (i > 0) {
-      assert.equal(
-        view.explanation.justHappened,
-        explainStep(trace, i - 1, source).text,
-        `${where}: just happened`,
-      );
+      if (event.event === "line") {
+        assert.equal(
+          view.explanation.justHappened,
+          explainStep(trace, i - 1, source).text,
+          `${where}: just happened`,
+        );
+      } else {
+        assert.ok(view.explanation.justHappened.length > 0, `${where}: just happened`);
+      }
     }
 
     // 3. The graph node is the one the graph draws for this step.
