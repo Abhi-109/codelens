@@ -159,7 +159,7 @@ test("buildExecutionGraph is empty for no trace", () => {
 test("measureNode sizes a box and wraps its line", () => {
   const node = { function: "fact", text: "return n * fact(n - 1)" };
   const size = measureNode(node);
-  assert.ok(size.width >= 150);
+  assert.ok(size.width >= 132);
   assert.ok(size.height > 30);
   assert.deepEqual(size.displayLines, ["return n * fact(n - 1)"]);
 });

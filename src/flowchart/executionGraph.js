@@ -21,10 +21,11 @@
 import { graphlib, layout } from "@dagrejs/dagre";
 
 const MODULE = "<module>";
-const CHAR_W = 7.0;
-const LINE_H = 15;
-const HEADER_H = 16;
-const PAD = 10;
+const CHAR_W = 6.6;
+
+// Box metrics, shared with the renderer so text lands in the right place.
+// Kept small on purpose: the graph must stay compact enough to sit in a pane.
+export const NODE = { PAD: 8, HEADER_H: 15, LINE_H: 14 };
 
 /** Greedy word-wrap, hard-splitting a single overlong word, never empty. */
 export function wrapText(text, maxChars) {
@@ -143,11 +144,14 @@ export function buildExecutionGraph(trace, source = "") {
 
 /** The box size and wrapped text lines for one execution node. */
 export function measureNode(node) {
-  const lines = wrapText(node.text, 30);
+  const lines = wrapText(node.text, 24);
   const longest = lines.reduce((n, l) => Math.max(n, l.length), 1);
   const header = functionLabel(node.function).length;
-  const width = Math.min(Math.max(Math.max(longest, header) * CHAR_W + PAD * 2, 150), 320);
-  const height = HEADER_H + lines.length * LINE_H + PAD * 2;
+  const width = Math.min(
+    Math.max(Math.max(longest, header) * CHAR_W + NODE.PAD * 2, 132),
+    232,
+  );
+  const height = NODE.HEADER_H + lines.length * NODE.LINE_H + NODE.PAD * 2;
   return { width: Math.round(width), height: Math.round(height), displayLines: lines };
 }
 
@@ -163,7 +167,7 @@ export function layoutExecutionGraph(graph) {
   }
 
   const g = new graphlib.Graph({ multigraph: true });
-  g.setGraph({ rankdir: "TB", nodesep: 28, ranksep: 46, marginx: 16, marginy: 16 });
+  g.setGraph({ rankdir: "TB", nodesep: 18, ranksep: 30, marginx: 10, marginy: 10 });
   g.setDefaultEdgeLabel(() => ({}));
 
   const measured = new Map();

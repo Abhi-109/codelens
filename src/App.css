@@ -707,16 +707,62 @@ h3 {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--code-bg);
-  padding: 12px;
+  padding: 8px;
   margin-bottom: 16px;
-  overflow: auto;
-  max-height: 60vh;
 }
 
-.exec-graph svg {
+/* A fixed pane the graph is *panned* inside, never one that grows the page. */
+.exec-view {
+  position: relative;
+  height: clamp(220px, 40vh, 380px);
+  overflow: hidden;
+  border-radius: 6px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.exec-view:active {
+  cursor: grabbing;
+}
+
+.exec-view svg {
   display: block;
-  width: 100%;
-  height: auto;
+}
+
+.exec-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+}
+
+.exec-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.exec-tools button {
+  font: inherit;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.exec-tools button:hover {
+  border-color: var(--accent);
+}
+
+.exec-hint {
+  margin-left: auto;
+  opacity: 0.8;
 }
 
 .exec-node-box {
