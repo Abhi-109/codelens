@@ -8,6 +8,7 @@
 // `concept` is an id into CONCEPTS, used by the UI to show a short card the
 // first time a concept appears in a run.
 
+import { changedSlots, slotEntries } from "./objects.js";
 import { showValue } from "./values.js";
 
 /** Short glossary shown as concept cards. Every concept id a rule can emit must exist here. */
@@ -46,6 +47,16 @@ export const CONCEPTS = {
     term: "List",
     blurb:
       "A list is an ordered box with numbered slots, starting at 0. You can add, remove, and change items.",
+  },
+  index: {
+    term: "List index",
+    blurb:
+      "The number in square brackets picks one item out of a list. Slots are numbered from 0, so the first item is [0].",
+  },
+  recursion: {
+    term: "Recursion",
+    blurb:
+      "Recursion is a function that calls itself. Each call gets its own fresh variables, and the calls pile up until one of them stops without calling again.",
   },
   dictionary: {
     term: "Dictionary",
@@ -117,7 +128,7 @@ function variableShow(variables, heap, name) {
 }
 
 /** Substitutes known variable names in a condition, so "marks >= 90" reads "68 >= 90". */
-function substituteVars(text, variables, heap) {
+export function substituteVars(text, variables, heap) {
   let out = text.replace(/[A-Za-z_]\w*/g, (name) => {
     if (!(name in variables)) return name;
     const shown = variableShow(variables, heap, name);
@@ -139,7 +150,7 @@ function nextLineEvent(trace, index) {
  * statement header at `indent`. Blank lines and comments are skipped; the
  * block ends at the first real line that is not indented deeper.
  */
-function blockEnd(source, headerLine, indent) {
+export function blockEnd(source, headerLine, indent) {
   const lines = source.split("\n");
   let end = headerLine;
   for (let n = headerLine; n < lines.length; n += 1) {
@@ -175,6 +186,40 @@ const CALL_RE = /^([A-Za-z_]\w*)\((.*)\)$/;
 const METHOD_RE = /^([A-Za-z_]\w*)\.([A-Za-z_]\w*)\((.*)\)$/;
 const DEF_PARAMS_RE = /^def\s+([A-Za-z_]\w*)\s*\(([^)]*)\)/;
 const LIST_METHODS = new Set(["append", "insert", "pop", "remove", "extend", "sort", "reverse"]);
+
+/**
+ * The text a print() line writes, read from the output events that follow it
+ * (they carry no stack of their own, so we gather them until control moves on).
+ */
+function printedText(trace, index) {
+  let out = "";
+  for (let i = index + 1; i < trace.length; i += 1) {
+    const event = trace[i];
+    if (event.event === "line" || event.event === "call" || event.event === "return") break;
+    if (event.event === "output") out += event.text;
+  }
+  return short(out.replace(/\n$/, ""));
+}
+
+/** The one slot an item assignment changed, named and valued from the next state. */
+function itemChange(trace, index, name, variables, beforeHeap) {
+  const ref = variables?.[name];
+  if (ref?.type !== "ref") return null;
+  const after = nextState(trace, index);
+  const afterObject = after?.heap?.[ref.id];
+  if (!afterObject) return null;
+  const changed = changedSlots(beforeHeap?.[ref.id], afterObject);
+  if (changed.size === 0) return null;
+  const key = [...changed][0];
+  const values = new Map(slotEntries(afterObject).map((entry) => [entry.key, entry.value]));
+  const slot = typeof key === "number" ? `${name}[${key}]` : `${name}[${JSON.stringify(key)}]`;
+  return { slot, value: showValue(values.get(key), after.heap) };
+}
+
+/** True when this call is a function already running below it on the stack. */
+function isRecursive(event) {
+  return (event.frames ?? []).slice(0, -1).some((frame) => frame.function === event.function);
+}
 
 function explainLine(event, trace, index, source) {
   const variables = topVariables(event);
@@ -278,7 +323,13 @@ function explainLine(event, trace, index, source) {
 
   // Printing and asking for input.
   if (/^print\s*\(/.test(text)) {
-    return { text: "This line shows something on the screen.", concept: "print" };
+    const printed = printedText(trace, index);
+    return {
+      text: printed
+        ? `This line prints ${printed} on the screen.`
+        : "This line shows something on the screen.",
+      concept: "print",
+    };
   }
   if (/(^|=)\s*input\s*\(/.test(text)) {
     return { text: "This line asks the person running the program to type something.", concept: "input" };
@@ -293,9 +344,12 @@ function explainLine(event, trace, index, source) {
   }
   match = text.match(ITEM_ASSIGN_RE);
   if (match) {
+    const change = itemChange(trace, index, match[1], variables, event.heap);
     return {
-      text: `Changes one item inside ${match[1]}.`,
-      concept: "list",
+      text: change
+        ? `Sets one item inside ${match[1]}: ${change.slot} is now ${change.value}.`
+        : `Changes one item inside ${match[1]}.`,
+      concept: "index",
     };
   }
 
@@ -403,7 +457,7 @@ function explainCall(event, source) {
     text: shown.length
       ? `Calls ${event.function}() with ${shown.join(", ")}.`
       : `Calls the function ${event.function}().`,
-    concept: "function-call",
+    concept: isRecursive(event) ? "recursion" : "function-call",
   };
 }
 
@@ -500,4 +554,105 @@ export function isNewConcept(trace, index, source, concept) {
     if (conceptAt(trace, i, source) === concept) return false;
   }
   return true;
+}
+
+// --- Why did execution come here? -------------------------------------------
+// The panels answer "why is this line running now?" from the jump between the
+// previous step that moved control and this one, so the answer comes from the
+// recorded trace and can never contradict it.
+
+const ANCHOR_EVENTS = new Set(["line", "call", "return", "unwind"]);
+
+/** Index of the nearest earlier step that moved control, or -1. */
+function previousAnchorIndex(trace, index) {
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (ANCHOR_EVENTS.has(trace[i].event)) return i;
+  }
+  return -1;
+}
+
+/** Index of the nearest earlier step in one frame, or -1. */
+function previousInFrameIndex(trace, index, frameId) {
+  for (let i = index - 1; i >= 0; i -= 1) {
+    if (ANCHOR_EVENTS.has(trace[i].event) && trace[i].frame_id === frameId) return i;
+  }
+  return -1;
+}
+
+/**
+ * One plain sentence for why control is at this step: the branch that was
+ * decided, the loop that came round, or the call that just started or returned.
+ * @returns {string | null}
+ */
+export function explainTransition(trace, index, source = "") {
+  const event = trace[index];
+  if (!event) return null;
+
+  if (event.event === "line") {
+    const anchorIndex = previousAnchorIndex(trace, index);
+    const anchor = anchorIndex >= 0 ? trace[anchorIndex] : null;
+    if (anchor?.event === "call" && anchor.frame_id === event.frame_id) {
+      if (event.function === "<module>") return "The program starts and runs this first line.";
+      return `${event.function}() was just called, so its first line runs now.`;
+    }
+    if (anchor?.event === "return" || anchor?.event === "unwind") {
+      if (anchor.function === "<module>") return "The program's last line finished.";
+      return `The call to ${anchor.function}() finished, so the ${event.function}() code carries on here.`;
+    }
+    const sameIndex = previousInFrameIndex(trace, index, event.frame_id);
+    if (sameIndex < 0) return "This is the first line that runs.";
+    const same = trace[sameIndex];
+    if (same.line === event.line) return null;
+    if (same.line > event.line) {
+      return `The loop body finished, so Python jumped back up to line ${event.line} for the next round.`;
+    }
+    if (same.line + 1 === event.line) {
+      return "The previous line finished, so Python moved on to the next line.";
+    }
+    // A jump forward over one or more lines: the previous line's own rule
+    // already names the decision that sent us here.
+    return explainStep(trace, sameIndex, source).text;
+  }
+
+  if (event.event === "call") {
+    if (event.function === "<module>") return null;
+    const frame = event.frames?.[event.frames.length - 1];
+    const at = frame?.call_line;
+    return at != null
+      ? `line ${at} calls ${event.function}(), so Python starts that function here.`
+      : `${event.function}() is called, so Python starts that function here.`;
+  }
+
+  if (event.event === "return") {
+    if (event.function === "<module>") return "The last line finished, so the program ends.";
+    return `${event.function}() reached a return, so its result goes back and the caller carries on.`;
+  }
+
+  return null;
+}
+
+/**
+ * The explanation card's reading of one step, in three labelled parts:
+ * what the previous step did, what the highlighted line is about to do, and
+ * why control came here. This is the single wording behind the card, tested as
+ * a unit so the panels can never disagree about the same step.
+ * @returns {{ justHappened: string|null, aboutToHappen: string, why: string|null, concept: string|null }}
+ */
+export function explainStepView(trace, index, source = "") {
+  const event = trace[index];
+  if (!event) {
+    return {
+      justHappened: null,
+      aboutToHappen: "Run your code to see what happens, step by step.",
+      why: null,
+      concept: null,
+    };
+  }
+  const about = explainStep(trace, index, source);
+  return {
+    justHappened: index > 0 ? explainStep(trace, index - 1, source).text : null,
+    aboutToHappen: about.text,
+    why: explainTransition(trace, index, source),
+    concept: about.concept,
+  };
 }

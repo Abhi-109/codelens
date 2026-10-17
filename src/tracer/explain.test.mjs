@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CONCEPTS, conceptAt, explainStep, isNewConcept } from "./explain.js";
+import { CONCEPTS, conceptAt, explainStep, explainStepView, explainTransition, isNewConcept } from "./explain.js";
 
 // --- trace builders ---------------------------------------------------------
 
@@ -35,6 +35,23 @@ function state(i, event, { variables = {}, heap = {}, line = 1, fn = "<module>",
 }
 
 const out = (i, text) => ({ step: i, event: "output", text, frame_id: 1, line: 1 });
+
+/** A state-carrying event built from an explicit list of frames (oldest first). */
+function framesEvent(i, event, frames, { heap = {}, line = 1, returnValue = null } = {}) {
+  const top = frames[frames.length - 1];
+  return {
+    step: i,
+    event,
+    function: top.function,
+    frame_id: top.frame_id,
+    line,
+    return_value: returnValue,
+    exception: null,
+    exit_kind: null,
+    frames,
+    heap,
+  };
+}
 
 // --- the tests --------------------------------------------------------------
 
@@ -260,4 +277,129 @@ test("a concept card shows only on the first step that introduces it", () => {
   assert.equal(isNewConcept(trace, 2, source, "variable"), false);
   assert.equal(isNewConcept(trace, 2, source, "loop"), true);
   assert.equal(isNewConcept(trace, 2, source, null), false);
+});
+
+// --- the three-part explanation card ---------------------------------------
+
+const GREET_SOURCE = 'def greet(name):\n    print(name)\n\ngreet("Asha")\n';
+const GREET_TRACE = [
+  framesEvent(0, "call", [frame({})]),
+  framesEvent(1, "line", [frame({ greet: { type: "function", name: "greet" } })], { line: 4 }),
+  framesEvent(
+    2,
+    "call",
+    [
+      frame({ greet: { type: "function", name: "greet" } }),
+      frame({ name: str("Asha") }, { fn: "greet", id: 2, call_line: 4, line: 1 }),
+    ],
+    { line: 1 },
+  ),
+  framesEvent(
+    3,
+    "line",
+    [
+      frame({ greet: { type: "function", name: "greet" } }),
+      frame({ name: str("Asha") }, { fn: "greet", id: 2, call_line: 4, line: 2 }),
+    ],
+    { line: 2 },
+  ),
+  out(4, "Asha"),
+  out(5, "\n"),
+];
+
+test("the card has a just-happened part, an about-to-happen part and a why-now part", () => {
+  const view = explainStepView(GREET_TRACE, 3, GREET_SOURCE);
+  assert.equal(view.justHappened, "Calls greet() with name = \"Asha\".");
+  assert.equal(view.aboutToHappen, "This line prints Asha on the screen.");
+  assert.equal(view.why, "greet() was just called, so its first line runs now.");
+  assert.equal(view.concept, "print");
+});
+
+test("why-now names the call that started a function", () => {
+  assert.equal(
+    explainTransition(GREET_TRACE, 3, GREET_SOURCE),
+    "greet() was just called, so its first line runs now.",
+  );
+  assert.equal(
+    explainTransition(GREET_TRACE, 2, GREET_SOURCE),
+    "line 4 calls greet(), so Python starts that function here.",
+  );
+});
+
+test("why-now borrows the decision sentence when control jumps forward", () => {
+  const source = "if x > 0:\n    y = 1\nprint(x)\n";
+  const trace = [
+    state(0, "call"),
+    state(1, "line", { line: 1, variables: { x: int(-1) } }),
+    state(2, "line", { line: 3, variables: { x: int(-1) } }),
+  ];
+  assert.equal(explainTransition(trace, 2, source), "-1 > 0 is False, so this branch is skipped.");
+});
+
+test("why-now explains a loop coming round again", () => {
+  const source = "total = 0\nfor n in range(1, 6):\n    total = total + n\n";
+  const trace = [
+    state(0, "call"),
+    state(1, "line", { line: 2, variables: { total: int(0) } }),
+    state(2, "line", { line: 3, variables: { total: int(0), n: int(1) } }),
+    state(3, "line", { line: 2, variables: { total: int(1), n: int(1) } }),
+  ];
+  assert.equal(
+    explainTransition(trace, 3, source),
+    "The loop body finished, so Python jumped back up to line 2 for the next round.",
+  );
+});
+
+test("why-now explains a return handing a result back", () => {
+  const trace = [
+    state(0, "call"),
+    state(1, "return", { fn: "fact", id: 2, return_value: int(120) }),
+  ];
+  assert.equal(
+    explainTransition(trace, 1),
+    "fact() reached a return, so its result goes back and the caller carries on.",
+  );
+});
+
+test("a print line names the value it prints", () => {
+  const source = "print(x)\n";
+  const trace = [
+    state(0, "call"),
+    state(1, "line", { line: 1, variables: { x: int(7) } }),
+    out(2, "7"),
+    out(3, "\n"),
+  ];
+  assert.equal(explainStep(trace, 1, source).text, "This line prints 7 on the screen.");
+});
+
+test("an item assignment names the slot that changed and its new value", () => {
+  const source = "xs[0] = 9\n";
+  const before = { o1: { type: "list", items: [int(1), int(2)] } };
+  const after = { o1: { type: "list", items: [int(9), int(2)] } };
+  const trace = [
+    state(0, "call"),
+    state(1, "line", { line: 1, variables: { xs: { type: "ref", id: "o1" } }, heap: before }),
+    state(2, "line", { line: 2, variables: { xs: { type: "ref", id: "o1" } }, heap: after }),
+  ];
+  assert.equal(explainStep(trace, 1, source).text, "Sets one item inside xs: xs[0] is now 9.");
+  assert.equal(explainStep(trace, 1, source).concept, "index");
+});
+
+test("a call to a function that is already running is taught as recursion", () => {
+  const source = "def fact(n):\n    return n * fact(n - 1)\n\nprint(fact(3))\n";
+  const trace = [
+    framesEvent(0, "call", [frame({})]),
+    framesEvent(
+      1,
+      "call",
+      [
+        frame({}),
+        frame({ n: int(3) }, { fn: "fact", id: 2, call_line: 4, line: 1 }),
+        frame({ n: int(2) }, { fn: "fact", id: 3, call_line: 2, line: 1 }),
+      ],
+      { line: 1 },
+    ),
+  ];
+  assert.equal(explainStep(trace, 1, source).text, "Calls fact() with n = 2.");
+  assert.equal(explainStep(trace, 1, source).concept, "recursion");
 });
