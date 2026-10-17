@@ -29,12 +29,16 @@ const EXPECTED = {
 
 const pyodide = await loadPyodide();
 pyodide.FS.writeFile("/tracer.py", readFileSync(join(tracerDir, "tracer.py"), "utf8"));
+pyodide.FS.writeFile("/flowchart.py", readFileSync(join(tracerDir, "flowchart.py"), "utf8"));
 await pyodide.runPythonAsync(
   "import sys, importlib.util\n"
     + "spec = importlib.util.spec_from_file_location('tracer', '/tracer.py')\n"
     + "tracer = importlib.util.module_from_spec(spec)\n"
     + "spec.loader.exec_module(tracer)\n"
-    + "sys.modules['tracer'] = tracer\n",
+    + "sys.modules['tracer'] = tracer\n"
+    + "flow_spec = importlib.util.spec_from_file_location('flowchart', '/flowchart.py')\n"
+    + "flowchart = importlib.util.module_from_spec(flow_spec)\n"
+    + "flow_spec.loader.exec_module(flowchart)\n",
 );
 
 const runTraceJson = pyodide.runPython(
@@ -43,6 +47,10 @@ const runTraceJson = pyodide.runPython(
 
 const buildFlowchartJson = pyodide.runPython(
   "import json\nlambda source: json.dumps(tracer.build_flowchart(source))\n",
+);
+
+const buildFlowchartGraphJson = pyodide.runPython(
+  "import json\nlambda source: json.dumps(flowchart.build_flowchart(source))\n",
 );
 
 let failed = 0;
@@ -61,6 +69,14 @@ for (const name of Object.keys(EXPECTED).sort()) {
   if (!flowOk) failed += 1;
   console.log(
     `${flowOk ? "PASS" : "FAIL"}  ${name}  (flowchart: ${Object.keys(flow.functions).length} chart(s))`,
+  );
+
+  const graph = JSON.parse(buildFlowchartGraphJson(source));
+  const graphOk =
+    graph.format_version === 2 && graph.error === null && "<main>" in graph.functions;
+  if (!graphOk) failed += 1;
+  console.log(
+    `${graphOk ? "PASS" : "FAIL"}  ${name}  (flowchart graph: ${Object.keys(graph.functions).length} chart(s))`,
   );
 }
 

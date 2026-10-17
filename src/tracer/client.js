@@ -1,7 +1,9 @@
 // Talks to the Pyodide worker. The Python tracer has one source of truth in
 // tracer-poc/tracer.py; it is imported here as text and handed to the worker.
+// flowchart.py (the format-2 graph builder) loads the same way.
 
 import tracerSource from "../../tracer-poc/tracer.py?raw";
+import flowchartSource from "../../tracer-poc/flowchart.py?raw";
 
 // Pinned to the version in package.json so the CDN matches the npm package
 // that scripts/pyodide-check.mjs tests against.
@@ -38,7 +40,7 @@ function ensureWorker() {
     if (message.type === "result") entry.resolve(message.result);
     else entry.reject(new Error(message.error));
   };
-  worker.postMessage({ type: "init", tracerSource, indexURL: INDEX_URL });
+  worker.postMessage({ type: "init", tracerSource, flowchartSource, indexURL: INDEX_URL });
   return worker;
 }
 
@@ -92,6 +94,29 @@ export function buildFlowchart(source) {
       reject,
     });
     w.postMessage({ type: "flowchart", id, source });
+  });
+}
+
+/**
+ * Builds the flowchart *graph* (format version 2, tracer-poc/flowchart.py) for
+ * a source without running it. This is the shape the SVG renderer draws;
+ * buildFlowchart above still returns the older tree (format version 1) that the
+ * current UI uses. Distinguish the two by `format_version`. Cached per source.
+ */
+const graphCache = new Map();
+export function buildFlowchartGraph(source) {
+  if (graphCache.has(source)) return Promise.resolve(graphCache.get(source));
+  const w = ensureWorker();
+  const id = nextId++;
+  return new Promise((resolve, reject) => {
+    pending.set(id, {
+      resolve: (value) => {
+        graphCache.set(source, value);
+        resolve(value);
+      },
+      reject,
+    });
+    w.postMessage({ type: "flowchart_graph", id, source });
   });
 }
 
