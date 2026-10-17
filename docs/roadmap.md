@@ -26,13 +26,13 @@ builder and its node/edge contract are in
 - [x] SVG shape primitives for the eight node kinds
 - [x] Dagre layout: nodes, edges, arrowheads, Yes/No labels, back edges
 - [x] Draw the diagram in the UI, old card list behind a "Simple view" toggle
-- [ ] Pan, zoom, and a fit-to-screen button
+- [x] Fit, zoom (wheel and buttons), pan, follow the current node, expand to full screen
 - [ ] Generate on a ~400 ms debounce as the learner types, before Run
 - [ ] "Show code in boxes" toggle
 
 ### Stage A4 — Execution overlay
 
-- [ ] Highlight the node for the current step, with a short trail
+- [x] Highlight the node for the current step, with a short trail
 - [ ] `True` / `False` chips on the branch that actually ran
 - [ ] Loop badges ("Round 2 of 4") in the flowchart and next to the loop line
 - [ ] Click a node to jump to the first step that ran it
@@ -94,9 +94,17 @@ Out of scope for version 1 — see [scope.md](scope.md) for the full list.
 
 Tier 1 is done. The recorder, tracer, teaching layer, object diagrams, and the
 card-list flowchart all work end to end. The flowchart renderer (stages A3–A5)
-is in progress: A3 draws the format-2 graph as an SVG diagram in the UI, and
-what remains is pan/zoom, debounced generation, and the show-code toggle.
+is in progress, but the main view is now the **execution graph**
+(`src/flowchart/executionGraph.js` + `ExecutionGraph.jsx`): a trace-driven
+diagram of the nodes and hops the run actually took, with a token that follows
+the current step. It replaces the textbook flowchart as the default view, which
+is still reachable behind "Simple view".
 
-All suites pass: 81 Python tests, 55 JS tests, plus lint and a production build.
+The playground is laid out as one viewport-height screen — code | graph |
+explanation above variables / call stack / output, with draggable splitters —
+folding into tabs below 1280px. What remains on A3 is debounced generation and
+the show-code toggle.
+
+All suites pass: 81 Python tests, 63 JS tests, plus lint and a production build.
 Two opt-in checks need a local Pyodide install: `npm run test:pyodide` and
 `npm run check:explain`.
