@@ -38,12 +38,16 @@ test("computeFit shrinks a chart that can still fit legibly", () => {
   assert.ok(Math.abs(centre.y - 250) < 1e-9);
 });
 
-test("computeFit fits the width and lets a very tall chart pan vertically", () => {
+test("computeFit fits the width and opens a very tall chart at its top", () => {
   const fit = computeFit({ width: 200, height: 2000 }, pane(400, 300));
   assert.equal(fit.scale, 1, "width fits at 100%, no need to shrink");
-  const centre = toScreen(fit, { x: 100, y: 1000 });
-  assert.equal(centre.x, 200);
-  assert.equal(centre.y, 150);
+  // Centred across, but pinned to the top so the first line is on screen.
+  const topLeft = toScreen(fit, { x: 0, y: 0 });
+  assert.equal(topLeft.x, 100);
+  assert.equal(topLeft.y, 0);
+  const middle = toScreen(fit, { x: 100, y: 1000 });
+  assert.equal(middle.x, 200);
+  assert.equal(middle.y, 1000);
 });
 
 test("computeFit never goes below the legibility floor", () => {

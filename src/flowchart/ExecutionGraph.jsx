@@ -129,17 +129,18 @@ export default function ExecutionGraph({ trace, source, index }) {
   const bounds = useMemo(() => ({ width: laid.width, height: laid.height }), [laid]);
   const markerId = `exec-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
 
-  const viewRef = useRef(null);
-  const dragState = useRef(null);
-  const frame = useRef(0);
-  const transformRef = useRef(IDENTITY);
-
   const [box, setBox] = useState({ w: 0, h: 0 });
-  const [manual, setManual] = useState(null); // { graph, transform } — a zoom or pan
+  const [manual, setManual] = useState(null); // { graph, size, transform } — a zoom or pan
   const [follow, setFollow] = useState(true);
-  const [dragging, setDragging] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [tipId, setTipId] = useState(null);
+
+  const viewRef = useRef(null);
+  const dragState = useRef(null);
+  const dragging = useRef(false);
+  const frame = useRef(0);
+  const transformRef = useRef(IDENTITY);
+  const boxRef = useRef(box);
 
   const reduceMotion = useMemo(
     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
@@ -179,12 +180,17 @@ export default function ExecutionGraph({ trace, source, index }) {
 
   // Fit-to-view is derived, so a new chart (or a resized pane) always refits.
   const fitted = useMemo(() => (ready ? computeFit(bounds, pane) : null), [ready, bounds, pane]);
-  // A manual zoom or pan wins, but only for the chart it was made on.
-  const active = manual && manual.graph === laid ? manual.transform : null;
+  // A zoom or pan wins, but only for the chart *and* the pane size it was made
+  // on: resizing the window refits, as does a brand new run.
+  const active =
+    manual && manual.graph === laid && manual.size.w === box.w && manual.size.h === box.h
+      ? manual.transform
+      : null;
   const transform = active ?? fitted ?? IDENTITY;
 
   useEffect(() => {
     transformRef.current = transform;
+    boxRef.current = box;
   });
 
   const animateTo = useCallback(
@@ -201,7 +207,7 @@ export default function ExecutionGraph({ trace, source, index }) {
           y: from.y + (target.y - from.y) * t,
         };
         transformRef.current = next;
-        setManual({ graph: laid, transform: next });
+        setManual({ graph: laid, size: boxRef.current, transform: next });
         if (p < 1) frame.current = requestAnimationFrame(tick);
       };
       frame.current = requestAnimationFrame(tick);
@@ -219,12 +225,14 @@ export default function ExecutionGraph({ trace, source, index }) {
     return seen;
   }, [graph, index]);
 
-  // Follow the current node, keeping the zoom level. Never runs mid-drag.
+  // Follow the current node, keeping the zoom level. `dragging` is a ref on
+  // purpose: releasing a drag must not yank the view back to the node, so this
+  // only re-centres when the step itself changes (or follow is switched on).
   useEffect(() => {
-    if (!follow || !ready || dragging || !currentNode) return;
+    if (!follow || !ready || dragging.current || !currentNode) return;
     const next = clampPan(centreOn(transformRef.current, currentNode, pane), bounds, pane);
     animateTo(next, reduceMotion ? 0 : FOLLOW_MS);
-  }, [follow, ready, dragging, currentNode, pane, bounds, reduceMotion, animateTo]);
+  }, [follow, ready, currentNode, pane, bounds, reduceMotion, animateTo]);
 
   // Wheel zoom needs a non-passive listener so the page never scrolls instead.
   useEffect(() => {
@@ -236,11 +244,13 @@ export default function ExecutionGraph({ trace, source, index }) {
       const rect = element.getBoundingClientRect();
       const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
       const zoomed = zoomAt(transformRef.current, point, Math.exp(-event.deltaY * 0.0015));
-      setManual({ graph: laid, transform: clampPan(zoomed, bounds, pane) });
+      setManual({ graph: laid, size: boxRef.current, transform: clampPan(zoomed, bounds, pane) });
     };
     element.addEventListener("wheel", onWheel, { passive: false });
     return () => element.removeEventListener("wheel", onWheel);
   }, [ready, laid, bounds, pane]);
+
+  const apply = (next) => setManual({ graph: laid, size: boxRef.current, transform: next });
 
   const tipNode = tipId ? laid.nodes.find((node) => node.id === tipId) ?? null : null;
   let tip = null;
@@ -258,8 +268,6 @@ export default function ExecutionGraph({ trace, source, index }) {
       top: Math.max(4, Math.min(centre.y - halfH, box.h - 48)),
     };
   }
-
-  const apply = (next) => setManual({ graph: laid, transform: next });
 
   function zoomBy(factor) {
     cancelAnimationFrame(frame.current);
@@ -287,7 +295,7 @@ export default function ExecutionGraph({ trace, source, index }) {
     cancelAnimationFrame(frame.current);
     event.currentTarget.setPointerCapture(event.pointerId);
     dragState.current = { x: event.clientX, y: event.clientY, from: transformRef.current };
-    setDragging(true);
+    dragging.current = true;
     setTipId(null);
   }
 
@@ -304,7 +312,7 @@ export default function ExecutionGraph({ trace, source, index }) {
 
   function endDrag() {
     dragState.current = null;
-    setDragging(false);
+    dragging.current = false;
   }
 
   function openTip(id) {

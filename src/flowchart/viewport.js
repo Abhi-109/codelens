@@ -38,6 +38,10 @@ export function centreOn(transform, point, viewport) {
  * too large for that, the width is fitted and the learner pans vertically —
  * and if even the width would need unreadable labels, the legibility floor
  * wins instead.
+ *
+ * Whichever branch wins, the drawing is centred in any direction where it fits
+ * and pinned to the top/left in a direction where it overflows, so a chart that
+ * cannot be shown whole still opens on its first line rather than its middle.
  */
 export function computeFit(bounds, viewport, minScale = MIN_LEGIBLE_SCALE) {
   const bw = positive(bounds?.width);
@@ -52,7 +56,13 @@ export function computeFit(bounds, viewport, minScale = MIN_LEGIBLE_SCALE) {
   const fitted = whole >= minScale ? whole : Math.max(widthOnly, minScale);
   // Never magnify on load: a two-node chart should not balloon to fill the pane.
   const scale = clampScale(Math.min(fitted, 1));
-  return centreOn({ scale, x: 0, y: 0 }, { x: bw / 2, y: bh / 2 }, viewport);
+  const drawnW = bw * scale;
+  const drawnH = bh * scale;
+  return {
+    scale,
+    x: drawnW <= paneW ? (paneW - drawnW) / 2 : 0,
+    y: drawnH <= paneH ? (paneH - drawnH) / 2 : 0,
+  };
 }
 
 /** Zooms by `factor` while keeping the graph point under `point` (pane space) fixed. */
