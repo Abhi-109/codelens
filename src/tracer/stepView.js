@@ -355,6 +355,19 @@ export function changeLog(trace) {
 }
 
 /**
+ * The step to open on after a run that ended badly: the step that raised, so
+ * the failing line is the one lit up. A syntax error never ran at all, so its
+ * single event is the answer.
+ * @returns {number} an index into `trace`, or 0
+ */
+export function errorStep(trace) {
+  const list = Array.isArray(trace) ? trace : [];
+  if (list.length === 0) return 0;
+  const raised = list.findIndex((event) => event.event === "exception");
+  return raised >= 0 ? raised : list.length - 1;
+}
+
+/**
  * How one variable changed over the whole run: the value it first held at each
  * step, and the line that put it there. Powers "watch this variable".
  * @returns {Array<{ index: number, line: number|null, value: string, function: string }>}

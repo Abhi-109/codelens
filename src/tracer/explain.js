@@ -674,5 +674,9 @@ function justHappened(trace, index, source) {
   if (event.event === "return" && previous?.event === "line" && event.return_value) {
     return `line ${previous.line} handed back ${showValue(event.return_value, event.heap)} from ${event.function}().`;
   }
+  if (event.event === "exception" && previous?.event === "line") {
+    // The line is highlighted *and* just started: it did not finish its work.
+    return `line ${previous.line} started running, and this is where it stopped.`;
+  }
   return explainStep(trace, index - 1, source).text;
 }

@@ -4,7 +4,7 @@ import { CONCEPTS, isNewConcept } from "./tracer/explain";
 import { countFor, flowFor, pathToLine, runsByLine } from "./tracer/flow";
 import { namesById, objectChanges, slotEntries } from "./tracer/objects";
 import { formatValue, showValue } from "./tracer/values";
-import { changeLog, getStepView, variableHistory } from "./tracer/stepView";
+import { changeLog, errorStep, getStepView, variableHistory } from "./tracer/stepView";
 import { buildExecutionGraph } from "./flowchart/executionGraph.js";
 import ExecutionGraph from "./flowchart/ExecutionGraph.jsx";
 import "./App.css";
@@ -126,7 +126,7 @@ function PanelHead({ title, hint, help }) {
 }
 
 /** One line of code, with the run markers, a result hint and hover values. */
-function CodeLine({ number, text, current, justRan, hint, values, onJump }) {
+function CodeLine({ number, text, current, justRan, error, hint, values, onJump }) {
   const parts = [];
   const pattern = /[A-Za-z_]\w*/g;
   let last = 0;
@@ -150,12 +150,14 @@ function CodeLine({ number, text, current, justRan, hint, values, onJump }) {
   return (
     <button
       type="button"
-      className={`code-line${current ? " current" : ""}${justRan ? " just-ran" : ""}`}
+      className={`code-line${current ? " current" : ""}${justRan ? " just-ran" : ""}${
+        error ? " code-error" : ""
+      }`}
       onClick={onJump}
-      title="Jump to a step that runs this line"
+      title={error ? "This line is where the program went wrong" : "Jump to a step that runs this line"}
     >
       <span className="code-mark" aria-hidden="true">
-        {current ? "▶" : justRan ? "•" : ""}
+        {error ? "✕" : current ? "▶" : justRan ? "•" : ""}
       </span>
       <span className="ln">{number}</span>
       <span className="code-text">
@@ -525,6 +527,8 @@ export default function App() {
   const line = view.line;
   // One code panel: editable until a run, then read-only with the line lit up.
   const stepping = !editing && result !== null;
+  // The line the program broke on, so the code pane can point at it.
+  const errorLine = result?.error?.line ?? null;
   const callTitle =
     view.frame && view.frame.function !== MODULE
       ? `${view.frame.function} call #${view.frame.callNumber}${
@@ -579,7 +583,9 @@ export default function App() {
       const [r, f] = await Promise.all([runTrace(source), buildFlowchart(source)]);
       setResult(r);
       setFlow(f);
-      setIndex(0);
+      // A run that crashed opens on the step that failed, so the line that
+      // broke is already lit up when the error message appears.
+      setIndex(r?.error ? errorStep(r.trace) : 0);
       setEditing(false);
       setSelectedCall(null);
       setWatched(null);
@@ -709,6 +715,7 @@ export default function App() {
                     text={text}
                     current={line === i + 1}
                     justRan={view.previousLine === i + 1 && line !== i + 1}
+                    error={errorLine === i + 1}
                     hint={line === i + 1 ? view.hint : null}
                     values={view.values}
                     onJump={() => jumpToLine(i + 1)}
@@ -858,6 +865,11 @@ export default function App() {
               graph={graph}
               index={index}
               onJump={jumpTo}
+              note={
+                flow?.error
+                  ? "There is nothing to draw: the code has a syntax error, so it never ran."
+                  : null
+              }
             />
           )}
         </section>

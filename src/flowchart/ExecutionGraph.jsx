@@ -186,8 +186,10 @@ function GraphEdge({ edge, markerId, index, reason, nodesById }) {
  * @param {Object} [props.graph] buildExecutionGraph output, so the node here is
  *   the very same node the step view reads
  * @param {(index: number) => void} [props.onJump] called when a node is clicked
+ * @param {string} [props.note] what to say when there is nothing to draw, e.g.
+ *   when the code never ran because of a syntax error
  */
-export default function ExecutionGraph({ trace, source, index, graph: given, onJump }) {
+export default function ExecutionGraph({ trace, source, index, graph: given, onJump, note = null }) {
   const graph = useMemo(
     () => given ?? buildExecutionGraph(trace, source),
     [given, trace, source],
@@ -524,7 +526,7 @@ export default function ExecutionGraph({ trace, source, index, graph: given, onJ
           </svg>
         ) : (
           <p className="empty exec-empty">
-            {hasGraph ? null : "Run your code to see it happen as a graph."}
+            {hasGraph ? null : (note ?? "Run your code to see it happen as a graph.")}
           </p>
         )}
 

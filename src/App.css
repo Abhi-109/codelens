@@ -340,6 +340,17 @@ button:disabled {
   box-shadow: inset 3px 0 0 var(--border);
 }
 
+/* The line the program broke on, so a failure points at itself. */
+.code-line.code-error {
+  box-shadow: inset 3px 0 0 #dc2626;
+  background: rgb(220 38 38 / 8%);
+}
+
+.code-line.code-error .code-mark,
+.code-line.code-error .code-text {
+  color: #dc2626;
+}
+
 .code-mark {
   flex: none;
   width: 1.4ch;

@@ -409,6 +409,19 @@ test("just happened says a line called a function, not that the line finished", 
   assert.equal(view.justHappened, "line 4 called greet().");
 });
 
+test("just happened at a failure says the line started, not that it printed", () => {
+  const source = "nums = [1, 2, 3]\nprint(nums[10])\n";
+  const trace = [
+    framesEvent(0, "call", [frame({})]),
+    framesEvent(1, "line", [frame({ nums: { type: "ref", id: "o1" } })], { line: 1 }),
+    framesEvent(2, "line", [frame({ nums: { type: "ref", id: "o1" } })], { line: 2 }),
+    { event: "exception", line: 2, frames: [frame({ nums: { type: "ref", id: "o1" } })], exception: { type: "IndexError", message: "list index out of range" } },
+  ];
+  const view = explainStepView(trace, 3, source);
+  assert.equal(view.justHappened, "line 2 started running, and this is where it stopped.");
+  assert.match(view.aboutToHappen, /Python stops with IndexError/);
+});
+
 test("just happened reports the value a finished call handed back", () => {
   const source = "def fact(n):\n    if n <= 1:\n        return 1\n    return n * fact(n - 1)\n";
   const inside = frame({ n: int(1) }, { fn: "fact", id: 2, call_line: 4, line: 3 });

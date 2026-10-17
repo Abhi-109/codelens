@@ -17,7 +17,7 @@ import { gunzipSync } from "node:zlib";
 
 import { explainStep } from "./explain.js";
 import { buildExecutionGraph } from "../flowchart/executionGraph.js";
-import { changeLog, getStepView, paramsFor, stateAt, variableHistory } from "./stepView.js";
+import { changeLog, errorStep, getStepView, paramsFor, stateAt, variableHistory } from "./stepView.js";
 
 const FIXTURES = JSON.parse(
   gunzipSync(readFileSync(new URL("./__fixtures__/traces.json.gz", import.meta.url))),
@@ -188,6 +188,17 @@ test("a runtime error keeps the failing line highlighted", () => {
   const view = getStepView(trace, errorIndex, source);
   assert.equal(view.line, 2);
   assert.ok(view.explanation.aboutToHappen.length > 0);
+});
+
+test("a failed run opens on the step that failed, not the top", () => {
+  const { trace } = FIXTURES.runtimeError;
+  assert.equal(errorStep(trace), 3);
+  assert.equal(trace[3].event, "exception");
+  assert.equal(trace[errorStep(trace)].line, 2);
+  // A syntax error never ran, so its only event is the one to show.
+  assert.equal(errorStep(FIXTURES.syntaxError.trace), 0);
+  assert.equal(errorStep([]), 0);
+  assert.equal(errorStep(null), 0);
 });
 
 // --- the anti-contradiction sweep over the real merge sort -----------------
