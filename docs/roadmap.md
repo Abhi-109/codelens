@@ -33,14 +33,37 @@ builder and its node/edge contract are in
 ### Stage A4 — Execution overlay
 
 - [x] Highlight the node for the current step, with a short trail
-- [ ] `True` / `False` chips on the branch that actually ran
-- [ ] Loop badges ("Round 2 of 4") in the flowchart and next to the loop line
-- [ ] Click a node to jump to the first step that ran it
+- [x] `True` / `False` chips on the branch that actually ran, showing the real values
+- [x] "ran N times" badges on the nodes and edges the run went round again
+- [x] Click a node to jump to the step that ran it (a picker appears if it ran more than once)
 
 ### Stage A5 — Function tabs and export
 
 - [ ] One tab per function, following the call stack
 - [ ] Export the chart as SVG or PNG
+
+## Teaching UI pass
+
+The panels stopped guessing and started reading from one tested step view
+(`src/tracer/stepView.js`), so the highlighted line, graph node, variables,
+changes, stack and explanation can never contradict each other. The convention is
+written down in [ui-diagnosis.md](ui-diagnosis.md).
+
+- [x] One `currentStep` driving every panel; every click target (graph node, code
+      line, change entry, call) sets it
+- [x] Explanation card in three labelled parts: Just happened / About to happen /
+      Why this line runs now
+- [x] Dismissible concept cards naming the idea the first time it appears
+- [x] Variables panel: plain heading and hint, real values, a two-names-for-one-list
+      note, NEW/CHANGED badges, Before/After toggle, click a name to see its history
+- [x] Changes panel: every change, newest first, each jumpable
+- [x] Function calls panel: arguments, called-from line, each call's own variables
+      and return value
+- [x] Graph: every edge labelled with why it was taken, decision chips with real
+      values, run badges, current/came-from/next tags, click-to-jump
+- [x] Code panel: wrapped long lines, `▶` on the next line, result hints inline,
+      hover a name to see its value
+- [x] Side panels renamed and given one-line descriptions and a `?` help button
 
 ## Tier 2: Core experience
 
@@ -58,16 +81,18 @@ The biggest win for a beginner. No tracer or trace-format changes.
 
 ## Tier 3: Better visuals
 
-- [ ] Reference arrows from variables to heap objects (SVG overlay)
-- [ ] Call stack cards with "called from line N", argument values, and return values
+- [ ] Reference arrows from variables to heap objects (SVG overlay; the objects
+      panel names every variable that points at each object instead)
+- [x] Call stack cards with "called from line N", argument values, and return values
 - [ ] Recursion tree view
 - [ ] Strings as character slots; nested lists as grids
-- [ ] Jump controls: next loop round, end of function, next change
+- [ ] Jump controls: next loop round, end of function (jumping to a change is done
+      from the Changes panel)
 
 ## Tier 4: Teaching layer
 
-- [ ] Concept cards, dismissible, shown once per run
-- [ ] Glossary tooltips on terms in explanations
+- [x] Concept cards, dismissible, shown once per run
+- [x] Glossary drawer, and a first-use card wherever a new term appears
 - [ ] Level selector (Beginner / Intermediate) changing explanation depth
 - [ ] Move all explanation strings into `i18n/en.js` (prep for Kannada)
 - [ ] Predict mode with a small score
@@ -101,10 +126,18 @@ the current step. It replaces the textbook flowchart as the default view, which
 is still reachable behind "Simple view".
 
 The playground is laid out as one viewport-height screen — code | graph |
-explanation above variables / call stack / output, with draggable splitters —
-folding into tabs below 1280px. What remains on A3 is debounced generation and
-the show-code toggle.
+explanation above variables / changes / calls / output, with draggable
+splitters — folding into tabs (Code, Graph, Variables, Changes, Calls, Output)
+below 1280px. What remains on A3 is debounced generation and the show-code
+toggle.
 
-All suites pass: 81 Python tests, 63 JS tests, plus lint and a production build.
+The teaching UI pass is done: `src/tracer/stepView.js` is the single tested view
+of a step, and every panel and the graph render from it, so they cannot disagree.
+The explanation card is three labelled parts, and it now says what the previous
+line *did* rather than repeating its prediction. See
+[ui-diagnosis.md](ui-diagnosis.md) for the convention and
+[flowchart-format.md](flowchart-format.md) for the graph contract.
+
+All suites pass: 81 Python tests, 95 JS tests, plus lint and a production build.
 Two opt-in checks need a local Pyodide install: `npm run test:pyodide` and
 `npm run check:explain`.
