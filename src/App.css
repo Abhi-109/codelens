@@ -703,18 +703,37 @@ h3 {
   cursor: pointer;
 }
 
+/* The graph fills whatever pane it is given and never grows the page. */
 .exec-graph {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: clamp(300px, 52vh, 520px);
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--code-bg);
-  padding: 8px;
-  margin-bottom: 16px;
+  padding: 6px;
 }
 
-/* A fixed pane the graph is *panned* inside, never one that grows the page. */
+/* Expand turns the same pane into a full-screen overlay — one graph, one
+   transform, just a much bigger box for it to fit into. */
+.exec-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  height: auto;
+  border: none;
+  border-radius: 0;
+  padding: 10px;
+  background: var(--bg);
+}
+
+/* A fixed pane the graph is *panned* inside — no native scrollbars, ever. */
 .exec-view {
   position: relative;
-  height: clamp(220px, 40vh, 380px);
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   border-radius: 6px;
   cursor: grab;
@@ -737,11 +756,40 @@ h3 {
   margin: 0;
 }
 
+/* Tooltip lives beside the node, never over it. */
+.exec-tip {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+.exec-tip-where {
+  font-size: 11px;
+  color: var(--text);
+}
+
+.exec-tip code {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-h);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .exec-tools {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 6px;
+  margin-top: 6px;
   font-size: 11px;
   color: var(--text);
 }
@@ -760,9 +808,20 @@ h3 {
   border-color: var(--accent);
 }
 
-.exec-hint {
-  margin-left: auto;
-  opacity: 0.8;
+.exec-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.exec-toggle input {
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .exec-node-box {
@@ -777,15 +836,25 @@ h3 {
   fill: var(--text-h);
 }
 
+/* Labels paint over the token, so the moving dot can never hide code. */
+.exec-texts {
+  pointer-events: none;
+}
+
 /* Not reached yet sits back; visited is solid; the current node glows. */
 .exec-node-ahead {
   opacity: 0.35;
 }
 
-.exec-node-current .exec-node-box {
+.exec-node-current .exec-node-box,
+.exec-node:focus .exec-node-box {
   stroke: var(--accent);
   stroke-width: 2.5;
   filter: drop-shadow(0 0 6px var(--accent-border));
+}
+
+.exec-node:focus {
+  outline: none;
 }
 
 /* Edge colour by kind, so calls, returns and loops are told apart. */
@@ -851,22 +920,17 @@ h3 {
   stroke-width: 3px;
 }
 
+/* The travelling dot: small, and drawn under the label layer. */
 .exec-token {
-  transition: transform 0.25s ease-out;
-}
-
-.exec-token-dot {
   fill: var(--accent);
-  stroke: var(--bg);
-  stroke-width: 2;
 }
 
 .exec-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   list-style: none;
-  margin: 8px 0 0;
+  margin: 0 0 0 auto;
   padding: 0;
   font-size: 11px;
   color: var(--text);
@@ -903,8 +967,8 @@ h3 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .exec-token {
-    transition: none;
+  .exec-graph {
+    scroll-behavior: auto;
   }
 }
 
