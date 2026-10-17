@@ -297,7 +297,8 @@ export default function App() {
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [columns, setColumns] = useState(loadColumns);
   const [resizing, setResizing] = useState(false);
-  const [tab, setTab] = useState("graph");
+  // On a phone the Run button lives behind the Code tab, so start there.
+  const [tab, setTab] = useState(() => (window.innerWidth < 900 ? "code" : "graph"));
 
   const timer = useRef(null);
   const layoutRef = useRef(null);
