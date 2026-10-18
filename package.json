@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test:tracer": "python -m unittest discover -s tracer-poc -p \"test_*.py\"",
-    "test:js": "node --test src/tracer/explain.test.mjs src/tracer/flow.test.mjs src/tracer/objects.test.mjs src/tracer/stepView.test.mjs src/flowchart/executionGraph.test.mjs src/flowchart/reasons.test.mjs src/flowchart/viewport.test.mjs",
+    "test:js": "node --test src/tracer/action.test.mjs src/tracer/explain.test.mjs src/tracer/flow.test.mjs src/tracer/objects.test.mjs src/tracer/stepView.test.mjs src/flowchart/executionGraph.test.mjs src/flowchart/reasons.test.mjs src/flowchart/viewport.test.mjs",
     "test:pyodide": "node scripts/pyodide-check.mjs",
     "check:explain": "node scripts/explain-check.mjs"
   },

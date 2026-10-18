@@ -657,6 +657,257 @@ export function explainStepView(trace, index, source = "") {
   };
 }
 
+// --- Statement kinds and short actions ---------------------------------------
+// The execution graph labels every node with a *short* verb phrase — "Set total",
+// "Call fact(4)", "Check n <= 1" — where the explanation card writes a whole
+// sentence. The label comes from the event type plus the kind of statement the
+// source line is, never from what the program is "about", so it works for any
+// program. Every rule has a fallback: an unknown line still gets a real label
+// (its own opening words), and nothing here throws.
+
+/** The kinds a line can be. Every one has an action rule (or falls back). */
+export const STATEMENT_KINDS = [
+  "def",
+  "async-def",
+  "decorator",
+  "class",
+  "import",
+  "if",
+  "elif",
+  "else",
+  "for",
+  "while",
+  "return",
+  "yield",
+  "break",
+  "continue",
+  "pass",
+  "del",
+  "raise",
+  "try",
+  "except",
+  "finally",
+  "with",
+  "async-with",
+  "global",
+  "nonlocal",
+  "assert",
+  "match",
+  "case",
+  "await",
+  "augmented",
+  "item-assign",
+  "attr-assign",
+  "assign",
+  "print",
+  "lambda",
+  "expression",
+  "other",
+];
+
+const KIND_RULES = [
+  [/^async\s+def\b/, "async-def"],
+  [/^@/, "decorator"],
+  [/^def\b/, "def"],
+  [/^class\b/, "class"],
+  [/^(?:from\s+[\w.]+\s+)?import\b/, "import"],
+  [/^elif\b/, "elif"],
+  [/^if\b/, "if"],
+  [/^else\b/, "else"],
+  [/^for\b/, "for"],
+  [/^while\b/, "while"],
+  [/^return\b/, "return"],
+  [/^yield\b/, "yield"],
+  [/^break\b/, "break"],
+  [/^continue\b/, "continue"],
+  [/^pass\b/, "pass"],
+  [/^del\b/, "del"],
+  [/^raise\b/, "raise"],
+  [/^try\b/, "try"],
+  [/^except\b/, "except"],
+  [/^finally\b/, "finally"],
+  [/^async\s+with\b/, "async-with"],
+  [/^with\b/, "with"],
+  [/^global\b/, "global"],
+  [/^nonlocal\b/, "nonlocal"],
+  [/^assert\b/, "assert"],
+  [/^match\b/, "match"],
+  [/^case\b/, "case"],
+  [/^await\b/, "await"],
+  [/^lambda\b/, "lambda"],
+];
+
+/** The bare name a statement defines or targets, when there is one. */
+function nameIn(text, re) {
+  return text.match(re)?.[1] ?? null;
+}
+
+/**
+ * The kind of statement a line is, from its text alone. Used to pick the short
+ * action label and the "not supported yet" note; unknown lines are "other".
+ * @param {string} text the trimmed source line
+ * @returns {string} one of STATEMENT_KINDS
+ */
+export function statementKind(text) {
+  const line = String(text ?? "").trim();
+  if (!line) return "other";
+  for (const [re, kind] of KIND_RULES) {
+    if (re.test(line)) return kind;
+  }
+  if (/^\w+\s*(\*\*|[-+*/%])=(?!=)/.test(line)) return "augmented";
+  // Annotated assignment (x: int = 1) and plain assignment, including tuples.
+  if (/^[\w.]+(?:\[[^\]]*\])?\s*:\s*[^=]+=[^=]/.test(line)) return "assign";
+  if (/^(?:\w+|\([^)]*\))(?:\s*\[[^\]]*\])?(?:\s*\.\s*\w+|\s*\[[^\]]*\])*\s*=(?!=)/.test(line)) {
+    if (/^\w+\s*\.\s*\w+\s*=(?!=)/.test(line)) return "attr-assign";
+    if (/^\w+\s*\[/.test(line)) return "item-assign";
+    return "assign";
+  }
+  // Several targets at once (a, b = 1, 2  /  x[0], x[1] = x[1], x[0]).
+  if (/^[^()=]+(?:,\s*[^()=]+)+\s*=(?!=)/.test(line)) return "assign";
+  if (/^print\s*\(/.test(line)) return "print";
+  if (/^[\w.]+\s*\(.*\)\s*$/.test(line)) return "expression";
+  return "other";
+}
+
+/** Cuts a label to `max` characters, on a word boundary when there is one. */
+function brief(text, max = 34) {
+  const value = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (value.length <= max) return value;
+  const cut = value.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
+/** A short verb phrase for a line, from its statement kind. */
+function actionForLine(text, kind) {
+  switch (kind) {
+    case "def":
+      return `Define ${nameIn(text, /^def\s+(\w+)/) ?? "a function"}()`;
+    case "async-def":
+      return `Define async ${nameIn(text, /^async\s+def\s+(\w+)/) ?? "function"}()`;
+    case "decorator":
+      return `Decorate the function below`;
+    case "class":
+      return `Define class ${nameIn(text, /^class\s+(\w+)/) ?? ""}`.trim();
+    case "import": {
+      const from = text.match(/^from\s+([\w.]+)/)?.[1];
+      const what = text.match(/^import\s+([\w.]+)/)?.[1];
+      return `Import ${from ?? what ?? "a module"}`;
+    }
+    case "if":
+    case "elif":
+      return `Check ${brief(text.replace(/^(?:el)?if\s+/, "").replace(/:\s*$/, ""), 30)}`;
+    case "else":
+      return "Take the other branch";
+    case "for": {
+      const target = text.match(/^for\s+(.+?)\s+in\s+/)?.[1] ?? "each item";
+      return `Loop over ${brief(target, 24)}`;
+    }
+    case "while":
+      return `Check the loop condition`;
+    case "return": {
+      const value = text.match(/^return(?:\s+(.+))?$/)?.[1];
+      return value ? `Return ${brief(value, 26)}` : "Return, with no value";
+    }
+    case "yield":
+      return "Produce the next value";
+    case "break":
+      return "Break out of the loop";
+    case "continue":
+      return "Skip to the next round";
+    case "pass":
+      return "Do nothing here";
+    case "del":
+      return `Delete ${nameIn(text, /^del\s+([\w.]+)/) ?? "a name"}`;
+    case "raise":
+      return "Raise an error";
+    case "try":
+      return "Try these lines";
+    case "except":
+      return "Handle the error";
+    case "finally":
+      return "Run the cleanup";
+    case "with":
+    case "async-with":
+      return `Open ${brief(nameIn(text, /^(?:async\s+)?with\s+([\w.]+)/) ?? "a resource", 26)}`;
+    case "global":
+      return `Use the global ${brief(text.replace(/^global\s+/, ""), 20)}`;
+    case "nonlocal":
+      return `Use the outer ${brief(text.replace(/^nonlocal\s+/, ""), 20)}`;
+    case "assert":
+      return `Check ${brief(text.replace(/^assert\s+/, ""), 28)}`;
+    case "match":
+      return `Match ${brief(text.replace(/^match\s+/, "").replace(/:\s*$/, ""), 24)}`;
+    case "case":
+      return "Match this case";
+    case "await":
+      return `Wait for ${brief(text.replace(/^await\s+/, ""), 24)}`;
+    case "lambda":
+      return "Define a small function";
+    case "augmented":
+      return brief(text.replace(/:\s*$/, ""), 30);
+    case "assign": {
+      const left = text.split("=")[0].trim();
+      const names = left.split(",").map((part) => part.trim()).filter(Boolean);
+      if (names.length > 1) return `Set ${brief(names.join(", "), 26)}`;
+      return `Set ${brief(left, 26)}`;
+    }
+    case "item-assign":
+      return `Change one item in ${nameIn(text, /^(\w+)/) ?? "the data"}`;
+    case "attr-assign":
+      return `Set ${brief(text.split("=")[0].trim(), 26)}`;
+    case "print":
+      return "Print to the screen";
+    case "expression":
+      return `Call ${brief(nameIn(text, /^([\w.]+)\s*\(/) ?? "a function", 26)}()`;
+    default:
+      return `Run ${brief(text, 30)}`;
+  }
+}
+
+/**
+ * The short label an execution-graph node carries: a verb phrase such as
+ * "Set total", "Call fact(4)" or "Check n <= 1". Derived from the event type
+ * and the statement kind only — never from an example's names.
+ * @returns {string}
+ */
+export function explainAction(event, trace, index, source = "") {
+  try {
+    if (!event) return "Start of the run";
+    switch (event.event) {
+      case "call":
+        return event.function === "<module>"
+          ? "Start the program"
+          : `Call ${event.function}()`;
+      case "return":
+        return event.function === "<module>" ? "Finish the program" : `${event.function}() returns`;
+      case "line": {
+        const { text } = sourceLine(source, event.line);
+        if (!text) return "Move on to the next line";
+        return actionForLine(text, statementKind(text));
+      }
+      case "exception":
+        return `Stop: ${event.exception?.type ?? "error"}`;
+      case "unwind":
+        return `${event.function ?? "This call"}() stops early`;
+      case "output":
+        return "Print to the screen";
+      case "input":
+        return "Read what was typed";
+      case "error":
+        return "The program could not run";
+      case "step_limit":
+      case "timeout":
+      case "output_limit":
+        return "Stopped to stay safe";
+      default:
+        return `Step ${index + 1}`;
+    }
+  } catch {
+    return "Run this step";
+  }
+}
+
 /**
  * What the step before this one actually did. A line that is still running —
  * because it called a function — must not be described as finished, so calls
