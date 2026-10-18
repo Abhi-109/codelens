@@ -11,6 +11,7 @@ import {
   centreOn,
   clampPan,
   computeFit,
+  frameCard,
   panBy,
   toScreen,
   viewBoxOf,
@@ -107,4 +108,31 @@ test("clampPan keeps part of the drawing on screen", () => {
 test("clampPan leaves a chart that already fits alone", () => {
   const centred = centreOn({ scale: 1, x: 0, y: 0 }, { x: 50, y: 50 }, pane(400, 300));
   assert.deepEqual(clampPan(centred, { width: 100, height: 100 }, pane(400, 300)), centred);
+});
+
+test("frameCard centres the current card when the drawing is wider than the pane", () => {
+  const card = { x: 1000, y: 500, width: 300, height: 99 };
+  const framed = frameCard({ scale: 1, x: 0, y: 0 }, card, { width: 4000, height: 3000 }, pane(600, 400));
+  const centre = toScreen(framed, { x: card.x + 150, y: card.y + 49.5 });
+  assert.ok(Math.abs(centre.x - 300) < 1e-9);
+  assert.ok(Math.abs(centre.y - 200) < 1e-9);
+});
+
+test("frameCard centres the drawing when the whole chart fits across", () => {
+  // A shallow graph: following one card sideways would leave the pane lopsided.
+  const card = { x: 28, y: 300, width: 300, height: 99 };
+  const bounds = { width: 328, height: 2000 };
+  const framed = frameCard({ scale: 1, x: 0, y: 0 }, card, bounds, pane(600, 400));
+  assert.equal(framed.x, (600 - 328) / 2);
+  // Still follows down the run, which is what matters while stepping.
+  const centre = toScreen(framed, { x: card.x + 150, y: card.y + 49.5 });
+  assert.ok(Math.abs(centre.y - 200) < 1e-9);
+});
+
+test("frameCard centres the middle of a laid-out row, not its corner", () => {
+  const row = { x: 200, y: 800, width: 300, height: 99, cx: 350, cy: 849.5 };
+  const framed = frameCard({ scale: 1, x: 0, y: 0 }, row, { width: 4000, height: 3000 }, pane(600, 400));
+  const middle = toScreen(framed, { x: row.cx, y: row.cy });
+  assert.ok(Math.abs(middle.x - 300) < 1e-9);
+  assert.ok(Math.abs(middle.y - 200) < 1e-9);
 });

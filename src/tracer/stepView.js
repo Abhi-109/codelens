@@ -170,10 +170,13 @@ function slotChanges(before, after, names) {
       if (!inSlotEntries.has(key)) continue; // the "+N more" marker is not a slot
       const name =
         object.type === "object" ? `${label}.${key}` : `${label}[${JSON.stringify(key)}]`;
+      const had = then.has(key);
       changes.push({
-        kind: "slot",
+        // A slot that did not exist before is new, not a change from nothing —
+        // calling it a change would print a made-up "before" value.
+        kind: had ? "slot" : "new-slot",
         name,
-        from: beforeHeap[id] ? showValue(then.get(key), beforeHeap) : null,
+        from: had ? showValue(then.get(key), beforeHeap) : null,
         to: showValue(now.get(key), afterHeap),
         line: null,
       });

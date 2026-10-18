@@ -174,7 +174,9 @@ function CodeLine({ number, text, current, justRan, error, hint, values, onJump 
 
 function VariableRow({ entry, change, onChange, watched, onWatch }) {
   // An argument is already explained by its "argument" tag; no NEW/after noise.
-  const badged = change && change.kind !== "slot" && !change.arg;
+  // A slot change inside a list or object is shown on the object itself.
+  const badged =
+    change && change.kind !== "slot" && change.kind !== "new-slot" && !change.arg;
   return (
     <li className={`var-row${badged ? " changed" : ""}`}>
       <button type="button" className="var-name" onClick={onWatch} aria-pressed={watched}>
@@ -462,7 +464,7 @@ export default function App() {
   const [source, setSource] = useState(EXAMPLES[START_EXAMPLE].code);
   const [result, setResult] = useState(null);
   const [flow, setFlow] = useState(null);
-  const [simpleView, setSimpleView] = useState(false);
+  const [viewMode, setViewMode] = useState("beginner");
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -845,16 +847,34 @@ export default function App() {
               Execution graph
               {result && <span className="flow-of"> — {callTitle}</span>}
             </h3>
-            <label className="flow-view">
-              <input
-                type="checkbox"
-                checked={simpleView}
-                onChange={(event) => setSimpleView(event.target.checked)}
-              />
-              Simple view
-            </label>
+            <div className="state-toggle flow-view" role="group" aria-label="How much detail to show">
+              <button
+                type="button"
+                className={viewMode === "beginner" ? "on" : ""}
+                onClick={() => setViewMode("beginner")}
+                title="Plain English, values and changes, nothing technical"
+              >
+                Beginner
+              </button>
+              <button
+                type="button"
+                className={viewMode === "advanced" ? "on" : ""}
+                onClick={() => setViewMode("advanced")}
+                title="The same graph with trace details: frames, run counts, wire labels"
+              >
+                Advanced
+              </button>
+              <button
+                type="button"
+                className={viewMode === "textbook" ? "on" : ""}
+                onClick={() => setViewMode("textbook")}
+                title="The textbook flowchart for the function you are inside"
+              >
+                Textbook
+              </button>
+            </div>
           </div>
-          {simpleView ? (
+          {viewMode === "textbook" ? (
             <div className="pane-scroll">
               <Flowchart flow={flow} functionName={view.function} trace={trace} line={line} />
             </div>
@@ -864,6 +884,7 @@ export default function App() {
               source={source}
               graph={graph}
               index={index}
+              mode={viewMode}
               onJump={jumpTo}
               note={
                 flow?.error

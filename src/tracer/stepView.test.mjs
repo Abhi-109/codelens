@@ -166,8 +166,39 @@ test("changeLog is the story of every change, with the step to jump to", () => {
   const { trace } = FIXTURES.mergeSort;
   const log = changeLog(trace);
   assert.ok(log.length > 10, "the merge sort changes a lot");
-  assert.ok(log.some((entry) => entry.kind === "slot"), "list slots are in the log too");
+  assert.ok(
+    log.some((entry) => entry.kind === "slot" || entry.kind === "new-slot"),
+    "list slots are in the log too",
+  );
   assert.ok(log.every((entry) => Number.isInteger(entry.index)));
+});
+
+// xs = [1, 2] / xs[0] = 9 / xs.append(3) / print(xs)
+const LIST_SOURCE = "xs = [1, 2]\nxs[0] = 9\nxs.append(3)\nprint(xs)\n";
+const ref = (id) => ({ type: "ref", id });
+const LIST_TRACE = [
+  state(0, "call", { line: 0 }),
+  state(1, "line", { line: 1 }),
+  state(2, "line", { line: 2, variables: { xs: ref("o1") }, heap: { o1: { type: "list", items: [int(1), int(2)] } } }),
+  state(3, "line", { line: 3, variables: { xs: ref("o1") }, heap: { o1: { type: "list", items: [int(9), int(2)] } } }),
+  state(4, "line", { line: 4, variables: { xs: ref("o1") }, heap: { o1: { type: "list", items: [int(9), int(2), int(3)] } } }),
+];
+
+test("a replaced list slot shows its old value; an appended one is new, not '?'", () => {
+  const replaced = getStepView(LIST_TRACE, 2, LIST_SOURCE).changes;
+  assert.deepEqual(replaced, [
+    { kind: "slot", name: 'xs[0]', from: "1", to: "9", line: null },
+  ]);
+  const appended = getStepView(LIST_TRACE, 3, LIST_SOURCE).changes;
+  assert.deepEqual(appended, [
+    // Appending to a two-item list makes slot 2 — the next index, not index 1.
+    { kind: "new-slot", name: 'xs[2]', from: null, to: "3", line: null },
+  ]);
+  // Nothing a learner sees may say "undefined" or a bare "?".
+  for (const change of [...replaced, ...appended]) {
+    assert.ok(!String(change.to).includes("undefined"));
+    assert.notEqual(change.to, "?");
+  }
 });
 
 test("paramsFor reads parameter names, leaving self out", () => {
@@ -261,7 +292,7 @@ test("every step of the merge-sort trace agrees across all panels", () => {
       const beforeVars = topFrame(view.before)?.variables ?? {};
       const afterVars = topFrame(view.after)?.variables ?? {};
       for (const change of view.changes) {
-        if (change.kind === "slot") {
+        if (change.kind === "slot" || change.kind === "new-slot") {
           slotChanges += 1;
           continue;
         }

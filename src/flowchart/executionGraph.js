@@ -15,21 +15,21 @@
 //   steps[i] = the node the token sits on at trace step i, so the UI can walk
 //              the token through the graph as the learner steps.
 //
-// Pure: no React, no dagre — node --test covers it. The dagre pass lives in
-// layoutExecutionGraph below.
+// Each node also carries what the *learner* needs, all of it read from the
+// trace: which call it belongs to (frameId, depth), what the line does in a few
+// words (action, from explainAction), and when it ran (firstStep, lastStep,
+// runs). Values and changes are per-step, so the renderer reads them through
+// getStepView for the step a node was last current on.
+//
+// Pure: no React. node --test covers it; layoutGraph.js does the geometry.
 
-import { graphlib, layout } from "@dagrejs/dagre";
+import { explainAction, statementKind } from "../tracer/explain.js";
+import { showValue } from "../tracer/values.js";
+import { paramsFor } from "../tracer/stepView.js";
 
-const MODULE = "<module>";
+export const MODULE = "<module>";
 /** Advance width of the 13px monospace label, plus a little slack. */
 const CHAR_W = 7.6;
-/** Labels stay to one or two short lines, so nodes stay small on screen. */
-const MAX_CHARS = 22;
-const MAX_LINES = 2;
-
-// Box metrics, shared with the renderer so text lands in the right place.
-// Kept small on purpose: the graph must stay compact enough to sit in a pane.
-export const NODE = { PAD: 6, LINE_H: 15 };
 
 /** Greedy word-wrap, hard-splitting a single overlong word, never empty. */
 export function wrapText(text, maxChars) {
@@ -49,6 +49,11 @@ export function wrapText(text, maxChars) {
   return lines.flatMap((l) =>
     l.length <= maxChars ? [l] : (l.match(new RegExp(`.{1,${maxChars}}`, "g")) ?? [l]),
   );
+}
+
+/** Rough width of a string in the 13px monospace label font. */
+export function textWidth(text, charWidth = CHAR_W) {
+  return String(text ?? "").length * charWidth;
 }
 
 function sourceLine(source, line) {
@@ -78,15 +83,23 @@ export function buildExecutionGraph(trace, source = "") {
 
   const id = (frameId, line) => `f${frameId}l${line}`;
 
-  function ensureLine(event) {
+  function ensureLine(event, index) {
     const nodeId = id(event.frame_id, event.line);
     if (!nodes.has(nodeId)) {
+      const text = sourceLine(source, event.line);
       nodes.set(nodeId, {
         id: nodeId,
         frameId: event.frame_id,
         function: event.function ?? MODULE,
         line: event.line,
-        text: sourceLine(source, event.line),
+        text,
+        stepKind: statementKind(text),
+        action: explainAction(event, list, index, source),
+        /** How many frames deep this line ran: the <module> body is 0. */
+        depth: Math.max((event.frames?.length ?? 1) - 1, 0),
+        firstStep: index,
+        lastStep: index,
+        runs: 1,
       });
       order.push(nodeId);
     }
@@ -125,7 +138,12 @@ export function buildExecutionGraph(trace, source = "") {
     const event = list[i];
 
     if (event.event === "line") {
-      const toId = ensureLine(event);
+      const toId = ensureLine(event, i);
+      const node = nodes.get(toId);
+      if (node.lastStep !== i) {
+        node.runs += 1;
+        node.lastStep = i;
+      }
       if (cursor) addEdge(cursor, toId, kindForLineStep(cursor, toId), i);
       cursor = toId;
       lastLine.set(event.frame_id, toId);
@@ -134,9 +152,9 @@ export function buildExecutionGraph(trace, source = "") {
       const kind = event.event === "return" ? "return" : "error";
       const anchor = nextAnchor(i);
       let dest = null;
-      if (anchor?.event === "line") dest = ensureLine(anchor);
+      if (anchor?.event === "line") dest = ensureLine(anchor, anchor.step ?? list.indexOf(anchor));
       else if (anchor) dest = lastLine.get(anchor.frame_id) ?? null;
-      if (fromId && dest) addEdge(fromId, dest, kind, anchor.index);
+      if (fromId && dest) addEdge(fromId, dest, kind, anchor.step ?? i);
       cursor = fromId;
     }
     // output / input / call / exception / limits leave the cursor where it is
@@ -163,69 +181,130 @@ export function nodeRuns(graph) {
   return runs;
 }
 
-/** Trims a line and marks it as cut short. */
-function ellipsize(text, maxChars) {
-  const cut = text.length > maxChars - 1 ? text.slice(0, maxChars - 1) : text;
-  return `${cut.trimEnd()}…`;
+/**
+ * What each call was, in the learner's words: the arguments it was given, the
+ * line that called it, and what it handed back. Built from the trace only.
+ * @param {Array} trace the trace array from docs/trace-format.md
+ * @param {string} [source] the user's code, for parameter names
+ * @returns {Map<number, Object>} keyed by frame_id
+ */
+export function callFrames(trace, source = "") {
+  const list = Array.isArray(trace) ? trace : [];
+  const frames = new Map();
+  for (let i = 0; i < list.length; i += 1) {
+    const event = list[i];
+    const stack = event?.frames;
+    const top = stack?.[stack.length - 1];
+    if (!top) continue;
+    let info = frames.get(top.frame_id);
+    if (!info) {
+      const params = top.function === MODULE ? [] : paramsFor(source, top.function);
+      const variables = top.variables ?? {};
+      info = {
+        frameId: top.frame_id,
+        function: top.function ?? MODULE,
+        callLine: top.call_line ?? null,
+        depth: Math.max(stack.length - 1, 0),
+        firstIndex: i,
+        lastIndex: i,
+        firstLine: null,
+        returnIndex: null,
+        returnText: null,
+        args: params
+          .filter((name) => name in variables)
+          .map((name) => ({ name, text: showValue(variables[name], event.heap) })),
+      };
+      frames.set(top.frame_id, info);
+    }
+    info.lastIndex = i;
+    if (event.event === "line" && event.frame_id === top.frame_id && info.firstLine === null) {
+      info.firstLine = event.line;
+    }
+    if (event.event === "return" && event.frame_id === top.frame_id) {
+      if (info.returnIndex === null) {
+        info.returnIndex = i;
+        info.returnText = event.return_value ? showValue(event.return_value, event.heap) : null;
+      }
+    }
+    if (event.event === "unwind" && event.frame_id === top.frame_id && info.returnIndex === null) {
+      info.returnIndex = i;
+      info.returnText = null;
+      info.raised = true;
+    }
+  }
+  for (const info of frames.values()) {
+    if (info.function === MODULE) {
+      info.label = MODULE;
+    } else if (isClassBody(source, info)) {
+      // `class Dog:` runs as a frame of its own. Calling it `Dog()` would read
+      // like an instance being built, so say what it really is.
+      info.classBody = true;
+      info.label = `${info.function} (class body)`;
+    } else {
+      info.label = `${info.function}(${info.args.map((arg) => arg.text).join(", ")})`;
+    }
+  }
+  return frames;
+}
+
+/** True when a frame is the body of `class Name:` rather than a call to it. */
+function isClassBody(source, info) {
+  if (info.firstLine === null || !info.function) return false;
+  const text = (source ?? "").split("\n")[info.firstLine - 1] ?? "";
+  return new RegExp(`^\\s*class\\s+${info.function}\\b`).test(text);
 }
 
 /**
- * Wraps a label to at most `maxLines` lines. Anything that will not fit is
- * folded into an ellipsis on the last line, so text is never clipped by the box.
+ * The rows the graph shows at one step: the nodes in execution order, with the
+ * calls that have already finished folded into one summary row each (unless
+ * they are on the current call stack or the learner expanded them).
+ *
+ * @param {Object} graph from buildExecutionGraph
+ * @param {{ index?: number, stack?: number[], calls?: Map, expanded?: Set<number>, fold?: boolean }} [options]
+ * @returns {{ rows: Array<Object>, anchors: Map<string, string> }}
  */
-export function fitLines(text, maxChars = MAX_CHARS, maxLines = MAX_LINES) {
-  const wrapped = wrapText(text, maxChars);
-  if (wrapped.length <= maxLines) return { lines: wrapped, truncated: false };
-  const lines = wrapped.slice(0, maxLines);
-  lines[maxLines - 1] = ellipsize(lines[maxLines - 1], maxChars);
-  return { lines, truncated: true };
-}
+export function visibleRows(graph, options = {}) {
+  const { index = 0, stack = [], calls = null, expanded = null, fold = true } = options;
+  const nodes = graph?.nodes ?? [];
+  const rows = [];
+  const anchors = new Map();
+  const onStack = new Set(stack);
+  const open = expanded instanceof Set ? expanded : new Set(expanded ?? []);
+  const countPerFrame = new Map();
+  for (const node of nodes) {
+    countPerFrame.set(node.frameId, (countPerFrame.get(node.frameId) ?? 0) + 1);
+  }
+  const folded = new Map();
 
-/** The box size and (possibly truncated) label lines for one execution node. */
-export function measureNode(node) {
-  const { lines, truncated } = fitLines(node.text);
-  const longest = lines.reduce((n, l) => Math.max(n, l.length), 1);
-  const width = Math.min(Math.max(longest * CHAR_W + NODE.PAD * 2, 84), 200);
-  const height = lines.length * NODE.LINE_H + NODE.PAD * 2;
-  return { width: Math.round(width), height: Math.round(height), displayLines: lines, truncated };
-}
-
-/**
- * Positions an execution graph top-to-bottom with dagre. Ranks follow the
- * edges, so a call sits below its caller and a return points back upward.
- * @param {{ nodes: Array, edges: Array }} graph from buildExecutionGraph
- * @returns {{ nodes: Array, edges: Array, width: number, height: number }}
- */
-export function layoutExecutionGraph(graph) {
-  if (!graph || graph.nodes.length === 0) {
-    return { nodes: [], edges: [], width: 0, height: 0 };
+  for (const node of nodes) {
+    const info = calls?.get(node.frameId) ?? null;
+    const finished = info?.returnIndex != null && info.returnIndex < index;
+    const hide = fold && finished && !onStack.has(node.frameId) && !open.has(node.frameId);
+    if (!hide) {
+      const key = `n:${node.id}`;
+      rows.push({ key, kind: "node", ...node });
+      anchors.set(node.id, key);
+      continue;
+    }
+    let key = folded.get(node.frameId);
+    if (!key) {
+      key = `c:${node.frameId}`;
+      folded.set(node.frameId, key);
+      rows.push({
+        key,
+        kind: "call",
+        frameId: node.frameId,
+        function: node.function,
+        label: info?.label ?? functionLabel(node.function),
+        depth: node.depth,
+        firstStep: info?.firstIndex ?? node.firstStep,
+        count: countPerFrame.get(node.frameId) ?? 1,
+        returned: info?.returnText ?? null,
+        raised: Boolean(info?.raised),
+      });
+    }
+    anchors.set(node.id, key);
   }
 
-  const g = new graphlib.Graph({ multigraph: true });
-  g.setGraph({ rankdir: "TB", nodesep: 14, ranksep: 18, marginx: 8, marginy: 8 });
-  g.setDefaultEdgeLabel(() => ({}));
-
-  const measured = new Map();
-  for (const node of graph.nodes) {
-    const size = measureNode(node);
-    measured.set(node.id, size);
-    g.setNode(node.id, { width: size.width, height: size.height });
-  }
-  graph.edges.forEach((edge, i) => {
-    g.setEdge(edge.from, edge.to, {}, `e${i}`);
-  });
-
-  layout(g);
-
-  const nodes = graph.nodes.map((node) => {
-    const position = g.node(node.id) ?? { x: 0, y: 0 };
-    return { ...node, x: position.x, y: position.y, ...measured.get(node.id) };
-  });
-  const edges = graph.edges.map((edge, i) => {
-    const laid = g.edge(edge.from, edge.to, `e${i}`) ?? {};
-    return { ...edge, points: laid.points ?? [] };
-  });
-
-  const meta = g.graph() ?? {};
-  return { nodes, edges, width: meta.width ?? 0, height: meta.height ?? 0 };
+  return { rows, anchors };
 }

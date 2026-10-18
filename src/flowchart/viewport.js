@@ -32,6 +32,25 @@ export function centreOn(transform, point, viewport) {
 }
 
 /**
+ * A view that keeps `card` in sight at the current zoom: the card is centred
+ * vertically, and sideways too — unless the whole drawing already fits across,
+ * in which case the drawing is centred instead, so a shallow graph never floats
+ * off to one side with a band of empty pane beside it.
+ */
+export function frameCard(transform, card, bounds, viewport, margin = 48) {
+  // A laid-out row carries `cx`/`cy`; a plain box is centred from its corner.
+  const centre = {
+    x: Number.isFinite(card?.cx) ? card.cx : (card?.x ?? 0) + (card?.width ?? 0) / 2,
+    y: Number.isFinite(card?.cy) ? card.cy : (card?.y ?? 0) + (card?.height ?? 0) / 2,
+  };
+  const centred = centreOn(transform, centre, viewport);
+  const drawnW = positive(bounds?.width) * transform.scale;
+  const paneW = Number.isFinite(viewport?.width) ? viewport.width : 0;
+  const x = drawnW <= paneW ? (paneW - drawnW) / 2 : centred.x;
+  return clampPan({ ...centred, x }, bounds, viewport, margin);
+}
+
+/**
  * The transform that shows the whole chart in the pane.
  *
  * The whole chart is shown when that keeps labels legible. When the chart is

@@ -1491,6 +1491,12 @@ h3 {
   border-color: var(--accent);
 }
 
+/* The toolbar labels shorten on a phone; see the phone rules at the end of
+   this file. Everything the long label said stays in the button's title. */
+.exec-narrow {
+  display: none;
+}
+
 .exec-toggle {
   display: inline-flex;
   align-items: center;
@@ -1507,37 +1513,155 @@ h3 {
   accent-color: var(--accent);
 }
 
-.exec-node-box {
+/* A card is one line of code, as it ran in one call: header, code, action,
+   values and where control goes next. */
+.exec-card-box {
   fill: var(--bg);
   stroke: var(--border);
   stroke-width: 1.5;
 }
 
-.exec-node-text {
+.exec-card-colour {
+  fill: var(--call-colour, var(--accent));
+}
+
+/* Each call gets its own stripe colour, so its cards read as one unit:
+   the arguments it was given, its lines, and what it handed back. */
+.exec-call-0 {
+  --call-colour: #aa3bff;
+}
+
+.exec-call-1 {
+  --call-colour: #0d9488;
+}
+
+.exec-call-2 {
+  --call-colour: #c2410c;
+}
+
+.exec-call-3 {
+  --call-colour: #2563eb;
+}
+
+.exec-call-4 {
+  --call-colour: #db2777;
+}
+
+.exec-call-5 {
+  --call-colour: #15803d;
+}
+
+@media (prefers-color-scheme: dark) {
+  .exec-call-0 {
+    --call-colour: #c084fc;
+  }
+
+  .exec-call-1 {
+    --call-colour: #4fd1c5;
+  }
+
+  .exec-call-2 {
+    --call-colour: #fbbf24;
+  }
+
+  .exec-call-3 {
+    --call-colour: #93c5fd;
+  }
+
+  .exec-call-4 {
+    --call-colour: #f9a8d4;
+  }
+
+  .exec-call-5 {
+    --call-colour: #86efac;
+  }
+}
+
+.exec-card-where {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--text);
+}
+
+.exec-card-badges {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--call-colour, var(--accent));
+}
+
+.exec-card-code {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12.5px;
   fill: var(--text-h);
 }
 
-/* Labels paint over the token, so the moving dot can never hide code. */
-.exec-texts {
-  pointer-events: none;
+.exec-card-action {
+  font-family: var(--sans);
+  font-size: 12px;
+  fill: var(--text-h);
 }
 
-/* Not reached yet sits back; visited is solid; the current node glows. */
-.exec-node-ahead {
-  opacity: 0.35;
+.exec-card-values {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  fill: var(--text);
 }
 
-.exec-node-current .exec-node-box,
-.exec-node:focus .exec-node-box {
+/* A value this line changes is the most important thing on the card. */
+.exec-card-changed {
+  fill: var(--accent);
+  font-weight: 600;
+}
+
+.exec-card-next {
+  font-family: var(--sans);
+  font-size: 10.5px;
+  fill: var(--text);
+}
+
+.exec-card-chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  fill: var(--text-h);
+}
+
+/* Not reached yet sits back; the line running now is unmistakable. */
+.exec-card-ahead {
+  opacity: 0.45;
+}
+
+.exec-card-current .exec-card-box,
+.exec-card:focus .exec-card-box {
   stroke: var(--accent);
   stroke-width: 2.5;
-  filter: drop-shadow(0 0 6px var(--accent-border));
+  filter: drop-shadow(0 0 7px var(--accent-border));
 }
 
-.exec-node:focus {
+.exec-card:focus {
   outline: none;
+}
+
+/* A finished call folds into one row; dashed, so it reads as "there is more". */
+.exec-fold-box {
+  fill: var(--bg);
+  stroke: var(--border);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+
+.exec-fold-title {
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  fill: var(--text-h);
+}
+
+.exec-fold-note {
+  font-family: var(--sans);
+  font-size: 10px;
+  fill: var(--text);
 }
 
 /* Edge colour by kind, so calls, returns and loops are told apart. */
@@ -1545,11 +1669,7 @@ h3 {
   fill: none;
   stroke: var(--text);
   stroke-width: 1.4;
-  opacity: 0.35;
-}
-
-.exec-edge-traveled .exec-edge-line {
-  opacity: 1;
+  opacity: 0.4;
 }
 
 .exec-edge-call .exec-edge-line {
@@ -1570,8 +1690,10 @@ h3 {
   stroke-dasharray: 2 3;
 }
 
-.exec-edge-just .exec-edge-line {
-  stroke-width: 2.5;
+/* The wire out of the line running now, so "where next" is visible. */
+.exec-edge-leaving .exec-edge-line {
+  opacity: 1;
+  stroke-width: 2.4;
 }
 
 .exec-arrow {
@@ -1594,71 +1716,19 @@ h3 {
   fill: #dc2626;
 }
 
-/* Edge labels say *why* control moved, not just that it did. */
-.exec-edge-label,
-.exec-edge-step,
-.exec-here,
-.exec-tag,
-.exec-runs,
-.exec-chip {
+/* Advanced mode labels the long wires saying why control moved. */
+.exec-edge-label {
+  font-family: var(--sans);
+  font-size: 9px;
+  fill: var(--text);
   paint-order: stroke;
   stroke: var(--code-bg);
   stroke-width: 3px;
   stroke-linejoin: round;
 }
 
-.exec-edge-label,
-.exec-edge-step {
-  font-family: var(--sans);
-  font-size: 9px;
-  fill: var(--text);
-}
-
-.exec-edge-step {
-  fill: var(--accent);
-}
-
-.exec-decor-layer {
-  pointer-events: none;
-}
-
-.exec-here {
-  font-family: var(--sans);
-  font-size: 9px;
-  font-weight: 600;
-  fill: var(--accent);
-}
-
-.exec-tag {
-  font-family: var(--sans);
-  font-size: 9px;
-  fill: var(--text);
-}
-
-/* "ran N times" sits inside the box so it can never spill past the pane. */
-.exec-runs {
-  font-family: var(--sans);
-  font-size: 10px;
-  fill: var(--accent);
-}
-
-.exec-chip {
-  font-family: var(--mono);
-  font-size: 10px;
-  fill: var(--text-h);
-}
-
-.exec-chip-no {
-  fill: #d97706;
-}
-
 .exec-clickable {
   cursor: pointer;
-}
-
-/* The travelling dot: small, and drawn under the label layer. */
-.exec-token {
-  fill: var(--accent);
 }
 
 /* The legend explains the reasons in words, not just colours. */
@@ -1682,21 +1752,43 @@ h3 {
 }
 
 .exec-legend {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+}
+
+/* The legend teaches the model first, then names the wire colours. */
+.exec-legend-pop {
   position: absolute;
   right: 0;
   bottom: calc(100% + 6px);
   z-index: 20;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 3px 10px;
-  width: min(320px, 80vw);
-  margin: 0;
-  padding: 10px;
+  width: min(340px, 84vw);
+  padding: 11px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg);
   box-shadow: 0 10px 30px rgb(0 0 0 / 18%);
+  text-align: left;
+}
+
+.exec-howto p {
+  margin: 0 0 7px;
   font-size: 11px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.exec-howto p:last-child {
+  margin-bottom: 0;
+}
+
+.exec-howto strong {
+  color: var(--text-h);
 }
 
 .exec-legend dt {
@@ -1846,6 +1938,51 @@ h3 {
 
   [data-pane="graph"] .exec-graph {
     max-height: 50vh;
+  }
+
+  /* A phone gives the graph barely 200px. Buy back the room the graph itself
+     does not need: a one-line title, one row of tools that scrolls sideways,
+     and a shorter explanation while the Graph tab is the one you are on. */
+  .layout[data-tab="graph"] .explain {
+    max-height: 20vh;
+  }
+
+  [data-pane="graph"] .flow-head h3 {
+    min-width: 0;
+    font-size: 13px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* Which call you are inside is on the card in front of you. */
+  [data-pane="graph"] .flow-head .flow-of {
+    display: none;
+  }
+
+  [data-pane="graph"] .flow-view {
+    flex: none;
+    font-size: 11px;
+  }
+
+  [data-pane="graph"] .exec-tools {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 4px;
+    font-size: 10.5px;
+  }
+
+  .exec-wide {
+    display: none;
+  }
+
+  .exec-narrow {
+    display: inline;
+  }
+
+  /* Never let the graph collapse to a sliver: one card must fit. */
+  [data-pane="graph"] .exec-view {
+    min-height: 130px;
   }
 }
 

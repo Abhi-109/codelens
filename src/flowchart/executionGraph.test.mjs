@@ -5,24 +5,36 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  NODE,
   buildExecutionGraph,
-  fitLines,
-  layoutExecutionGraph,
-  measureNode,
   nodeRuns,
   wrapText,
 } from "./executionGraph.js";
 
-// Compact trace builder: [event, function, frame_id, line] tuples.
+// Compact trace builder: [event, function, frame_id, line] tuples. It keeps the
+// call stack the way the tracer does, so every state event carries all frames.
 function events(list) {
-  return list.map(([event, functionName, frame_id, line], i) => ({
-    step: i,
-    event,
-    function: functionName,
-    frame_id,
-    line,
-  }));
+  const trace = [];
+  const stack = [];
+  list.forEach(([event, functionName, frame_id, line], i) => {
+    if (event === "call") {
+      stack.push({ frame_id, function: functionName, line: null, call_line: line, variables: {} });
+    } else if (event === "return" || event === "unwind") {
+      if (stack.length > 0 && stack[stack.length - 1].frame_id === frame_id) stack.pop();
+    } else if (event === "line") {
+      const top = stack[stack.length - 1];
+      if (top) top.line = line;
+    }
+    trace.push({
+      step: i,
+      event,
+      function: functionName,
+      frame_id,
+      line,
+      frames: stack.map((f) => ({ ...f, variables: { ...f.variables } })),
+      heap: {},
+    });
+  });
+  return trace;
 }
 
 const edge = (graph, from, to, kind) =>
@@ -169,57 +181,35 @@ test("nodeRuns lists every step index a node is current, in order", () => {
   assert.equal(nodeRuns(null).size, 0);
 });
 
-test("measureNode sizes a compact box from its label", () => {
-  const node = { function: "fact", text: "return n * fact(n - 1)" };
-  const size = measureNode(node);
-  assert.ok(size.width >= 84);
-  assert.ok(size.width <= 200);
-  assert.equal(size.height, NODE.LINE_H + NODE.PAD * 2, "one line tall");
-  assert.deepEqual(size.displayLines, ["return n * fact(n - 1)"]);
-  assert.equal(size.truncated, false);
+test("a node counts how many times its line actually ran", () => {
+  const graph = buildExecutionGraph(loopTrace, "");
+  const body = graph.nodes.find((n) => n.id === "f1l2");
+  assert.equal(body.runs, 3, "the loop body line ran three times");
+  assert.equal(body.firstStep, 2);
+  assert.equal(body.lastStep, 6);
+  assert.equal(graph.nodes.find((n) => n.id === "f1l1").runs, 1);
 });
 
-test("measureNode drops the function header, so box width follows the label", () => {
-  const short = measureNode({ function: "verylongfunctionname", text: "x = 1" });
-  const wide = measureNode({ function: "f", text: "total = total + n" });
-  assert.equal(short.width, 84, "clamped to the minimum, not the function name");
-  assert.ok(wide.width > short.width);
+test("a node carries its action and its statement kind, read from the trace", () => {
+  const source = "total = 0\nfor n in [1, 2]:\n    total += n\nprint(total)\n";
+  const trace = events([
+    ["call", "<module>", 1, 1],
+    ["line", "<module>", 1, 1],
+    ["line", "<module>", 1, 2],
+    ["line", "<module>", 1, 3],
+    ["line", "<module>", 1, 4],
+    ["return", "<module>", 1, 4],
+  ]);
+  const graph = buildExecutionGraph(trace, source);
+  assert.equal(graph.nodes.find((n) => n.id === "f1l1").action, "Set total");
+  assert.equal(graph.nodes.find((n) => n.id === "f1l2").action, "Loop over n");
+  assert.equal(graph.nodes.find((n) => n.id === "f1l3").stepKind, "augmented");
+  assert.equal(graph.nodes.find((n) => n.id === "f1l4").stepKind, "print");
 });
 
-test("fitLines keeps two lines and ellipsizes the rest", () => {
-  const { lines, truncated } = fitLines("result = first_value + second_value + third_value");
-  assert.equal(lines.length, 2);
-  assert.equal(truncated, true);
-  assert.ok(lines[1].endsWith("…"));
-  assert.ok(lines.every((line) => line.length <= 22), "never wider than the box");
-});
-
-test("fitLines leaves short labels alone", () => {
-  const { lines, truncated } = fitLines("x = 1");
-  assert.deepEqual(lines, ["x = 1"]);
-  assert.equal(truncated, false);
-});
-
-test("layoutExecutionGraph positions every node and edge", () => {
+test("a node knows how deep in the call stack it ran", () => {
   const graph = buildExecutionGraph(recTrace, "");
-  const laid = layoutExecutionGraph(graph);
-  assert.equal(laid.nodes.length, graph.nodes.length);
-  assert.ok(laid.width > 0 && laid.height > 0);
-  for (const node of laid.nodes) {
-    assert.ok(Number.isFinite(node.x) && Number.isFinite(node.y));
-    assert.ok(node.width > 0 && node.height > 0);
-  }
-  for (const e of laid.edges) {
-    assert.ok(e.points.length >= 2, `${e.from}->${e.to}`);
-  }
-});
-
-test("layoutExecutionGraph handles an empty graph", () => {
-  assert.deepEqual(layoutExecutionGraph(null), { nodes: [], edges: [], width: 0, height: 0 });
-  assert.deepEqual(layoutExecutionGraph({ nodes: [], edges: [] }), {
-    nodes: [],
-    edges: [],
-    width: 0,
-    height: 0,
-  });
+  assert.equal(graph.nodes.find((n) => n.id === "f1l1").depth, 0);
+  assert.equal(graph.nodes.find((n) => n.id === "f2l2").depth, 1);
+  assert.equal(graph.nodes.find((n) => n.id === "f3l2").depth, 2);
 });
