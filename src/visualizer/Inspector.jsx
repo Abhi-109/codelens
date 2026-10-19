@@ -191,7 +191,12 @@ function ExplainPanel({ ctx }) {
   );
 }
 
-function VariablesPanel({ ctx }) {
+/**
+ * Exported so the Combined view can draw the *same* variables panel beside the
+ * call tree. It is one component reading one `ctx`, not a second
+ * implementation that could drift from the inspector's.
+ */
+export function VariablesPanel({ ctx }) {
   const {
     view,
     showAfter,
@@ -273,7 +278,8 @@ function VariablesPanel({ ctx }) {
   );
 }
 
-function StackPanel({ ctx }) {
+/** Exported for the Combined view, for the same reason as VariablesPanel. */
+export function StackPanel({ ctx }) {
   const { view, olderCalls, selectedCall, jumpToCall, clearSelectedCall } = ctx;
   return (
     <>

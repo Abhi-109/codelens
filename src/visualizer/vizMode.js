@@ -14,7 +14,7 @@
  */
 
 /** Every canvas the workspace can draw, in the order they are offered. */
-export const VIZ_MODES = ["tree", "flow"];
+export const VIZ_MODES = ["tree", "flow", "combined"];
 
 export const DEFAULT_VIZ = "tree";
 export const VIZ_STORAGE_KEY = "codelens-viz";

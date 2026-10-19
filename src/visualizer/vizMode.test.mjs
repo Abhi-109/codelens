@@ -35,7 +35,11 @@ function storeWith(values = {}, { throws = false } = {}) {
 }
 
 test("every offered canvas has a name and a plain-English blurb", () => {
-  assert.deepEqual(VIZ_MODES, ["tree", "flow"], "Call tree is the canvas a fresh run opens on");
+  assert.deepEqual(
+    VIZ_MODES,
+    ["tree", "flow", "combined"],
+    "Call tree is the canvas a fresh run opens on",
+  );
   assert.equal(DEFAULT_VIZ, "tree");
   for (const id of VIZ_MODES) {
     assert.equal(isVizMode(id), true);

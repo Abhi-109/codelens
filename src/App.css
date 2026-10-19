@@ -2328,6 +2328,98 @@ h3 {
   background: var(--danger-bg);
 }
 
+/* --- Combined: the tree beside the half of the step you care about -------- */
+
+/* Two columns on a laptop — the drawing, then the panel — and one column
+   below, stacked, so a tablet or a phone gets both rather than a squeezed
+   pair. Nothing here holds state; the subview lives in the component. */
+.cmb {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 306px;
+  flex: 1;
+  min-height: 0;
+}
+
+.cmb-tree {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+}
+
+.cmb-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  overflow: auto;
+  background: var(--code-bg);
+}
+
+.cmb-tabs {
+  display: flex;
+  flex: none;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.cmb-tab {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.cmb-tab:hover {
+  color: var(--text-h);
+  border-color: var(--border-strong);
+}
+
+.cmb-tab.on {
+  background: var(--surface);
+  border-color: var(--accent-border);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.cmb-tab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.cmb-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.cmb-body:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+@media (max-width: 1023px) {
+  .cmb {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(260px, 1fr) auto;
+  }
+
+  .cmb-tree {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cmb-side {
+    max-height: 48vh;
+  }
+}
+
 /* --- Narrow windows: the canvas and the inspector take turns ------------- */
 
 /* Only the pane the tab names is drawn; the other is off screen entirely, so

@@ -115,8 +115,13 @@ every mode, inspector tab and learning mode.
 
 ### Stage 3 — Combined view
 
-- [ ] The call tree beside a compact call stack and the variables of the current
+- [x] The call tree beside a compact call stack and the variables of the current
       step, reusing the inspector components and the one shared step
+- [x] A Calls / Variables subview strip (`selectCombinedSubview`) that changes
+      only what is drawn: clicking a call, following a name, switching subview,
+      or leaving and re-entering the canvas all leave the step exactly where it
+      was
+- [x] Stacks to one column below 1024px rather than squeezing both halves
 
 ### Stage 4 — Animation and playback
 

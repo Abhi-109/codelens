@@ -5,6 +5,7 @@ import { namesById, objectChanges } from "./tracer/objects";
 import { changeLog, errorStep, getStepView, variableHistory } from "./tracer/stepView";
 import { buildExecutionGraph } from "./flowchart/executionGraph.js";
 import ControlFlowChart from "./flowchart/ControlFlowChart.jsx";
+import CombinedView from "./visualizer/CombinedView.jsx";
 import Inspector from "./visualizer/Inspector.jsx";
 import PlaybackBar from "./visualizer/PlaybackBar.jsx";
 import CallTree from "./visualizer/CallTree.jsx";
@@ -702,6 +703,20 @@ export default function App() {
                 onJump={jumpTo}
                 note={
                   flowGraph?.error
+                    ? "There is nothing to draw: the code has a syntax error, so it never ran."
+                    : null
+                }
+              />
+            ) : viz === "combined" ? (
+              <CombinedView
+                trace={trace}
+                source={source}
+                index={index}
+                currentFrameId={view.frameId ?? null}
+                onJumpCall={jumpToCall}
+                ctx={inspectorCtx}
+                note={
+                  flow?.error
                     ? "There is nothing to draw: the code has a syntax error, so it never ran."
                     : null
                 }

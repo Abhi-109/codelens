@@ -71,6 +71,12 @@ CodeLens fixes both halves of that:
     subdued and cannot be clicked, and an exception lights the line it broke on
     without inventing an edge. One tab per function, "Follow run", "Show code in
     boxes", and the old block outline one click away under **Simple view**.
+  - **Combined** — the call tree beside the two halves of the step you most often
+    reach for: which calls are waiting (their real arguments and returned values)
+    or what the program is holding, with one click to follow a name through its
+    whole history. It draws the inspector's *own* panels, fed the inspector's own
+    step view, so the two sides cannot disagree — and choosing between them, or
+    switching canvas away and back, leaves the step where it was.
   - Fit, zoom, pan, follow, expand and a "How to read this" legend behave the same
     on every canvas, on a laptop and on a phone, and honour reduced motion.
 - **A Beginner / Advanced / Textbook** switch in one control changes how much of
@@ -168,7 +174,7 @@ Three suites, all of which should pass on every commit:
 
 ```bash
 npm run test:tracer   # 95 Python tests: the tracer, the flowchart model and the corpus
-npm run test:js       # 286 JS tests: the call tree and control flow model and layout, the
+npm run test:js       # 291 JS tests: the call tree and control flow model and layout, the
                       # graph, the teaching layer, the corpus, the router, the homepage
                       # preview, the language picker and the workspace modules
 npm run lint          # oxlint
@@ -240,6 +246,7 @@ codelens/
 │   │   ├── vizMode.test.mjs
 │   │   ├── Canvas.jsx           # the shared surface: pan, zoom, fit, follow, expand
 │   │   ├── CallTree.jsx         # canvas 1: the calls this run made, nested
+│   │   ├── CombinedView.jsx     # canvas 3: the tree beside the stack or variables
 │   │   ├── VisualizationPane.jsx # the canvas strip, and the one place a mode is chosen
 │   │   └── SimpleFlow.jsx       # the v1 block outline, behind "Simple view"
 │   ├── flowchart/

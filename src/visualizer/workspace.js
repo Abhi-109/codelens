@@ -48,3 +48,36 @@ export function selectInspectorTab(state, tabId) {
 export function initialInspectorTab() {
   return { tab: DEFAULT_INSPECTOR_TAB };
 }
+
+/* --- The Combined view's own subview ------------------------------------- */
+
+/**
+ * The Combined view draws the call tree beside one other thing. These two
+ * decide what that is, and they follow exactly the rule the inspector tab
+ * follows: a selection that changes only what you are looking at cannot change
+ * where the program is, so no field but the choice itself is touched.
+ */
+export const COMBINED_SUBVIEWS = [
+  { id: "stack", label: "Calls" },
+  { id: "variables", label: "Variables" },
+];
+
+export const COMBINED_SUBVIEW_IDS = COMBINED_SUBVIEWS.map((entry) => entry.id);
+
+export const DEFAULT_COMBINED_SUBVIEW = "stack";
+
+/**
+ * Choose what sits beside the call tree. An unknown id keeps the current
+ * subview rather than blanking the pane.
+ */
+export function selectCombinedSubview(state, id) {
+  const subview = COMBINED_SUBVIEW_IDS.includes(id)
+    ? id
+    : (state?.subview ?? DEFAULT_COMBINED_SUBVIEW);
+  return state && state.subview === subview ? state : { ...state, subview };
+}
+
+/** The subview a fresh Combined view opens on: which calls are running. */
+export function initialCombinedSubview() {
+  return { subview: DEFAULT_COMBINED_SUBVIEW };
+}

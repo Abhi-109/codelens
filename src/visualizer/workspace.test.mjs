@@ -2,11 +2,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  COMBINED_SUBVIEWS,
+  COMBINED_SUBVIEW_IDS,
+  DEFAULT_COMBINED_SUBVIEW,
   DEFAULT_INSPECTOR_TAB,
   INSPECTOR_TABS,
   INSPECTOR_TAB_IDS,
   clampStep,
+  initialCombinedSubview,
   initialInspectorTab,
+  selectCombinedSubview,
   selectInspectorTab,
   stepBy,
 } from "./workspace.js";
@@ -79,4 +84,46 @@ test("back and forward are exact inverses in the middle of a trace", () => {
     assert.equal(stepBy(stepBy(i, 10, 1), 10, -1), i);
     assert.equal(stepBy(stepBy(i, 10, -1), 10, 1), i);
   }
+});
+
+/* --- The Combined view's subview ----------------------------------------- */
+
+test("the combined view offers the two halves of the step it shows", () => {
+  assert.deepEqual(COMBINED_SUBVIEW_IDS, ["stack", "variables"]);
+  assert.equal(DEFAULT_COMBINED_SUBVIEW, "stack");
+  for (const entry of COMBINED_SUBVIEWS) {
+    assert.equal(typeof entry.label, "string");
+    assert.ok(entry.label.length > 0);
+  }
+  // These are the inspector's own sections, reached under their own names.
+  assert.ok(INSPECTOR_TAB_IDS.includes("stack"));
+  assert.ok(INSPECTOR_TAB_IDS.includes("variables"));
+});
+
+test("the combined view opens on which calls are waiting", () => {
+  assert.deepEqual(initialCombinedSubview(), { subview: "stack" });
+});
+
+test("switching what sits beside the tree never moves the execution step", () => {
+  const state = { subview: "stack", index: 17, playing: true, speed: 4, viz: "combined" };
+  for (const id of COMBINED_SUBVIEW_IDS) {
+    const next = selectCombinedSubview(state, id);
+    assert.equal(next.subview, id);
+    assert.equal(next.index, 17, `${id} must not touch index`);
+    assert.equal(next.playing, true, `${id} must not touch playing`);
+    assert.equal(next.speed, 4, `${id} must not touch speed`);
+    assert.equal(next.viz, "combined", `${id} must not touch the canvas`);
+  }
+});
+
+test("an unknown subview keeps the current one rather than blanking the panel", () => {
+  assert.equal(selectCombinedSubview({ subview: "variables" }, "nope").subview, "variables");
+  assert.equal(selectCombinedSubview({ subview: "variables" }, null).subview, "variables");
+  assert.equal(selectCombinedSubview(null, "nope").subview, DEFAULT_COMBINED_SUBVIEW);
+  assert.equal(selectCombinedSubview({ subview: "stack" }, "stack").subview, "stack");
+});
+
+test("picking the subview already showing changes nothing at all", () => {
+  const state = { subview: "variables", index: 3 };
+  assert.equal(selectCombinedSubview(state, "variables"), state, "the same object, so no re-render");
 });
