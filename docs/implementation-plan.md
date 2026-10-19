@@ -45,7 +45,7 @@ from `src/styles/tokens.css`.
 |---|---|---|
 | 0 | Repository audit (this document) | ✅ done |
 | 1 | Design tokens, dark/light themes with toggle + persistence, app shell (nav, breadcrumbs, footer, loading/empty/error/404), hand-rolled History-API router, all ten routes resolving; `/visualizer/python` unchanged | ✅ done |
-| 2 | Homepage (hero, real-trace preview) and language selection | ⬜ next |
+| 2 | Homepage (hero, real-trace preview) and language selection | ✅ done |
 | 3 | Python visualizer: move into the shell, split `App.jsx`, add missing modes (variable-history chart, call tree, timeline, step comparison, memory arrows) | ⬜ |
 | 4a | Data structures: array, stack, queue, linked list — pure state machines + tests, three-region UI | ⬜ |
 | 4b | Binary tree, heap, graph (only after 4a is approved) | ⬜ |
@@ -63,7 +63,19 @@ Each phase stops for review before the next begins.
 
 ## 7. Risks
 
-- **Pyodide on the homepage** is a heavy download; the Phase 2 preview lazy-loads the engine and shows a loading state rather than a fake trace.
+- **Pyodide on the homepage** was the worry; Phase 2 removed it instead of
+  managing it. The spec allows building the preview "from the real trace of a
+  built-in example" and asks for the engine to be lazy-loaded only on
+  visualizer pages, so the hero replays a **recorded** run
+  (`src/pages/preview-fixture.json`, re-recordable with
+  `npm run fixtures:preview`) through the visualizer's own `getStepView`.
+  Nothing is invented: `src/pages/preview.test.mjs` checks every frame against
+  the vendored corpus trace, and the fixture is asserted to still equal the
+  corpus entry, so it cannot drift.
+- **Primary buttons** are near-black in light mode and blue in dark, per the
+  mockups. That lives in two tokens (`--btn-primary-bg`/`--btn-primary-fg`)
+  read by `.btn-primary`, so the shell CTA and the hero CTA agree everywhere.
+  The visualizer's own Run button still uses `--accent`; that is Phase 3's call.
 - **`App.jsx` is 1,242 lines**; Phase 3 splits it into components and hooks, which is the largest refactor in the plan and must keep every existing test green.
 - **Theme conversion of `App.css`** changed how the playground looks in both themes; screenshots at three sizes were taken to catch regressions.
 - **Placeholder pages** (learn, docs, data structures) are honest about not working yet; they must be replaced, not forgotten.

@@ -68,6 +68,19 @@
   /* Text on top of the accent colour. */
   --on-accent: #ffffff;
 
+  /* Primary buttons are near-black in light mode (see docs/design), blue in
+     dark mode. One token pair, so every primary button agrees. */
+  --btn-primary-bg: #0b1020;
+  --btn-primary-fg: #ffffff;
+
+  /* Hero: second headline line, blue -> violet in light. */
+  --hero-grad-from: #3b5bff;
+  --hero-grad-to: #7c3aed;
+
+  /* Hero background washes: a lavender bloom, top right and bottom left. */
+  --hero-wash-a: rgb(124 58 237 / 15%);
+  --hero-wash-b: rgb(59 91 255 / 9%);
+
   /* Execution-graph edge colours, by meaning. */
   --edge-call: #8b5cf6;
   --edge-return: #14b8a6;
@@ -113,6 +126,18 @@
   --danger-bg: rgb(248 113 113 / 10%);
 
   --on-accent: #ffffff;
+
+  /* Primary buttons stay blue on a dark surface. */
+  --btn-primary-bg: #2f6bff;
+  --btn-primary-fg: #ffffff;
+
+  /* Hero: second headline line, blue -> cyan in dark. */
+  --hero-grad-from: #4d8cff;
+  --hero-grad-to: #22d3c5;
+
+  /* Hero background washes: soft wave lines, drawn in the accent colour. */
+  --hero-wash-a: rgb(47 107 255 / 9%);
+  --hero-wash-b: rgb(34 211 197 / 6%);
 
   --edge-call: #8b5cf6;
   --edge-return: #22d3c5;

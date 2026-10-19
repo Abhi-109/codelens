@@ -80,9 +80,11 @@ CodeLens fixes both halves of that:
   first use by a dismissible concept card, and a glossary drawer collects the terms.
 - **Works where beginners are** — phone and laptop, light and dark themes, with
   a theme toggle that is remembered and never flashes the wrong colours.
-- **A real site around it** — a landing page, a language picker, and docs,
-  learn and about pages behind one shared shell with breadcrumbs, a footer,
-  and loading / empty / error / 404 states.
+- **A real site around it** — a landing page whose hero replays a real trace
+  step by step (variables, call stack and output, all from the engine's own
+  recording, pausing when you leave the tab), a language picker that is honest
+  about what runs today, and docs, learn and about pages behind one shared
+  shell with breadcrumbs, a footer, and loading / empty / error / 404 states.
 
 ## How it works
 
@@ -143,7 +145,8 @@ Three suites, all of which should pass on every commit:
 
 ```bash
 npm run test:tracer   # 95 Python tests: the tracer, the flowchart model and the corpus
-npm run test:js       # 162 JS tests: the graph, the teaching layer, the corpus, the router
+npm run test:js       # 176 JS tests: the graph, the teaching layer, the corpus, the router,
+                      # the homepage preview and the language picker
 npm run lint          # oxlint
 npm run build         # production build
 ```
@@ -188,6 +191,14 @@ codelens/
 │   │   ├── states.jsx      # loading, empty, error and 404 states
 │   │   └── shell.css
 │   ├── pages/              # one file per route (home, get-started, learn, ...)
+│   │   ├── Home.jsx            # the landing page and its live preview
+│   │   ├── GetStarted.jsx      # the language grid (Python only, honestly)
+│   │   ├── languages.js        # the language list + the homepage features (pure)
+│   │   ├── languages.test.mjs  # Python is the only language that links anywhere
+│   │   ├── preview.js          # real trace -> preview frames (pure, reuses stepView)
+│   │   ├── preview.test.mjs    # every frame checked against the corpus recording
+│   │   ├── preview-fixture.json # a recorded run of one built-in example
+│   │   └── usePageMeta.js      # each page's own <title> and meta description
 │   ├── App.jsx             # the Python visualizer UI (unchanged by the shell)
 │   ├── App.css
 │   ├── flowchart/
@@ -213,7 +224,8 @@ codelens/
 │   ├── corpus-golden.json  # recorded status, stdout and counts per program
 │   ├── examples/           # the first 10 example programs (each doubles as a test)
 │   └── test_*.py           # tracer, flowchart and corpus tests
-└── scripts/                # opt-in Pyodide and explain checks
+└── scripts/                # preview-fixture.mjs (re-records the homepage's trace),
+                            # plus the opt-in Pyodide and explain checks
 ```
 
 Tests live beside what they cover (`*.test.mjs` next to the `.js`), and

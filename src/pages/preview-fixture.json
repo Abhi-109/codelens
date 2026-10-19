@@ -1,0 +1,307 @@
+{
+ "program": "function-basic",
+ "title": "A call, a parameter, a return",
+ "category": "functions",
+ "source": "def greet(name):\n    message = 'Hello, ' + name\n    return message\n\nresult = greet('Asha')\nprint(result)\n",
+ "trace": [
+  {
+   "event": "call",
+   "exception": null,
+   "exit_kind": null,
+   "frame_id": 1,
+   "frames": [
+    {
+     "call_line": null,
+     "frame_id": 1,
+     "function": "<module>",
+     "line": 0,
+     "variables": {}
+    }
+   ],
+   "function": "<module>",
+   "heap": {},
+   "line": 0,
+   "return_value": null,
+   "step": 0
+  },
+  {
+   "event": "line",
+   "exception": null,
+   "exit_kind": null,
+   "frame_id": 1,
+   "frames": [
+    {
+     "call_line": null,
+     "frame_id": 1,
+     "function": "<module>",
+     "line": 1,
+     "variables": {}
+    }
+   ],
+   "function": "<module>",
+   "heap": {},
+   "line": 1,
+   "return_value": null,
+   "step": 1
+  },
+  {
+   "event": "line",
+   "exception": null,
+   "exit_kind": null,
+   "frame_id": 1,
+   "frames": [
+    {
+     "call_line": null,
+     "frame_id": 1,
+     "function": "<module>",
+     "line": 5,
+     "variables": {
+      "greet": {
+       "name": "greet",
+       "type": "function"
+      }
+     }
+    }
+   ],
+   "function": "<module>",
+   "heap": {},
+   "line": 5,
+   "return_value": null,
+   "step": 2
+  },
+  {
+   "event": "call",
+   "exception": null,
+   "exit_kind": null,
+   "frame_id": 2,
+   "frames": [
+    {
+     "call_line": null,
+     "frame_id": 1,
+     "function": "<module>",
+     "line": 5,
+     "variables": {
+      "greet": {
+       "name": "greet",
+       "type": "function"
+      }
+     }
+    },
+    {
+     "call_line": 5,
+     "frame_id": 2,
+     "function": "greet",
+     "line": 1,
+     "variables": {
+      "name": {
+       "type": "str",
+       "value": "Asha"
+      }
+     }
+    }
+   ],
+   "function": "greet",
+   "heap": {},
+   "line": 1,
+   "return_value": null,
+   "step": 3
+  },
+  {
+   "event": "line",
+   "exception": null,
+   "exit_kind": null,
+   "frame_id": 2,
+   "frames": [
+    {
+     "call_line": null,
+     "frame_id": 1,
+     "function": "<module>",
+     "line": 5,
+     "variables": {
+      "greet": {
+       "name": "greet",
+       "type": "function"
+      }
+     }
+    },
+    {
+     "call_line": 5,
+     "frame_id": 2,
+     "function": "greet",
+     "line": 2,
+     "variables": {
+      "name": {
+       "type": "str",
+       "value": "Asha"
+      }
+     }
+    }
+   ],
+   "function": "greet",
+   "heap": {},
+   "line": 2,
+   "return_value": null,
+   "step": 4
+  },
+  {
+   "event": "line",
+   "exception": null,
+   "exit_kind": null,
+   "frame_id": 2,
+   "frames": [
+    {
+     "call_line": null,
+     "frame_id": 1,
+     "function": "<module>",
+     "line": 5,
+     "variables": {
+      "greet": {
+       "name": "greet",
+       "type": "function"
+      }
+     }
+    },
+    {
+     "call_line": 5,
+     "frame_id": 2,
+     "function": "greet",
+     "line": 3,
+     "variables": {
+      "message": {
+       "type": "str",
+       "value": "Hello, Asha"
+      },
+      "name": {
+       "type": "str",
+       "value": "Asha"
+      }
+     }
+    }
+   ],
+   "function": "greet",
+   "heap": {},
+   "line": 3,
+   "return_value": null,
+   "step": 5
+  },
+  {
+   "event": "return",
+   "exception": null,
+   "exit_kind": "normal",
+   "frame_id": 2,
+   "frames": [
+    {
+     "call_line": null,
+     "frame_id": 1,
+     "function": "<module>",
+     "line": 5,
+     "variables": {
+      "greet": {
+       "name": "greet",
+       "type": "function"
+      }
+     }
+    },
+    {
+     "call_line": 5,
+     "frame_id": 2,
+     "function": "greet",
+     "line": 3,
+     "variables": {
+      "message": {
+       "type": "str",
+       "value": "Hello, Asha"
+      },
+      "name": {
+       "type": "str",
+       "value": "Asha"
+      }
+     }
+    }
+   ],
+   "function": "greet",
+   "heap": {},
+   "line": 3,
+   "return_value": {
+    "type": "str",
+    "value": "Hello, Asha"
+   },
+   "step": 6
+  },
+  {
+   "event": "line",
+   "exception": null,
+   "exit_kind": null,
+   "frame_id": 1,
+   "frames": [
+    {
+     "call_line": null,
+     "frame_id": 1,
+     "function": "<module>",
+     "line": 6,
+     "variables": {
+      "greet": {
+       "name": "greet",
+       "type": "function"
+      },
+      "result": {
+       "type": "str",
+       "value": "Hello, Asha"
+      }
+     }
+    }
+   ],
+   "function": "<module>",
+   "heap": {},
+   "line": 6,
+   "return_value": null,
+   "step": 7
+  },
+  {
+   "event": "output",
+   "frame_id": 1,
+   "line": 6,
+   "step": 8,
+   "text": "Hello, Asha"
+  },
+  {
+   "event": "output",
+   "frame_id": 1,
+   "line": 6,
+   "step": 9,
+   "text": "\n"
+  },
+  {
+   "event": "return",
+   "exception": null,
+   "exit_kind": "normal",
+   "frame_id": 1,
+   "frames": [
+    {
+     "call_line": null,
+     "frame_id": 1,
+     "function": "<module>",
+     "line": 6,
+     "variables": {
+      "greet": {
+       "name": "greet",
+       "type": "function"
+      },
+      "result": {
+       "type": "str",
+       "value": "Hello, Asha"
+      }
+     }
+    }
+   ],
+   "function": "<module>",
+   "heap": {},
+   "line": 6,
+   "return_value": {
+    "type": "none"
+   },
+   "step": 10
+  }
+ ],
+ "output": "Hello, Asha\n"
+}

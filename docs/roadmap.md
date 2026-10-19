@@ -19,7 +19,14 @@ project is left in a runnable, demoable state after each task.
       playground, unchanged
 - [x] Landing page, language selection page (Python available, others marked
       Coming Soon and unclickable), about page
-- [ ] Homepage preview driven by the real engine (lazy-loaded)
+- [x] **Homepage preview driven by real trace data**: the hero replays a
+      recorded run of a built-in example through the visualizer's own
+      `getStepView`, looping through the steps with a play/pause player, and
+      pausing when the tab is hidden, when it scrolls out of view, and for
+      anyone who asked for reduced motion. Deliberately *not* Pyodide: the
+      quality bar says to lazy-load the engine only on the visualizer pages,
+      so the hero never blocks first paint (`src/pages/preview.js`,
+      `npm run fixtures:preview` re-records it)
 - [ ] Learn lessons and docs pages
 
 - [x] Replace the Vite template `README.md` with a real one
@@ -199,7 +206,13 @@ and keeps [supported-python.md](supported-python.md) in sync, and
 own functions. A `no-example-hardcoding` test keeps example-specific words out of
 the teaching layer's strings.
 
-All suites pass: 95 Python tests, 144 JS tests, plus lint and a production build.
-Two opt-in checks need a local Pyodide install: `npm run test:pyodide` and
-`npm run check:explain`. What remains on A3 is debounced generation and the
+The landing page and the language picker are real, not stubs: the hero replays
+a **recorded trace** of a built-in example through the same `getStepView` the
+visualizer uses, so every value on it comes from the engine, and the language
+grid marks Python as the only card that opens anything
+(`src/pages/preview.js`, `src/pages/languages.js`, both tested).
+
+All suites pass: 95 Python tests, 176 JS tests, plus lint and a production
+build. Two opt-in checks need a local Pyodide install: `npm run test:pyodide`
+and `npm run check:explain`. What remains on A3 is debounced generation and the
 show-code toggle; see the roadmap above for the rest.
