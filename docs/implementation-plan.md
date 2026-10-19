@@ -59,7 +59,7 @@ Each phase stops for review before the next begins.
 - **Router:** hand-rolled History-API router (`src/router.js` + `router.jsx`), no new dependency. Matching is pure and tested (`src/router.test.mjs`, 18 cases).
 - **Dependencies:** none added. `@dagrejs/dagre` removed. The editor stays a custom textarea (line numbers, current-line highlight and inline values already work).
 - **Theme:** `data-theme` on `<html>`, set before first paint by an inline boot script in `index.html`, then kept in step by `src/theme.js`. Stored under `codelens-theme`; falls back to the OS preference, then light.
-- **Deep links:** History API; `vite dev` and `vite preview` serve the SPA fallback. A static host (e.g. GitHub Pages) would need a `404.html` rewrite.
+- **Deep links:** History API; `vite dev` and `vite preview` serve the SPA fallback, and `vercel.json` rewrites every path to `/index.html` for Vercel (rewrites run after the filesystem, so `public/` assets and hashed `dist/assets/*` still serve). A static host without rewrites (e.g. GitHub Pages) would need a `404.html` copy of `index.html`.
 
 ## 7. Risks
 
