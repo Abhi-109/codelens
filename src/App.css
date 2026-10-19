@@ -913,21 +913,9 @@ button:disabled {
   border-radius: 6px;
 }
 
-.step-where {
-  margin: 0 0 6px;
-  font-size: 12.5px;
-}
-
-.step-where strong {
-  font-weight: 700;
-}
-
-.step-where span {
-  color: var(--text);
-}
-
 .step-code {
   display: block;
+  margin: 0 0 6px;
   padding: 4px 6px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -939,18 +927,9 @@ button:disabled {
 }
 
 .step-action {
-  margin: 6px 0 0;
+  margin: 0 0 8px;
   font-size: 12.5px;
   font-weight: 600;
-}
-
-.step-label {
-  display: inline-block;
-  padding: 0 4px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font-size: 11px;
-  text-transform: uppercase;
 }
 
 .panel-more {
@@ -2019,7 +1998,7 @@ h3 {
   .layout:not([data-tab="graph"]) [data-pane="graph"],
   .layout[data-tab="graph"] [data-pane="side"],
   .layout[data-tab="variables"] [data-card]:not([data-card="variables"]),
-  .layout[data-tab="changes"] [data-card]:not([data-card="changes"]),
+  .layout[data-tab="flow"] [data-card]:not([data-card="flow"]):not([data-card="trace"]),
   .layout[data-tab="stack"] [data-card]:not([data-card="stack"]),
   .layout[data-tab="output"] [data-card]:not([data-card="output"]) {
     display: none;
@@ -2098,7 +2077,7 @@ h3 {
 
   .layout:not([data-tab="code"]) [data-pane="code"],
   .layout:not([data-tab="graph"]) [data-pane="graph"],
-  .layout:not([data-tab="variables"]):not([data-tab="changes"]):not([data-tab="stack"]):not(
+  .layout:not([data-tab="variables"]):not([data-tab="flow"]):not([data-tab="stack"]):not(
       [data-tab="output"]
     )
     [data-pane="side"] {

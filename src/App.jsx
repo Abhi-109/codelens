@@ -54,12 +54,13 @@ const MIN_MID = 26;
 const MIN_RIGHT = 18;
 
 // Below 1280px the columns become tabs. "Code" is only reachable as a tab on
-// phones; from 900px up the code column is always on screen.
+// phones; from 900px up the code column is always on screen. Section A is the
+// teaching card, which stays pinned above the tabs, so the tabs start at B.
 const TABS = [
   { id: "code", label: "Code", phoneOnly: true },
   { id: "graph", label: "Graph" },
   { id: "variables", label: "Variables" },
-  { id: "changes", label: "Changes" },
+  { id: "flow", label: "Flow" },
   { id: "stack", label: "Calls" },
   { id: "output", label: "Output" },
 ];
@@ -847,9 +848,12 @@ export default function App() {
           onRelease={releaseSplitter}
         />
 
+        {/* Section A: the current step. This is the teaching surface, so it
+            keeps the full prose; the inspector below starts at B. */}
+        <PanelError>
         <div className="explain" data-pane="teach">
           <div className="explain-head">
-            <div className="explain-label">What's happening</div>
+            <div className="explain-label">A · What's happening</div>
             <span className="explain-where">
               {result ? (
                 <>
@@ -861,6 +865,10 @@ export default function App() {
 
           {result ? (
             <>
+              {view.code ? <code className="step-code">{view.code.text}</code> : null}
+              {currentNode?.action ? (
+                <p className="step-action">{currentNode.action}</p>
+              ) : null}
               <div className="explain-part">
                 <div className="explain-part-label">Just happened</div>
                 <p className="explain-text just">{view.explanation.justHappened ?? "Nothing yet."}</p>
@@ -906,6 +914,7 @@ export default function App() {
             </p>
           ) : null}
         </div>
+        </PanelError>
 
         <div className="tabs" role="tablist" aria-label="Panels">
           {TABS.map(({ id, label, phoneOnly }) => (
@@ -985,36 +994,6 @@ export default function App() {
 
         <section className="pane side-pane" data-pane="side">
           <div className="side-scroll">
-            <PanelError>
-              <section className="panel" data-card="step">
-                <PanelHead
-                  title="A · This step"
-                  hint="Where you are, in plain English, and why."
-                  help="One step of the run: the line about to run, what it does, and the decision that brought control here. It is the same wording the graph card uses, so the two can never disagree."
-                />
-                {result ? (
-                  <>
-                    <p className="step-where">
-                      <strong>{view.line ? `line ${view.line}` : `step ${index + 1}`}</strong>
-                      <span> · {callTitle}</span>
-                    </p>
-                    {view.code ? <code className="step-code">{view.code.text}</code> : null}
-                    {currentNode?.action ? (
-                      <p className="step-action">{currentNode.action}</p>
-                    ) : null}
-                    <p className="explain-text about">{view.explanation.aboutToHappen}</p>
-                    {view.explanation.why ? (
-                      <p className="explain-text why">
-                        <span className="step-label">Why</span> {view.explanation.why}
-                      </p>
-                    ) : null}
-                  </>
-                ) : (
-                  <p className="empty">Run your code and this describes each step.</p>
-                )}
-              </section>
-            </PanelError>
-
             <PanelError>
             <section className="panel" data-card="variables">
               <PanelHead
