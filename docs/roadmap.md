@@ -34,9 +34,16 @@ project is left in a runnable, demoable state after each task.
 - [x] Add `docs/roadmap.md` (this file)
 - [x] Add a GitHub Actions workflow that runs tests, lint, and build on every push and PR
 
-## Flowchart renderer (stages A3–A5)
+## Flowchart renderer (stages A3–A5) — superseded
 
-A vertical slice that replaces the card list with a real textbook flowchart,
+> **Retired.** This slice drew the format-2 chart with **dagre**, and was
+> removed when the visualization was rebuilt (see
+> [Visualization rebuild](#visualization-rebuild-call-tree--control-flow--combined)
+> below). `@dagrejs/dagre` left the dependency tree in `fe41185`; the layout is
+> now hand-rolled and deterministic (`src/flowchart/layout.js`). The format
+> contract it documented is unchanged and still accurate.
+
+A vertical slice that replaced the card list with a real textbook flowchart,
 drawn as SVG and laid out with dagre. The detailed spec is
 [stage-a3-flowchart-renderer.md](stage-a3-flowchart-renderer.md); the graph
 builder and its node/edge contract are in
@@ -44,7 +51,7 @@ builder and its node/edge contract are in
 
 ### Stage A3 — SVG renderer
 
-- [x] Install `@dagrejs/dagre` for the layout pass
+- [x] Install `@dagrejs/dagre` for the layout pass *(since removed — see above)*
 - [x] Load the format-2 graph through the worker and client (`buildFlowchartGraph`)
 - [x] `src/flowchart/mapTrace.js` — chart selection and line→node lookup, with tests
 - [x] SVG shape primitives for the eight node kinds
@@ -65,6 +72,65 @@ builder and its node/edge contract are in
 
 - [ ] One tab per function, following the call stack
 - [ ] Export the chart as SVG or PNG
+
+## Visualization rebuild (Call tree / Control flow / Combined)
+
+The legacy execution-graph card timeline (`ExecutionGraph.jsx`, a box-per-line
+node model) is **retired**, not replaced in place: its renderer is deleted, its
+pure mapping utilities (`executionGraph.js`, `layoutGraph.js`, `nodeBody.js`,
+`reasons.js`) are kept because the step view and the corpus tests still depend
+on them. In its place the Visualize pane offers a strip of canvases, all of
+them windows onto **one** execution — one step, one timer, one speed, shared by
+every mode, inspector tab and learning mode.
+
+### Stage 1 — Call tree
+
+- [x] `buildCallTree` / `callStatus` (`src/flowchart/callTree.js`) — parent and
+      child from real frame events; status future → running → done/failed
+- [x] Deterministic top-down layout (`src/flowchart/callTreeLayout.js`): one box
+      per call, never a shared node, stable geometry that ignores the step
+- [x] Return values read from the trace's own return events; a failed call shows
+      the exception instead, inherited from the deepest raising child
+- [x] Click a call to jump to the step it started at; the current call is
+      highlighted and kept centred; fold a subtree away and back
+- [x] Shared canvas shell (`src/visualizer/Canvas.jsx`): pan, zoom, fit, follow,
+      expand, toolbar, legend, empty states
+- [x] 24 unit tests (`callTree.test.mjs`, `callTreeLayout.test.mjs`)
+
+### Stage 2 — Control flow graph
+
+- [x] Format-2 chart lookup (`src/flowchart/mapTrace.js`) and the trace→node
+      layer (`src/flowchart/controlFlow.js`), both pure
+- [x] Hand-rolled deterministic layered layout (`src/flowchart/layout.js`) — ranks,
+      barycentre sweeps, private channels for loop-back arrows; no dependency
+- [x] SVG shapes for all eight node kinds (`src/flowchart/shapes.jsx`)
+- [x] Current node, executed path, and the real Yes/No the run took —
+      invocation by invocation, read only from the trace
+- [x] Boxes the run never reached are drawn subdued and cannot be clicked; an
+      exception highlights the raising line and invents no edge
+- [x] One tab per function the program defines, with the ones this run entered
+      marked, plus "Follow run", "Show code" and the v1 card list behind
+      **Simple view**
+- [x] 40 unit tests (`mapTrace.test.mjs`, `layout.test.mjs`, `controlFlow.test.mjs`)
+
+### Stage 3 — Combined view
+
+- [ ] The call tree beside a compact call stack and the variables of the current
+      step, reusing the inspector components and the one shared step
+
+### Stage 4 — Animation and playback
+
+- [ ] Transitions for active node/edge/status changes that never move the whole
+      graph, never block manual stepping, and respect `prefers-reduced-motion`
+
+### Stage 5 — Polish and QA
+
+- [ ] Dark and light theme pass on labels, controls and edges; contrast fixed
+      through design tokens
+- [ ] Keyboard, ARIA and focus check across all three canvases
+- [ ] Responsive check at desktop, tablet and phone
+- [ ] Empty / loading / input-required / success / exception states checked
+      against real examples
 
 ## Teaching UI pass
 
@@ -192,12 +258,16 @@ the code, a plain-English action, the values that matter, what changed, and
 where control goes next; finished calls fold away. The textbook flowchart is
 still reachable behind the same **Beginner / Advanced / Textbook** control.
 
-The playground is one viewport-height screen — code | graph | explanation |
-inspector — with draggable splitters, folding into tabs (Code, Explain, Graph,
-Panels) below 1280px and staying usable at 375×667. The inspector is five
-labelled sections (A this step, B variables, C execution flow, D calls and
-returns, E output) plus a collapsed trace-internals disclosure, each wrapped in
-its own error boundary.
+The playground is one viewport-height screen — code | graph | inspector —
+with draggable splitters, folding into Code / Graph / Inspector tabs below
+1280px and staying usable at 375×667. The inspector is six tabs (Explain,
+Variables, Stack, Memory, Output, History) behind one ARIA tablist with roving
+tabindex, so changing section never moves the execution step, and playback
+sits in a single bar under all three panes. The **Beginner / Advanced /
+Textbook** control that used to sit above the graph now lives in the top bar,
+so it reaches every pane; it changes explanation level and technical detail
+for the whole workspace, never the trace itself. This workspace is Phase A of
+an approved redesign — the later phases are waiting on review.
 
 Breadth is proven rather than claimed: `tracer-poc/corpus.py` holds ~45 programs
 across 32 categories of Python, `test_corpus.py` checks the tracer against them
@@ -212,7 +282,7 @@ visualizer uses, so every value on it comes from the engine, and the language
 grid marks Python as the only card that opens anything
 (`src/pages/preview.js`, `src/pages/languages.js`, both tested).
 
-All suites pass: 95 Python tests, 176 JS tests, plus lint and a production
+All suites pass: 95 Python tests, 214 JS tests, plus lint and a production
 build. Two opt-in checks need a local Pyodide install: `npm run test:pyodide`
 and `npm run check:explain`. What remains on A3 is debounced generation and the
 show-code toggle; see the roadmap above for the rest.

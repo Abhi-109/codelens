@@ -102,7 +102,19 @@ one-liner such as `if x: y = 2` is folded into a single node so the line still
 maps to exactly one node.
 
 `tracer.py`'s trace reports module-level code as `<module>`; this format keys it
-as `<main>`. The translation belongs in `src/flowchart/mapTrace.js`.
+as `<main>`. Two files do the translating, both pure and unit-tested:
+
+- `src/flowchart/mapTrace.js` — chart and line→node lookup (`chartFor`,
+  `nodeForLine`, `nodeForSourceLine`, `chartList`).
+- `src/flowchart/controlFlow.js` — one entry per trace step (`mapSteps`), plus
+  the questions the canvas asks about it: which arrows the run walked, which
+  branch a Yes/No really took (`outgoingEdge`), the first step a box was
+  reached at (`jumpToNode`), and where an exception was raised.
+
+A step that does not resolve to a node — a call into a function the program
+does not define, an `output` or `unwind` event with no line — is recorded as
+**unmapped** rather than pointed at the nearest plausible box. The canvas draws
+such a step with nothing highlighted.
 
 ## 7. Known limitations
 

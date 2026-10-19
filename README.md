@@ -55,15 +55,27 @@ CodeLens fixes both halves of that:
 - **Function calls** — each call on the stack with its arguments and the line that
   called it; click one to see that call's own variables and jump to where it
   started, and a finished call shows what it returned and to which line.
-- **Execution graph** — one card per executed line, laid out automatically in run
-  order, indented per call depth, so recursion reads as a staircase rather than a
-  tower. Each card shows the code, a plain-English action, the values that matter
-  there, what changed, and where control goes next; finished calls fold away with
-  one click, and only one edge is labelled at a time (with the real values that
-  decided it). Fit, zoom, pan, follow the current card, reset — and the current
-  card stays on screen, including on a phone. A **Beginner / Advanced / Textbook**
-  switch in one control changes how much of the trace is exposed; Textbook is the
-  original textbook flowchart, still one click away.
+- **Three canvases, one run** — the Visualize pane offers a strip of drawings,
+  and every one of them is a window onto the *same* execution: switching canvas
+  carries the step, the playing state and the speed through untouched.
+  - **Call tree** — every call the program made, nested under the call that made
+    it, so recursion reads as a tree rather than a tower. Each box shows the real
+    arguments and what the call gave back (or the exception that stopped it), the
+    call running now is highlighted and kept in view, and clicking any call jumps
+    to the step it started at. A subtree can be folded away.
+  - **Control flow graph** — the textbook flowchart of your code, laid out
+    deterministically with no graph library: ovals, rectangles, diamonds, calls
+    and read/show boxes. The path this run really took is lit up, a Yes or a No
+    only ever shows the branch that was actually taken (per invocation, so a
+    recursive call's own answer is its own), a box the run never reached is drawn
+    subdued and cannot be clicked, and an exception lights the line it broke on
+    without inventing an edge. One tab per function, "Follow run", "Show code in
+    boxes", and the old block outline one click away under **Simple view**.
+  - Fit, zoom, pan, follow, expand and a "How to read this" legend behave the same
+    on every canvas, on a laptop and on a phone, and honour reduced motion.
+- **A Beginner / Advanced / Textbook** switch in one control changes how much of
+  the trace is exposed; Textbook opens the control flow canvas, and after that you
+  can pick any canvas you like.
 - **Inspector in five sections** — A this step (line, plain English, why), B
   variables (values, scope, changes), C execution flow (before / now / next with
   reasons), D calls and returns (arguments, locals, waiting calls, returned value
@@ -118,9 +130,18 @@ src/flowchart/           draws the execution graph from the same trace
     └── ExecutionGraph.jsx the graph component
     │
     ▼
-React UI (src/App.jsx)   draws it all: the inspector's five sections,
-                         the explanation card and the code panel all read
-                         the same tested step view
+src/visualizer/          the workspace beside the canvas
+    ├── Inspector.jsx     six tabbed sections (Explain…History), real ARIA tabs
+    ├── PlaybackBar.jsx   stepping, timeline, speed, and the Developer menu
+    ├── playback.js       milliseconds per step, plus the saved preference
+    ├── learningMode.js   what Beginner / Advanced / Textbook are allowed to change
+    ├── workspace.js      step clamping and tab selection, so they cannot tangle
+    ├── labels.js         the learner's words for a step and a variable list
+    └── panelBits.jsx     shared panel pieces: rows, calls, objects, headings
+    │
+    ▼
+React UI (src/App.jsx)   draws it all: the code panel, the graph and the
+                         inspector all read the same tested step view
 ```
 
 The tracer is the single source of truth, and the trace JSON is the only thing the
@@ -147,8 +168,9 @@ Three suites, all of which should pass on every commit:
 
 ```bash
 npm run test:tracer   # 95 Python tests: the tracer, the flowchart model and the corpus
-npm run test:js       # 176 JS tests: the graph, the teaching layer, the corpus, the router,
-                      # the homepage preview and the language picker
+npm run test:js       # 286 JS tests: the call tree and control flow model and layout, the
+                      # graph, the teaching layer, the corpus, the router, the homepage
+                      # preview, the language picker and the workspace modules
 npm run lint          # oxlint
 npm run build         # production build
 ```
@@ -201,15 +223,43 @@ codelens/
 │   │   ├── preview.test.mjs    # every frame checked against the corpus recording
 │   │   ├── preview-fixture.json # a recorded run of one built-in example
 │   │   └── usePageMeta.js      # each page's own <title> and meta description
-│   ├── App.jsx             # the Python visualizer UI (unchanged by the shell)
+│   ├── App.jsx             # the Python visualizer: orchestrator + tracer wiring
 │   ├── App.css
+│   ├── visualizer/
+│   │   ├── Inspector.jsx        # six tabbed sections, full ARIA tab pattern
+│   │   ├── PlaybackBar.jsx      # stepping, timeline, speed, Developer menu
+│   │   ├── panelBits.jsx        # shared panel pieces (components only)
+│   │   ├── labels.js            # step words + the variable list builder
+│   │   ├── playback.js          # ms per step and the saved speed (pure)
+│   │   ├── playback.test.mjs
+│   │   ├── learningMode.js      # what each learning mode may change (pure)
+│   │   ├── learningMode.test.mjs
+│   │   ├── workspace.js         # step clamping and tab selection (pure)
+│   │   ├── workspace.test.mjs
+│   │   ├── vizMode.js           # which canvas draws the run (pure)
+│   │   ├── vizMode.test.mjs
+│   │   ├── Canvas.jsx           # the shared surface: pan, zoom, fit, follow, expand
+│   │   ├── CallTree.jsx         # canvas 1: the calls this run made, nested
+│   │   ├── VisualizationPane.jsx # the canvas strip, and the one place a mode is chosen
+│   │   └── SimpleFlow.jsx       # the v1 block outline, behind "Simple view"
 │   ├── flowchart/
-│   │   ├── executionGraph.js    # the execution graph's node model (pure)
-│   │   ├── layoutGraph.js       # automatic layout: rows, indents, edge lanes (pure)
+│   │   ├── callTree.js          # frames -> a tree of calls, one node per call (pure)
+│   │   ├── callTree.test.mjs
+│   │   ├── callTreeLayout.js    # box sizes and positions for that tree (pure)
+│   │   ├── callTreeLayout.test.mjs
+│   │   ├── mapTrace.js          # format-2 chart and line -> node lookup (pure)
+│   │   ├── mapTrace.test.mjs
+│   │   ├── layout.js            # deterministic layered layout, no dependency (pure)
+│   │   ├── layout.test.mjs
+│   │   ├── controlFlow.js       # trace step -> chart node, arrow, branch (pure)
+│   │   ├── controlFlow.test.mjs
+│   │   ├── shapes.jsx           # SVG primitives for the eight node kinds
+│   │   ├── ControlFlowChart.jsx # canvas 2: the shapes, with the run's path lit
+│   │   ├── executionGraph.js    # the step view's node model (pure, still load-bearing)
+│   │   ├── layoutGraph.js       # card rows, indents and edge lanes (pure)
 │   │   ├── nodeBody.js          # what each card shows (pure)
 │   │   ├── reasons.js           # why an edge ran, with real values (pure)
-│   │   ├── viewport.js          # fit / zoom / pan maths (pure)
-│   │   └── ExecutionGraph.jsx   # the graph component
+│   │   └── viewport.js          # fit / zoom / pan maths (pure)
 │   └── tracer/
 │       ├── client.js           # talks to the Web Worker
 │       ├── pyodide.worker.js   # loads Pyodide, runs the tracer

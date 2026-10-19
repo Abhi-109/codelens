@@ -1,12 +1,32 @@
-import { Component, useEffect, useMemo, useRef, useState } from "react";
-import { buildFlowchart, onEngineStatus, runTrace } from "./tracer/client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { buildFlowchart, buildFlowchartGraph, onEngineStatus, runTrace } from "./tracer/client";
 import { CONCEPTS, explainStep, isNewConcept } from "./tracer/explain";
-import { countFor, flowFor, pathToLine, runsByLine } from "./tracer/flow";
-import { namesById, objectChanges, slotEntries } from "./tracer/objects";
-import { formatValue, showValue } from "./tracer/values";
+import { namesById, objectChanges } from "./tracer/objects";
 import { changeLog, errorStep, getStepView, variableHistory } from "./tracer/stepView";
 import { buildExecutionGraph } from "./flowchart/executionGraph.js";
-import ExecutionGraph from "./flowchart/ExecutionGraph.jsx";
+import ControlFlowChart from "./flowchart/ControlFlowChart.jsx";
+import Inspector from "./visualizer/Inspector.jsx";
+import PlaybackBar from "./visualizer/PlaybackBar.jsx";
+import CallTree from "./visualizer/CallTree.jsx";
+import VisualizationPane from "./visualizer/VisualizationPane.jsx";
+import { DEFAULT_SPEED, isSpeed, loadSpeed, playbackIntervalMs, saveSpeed } from "./visualizer/playback.js";
+import {
+  LEARNING_MODES,
+  MODE_BLURBS,
+  MODE_LABELS,
+  DEFAULT_MODE,
+  isLearningMode,
+  loadMode,
+  modeDetail,
+  saveMode,
+} from "./visualizer/learningMode.js";
+import {
+  isVizMode,
+  initialViz,
+  saveViz,
+  selectViz,
+} from "./visualizer/vizMode.js";
+import { clampStep } from "./visualizer/workspace.js";
 import "./App.css";
 
 const MODULE = "<module>";
@@ -53,16 +73,14 @@ const MIN_LEFT = 18;
 const MIN_MID = 26;
 const MIN_RIGHT = 18;
 
-// Below 1280px the columns become tabs. "Code" is only reachable as a tab on
-// phones; from 900px up the code column is always on screen. Section A is the
-// teaching card, which stays pinned above the tabs, so the tabs start at B.
-const TABS = [
+// Below 1280px the canvas and the inspector take turns, chosen by this bar;
+// from 1280px up all three columns are on screen together and it is hidden.
+// "Code" is only reachable as a tab on phones, where the code column would
+// otherwise have no room of its own.
+const PANES = [
   { id: "code", label: "Code", phoneOnly: true },
-  { id: "graph", label: "Graph" },
-  { id: "variables", label: "Variables" },
-  { id: "flow", label: "Flow" },
-  { id: "stack", label: "Calls" },
-  { id: "output", label: "Output" },
+  { id: "graph", label: "Visualize" },
+  { id: "inspector", label: "Inspector" },
 ];
 
 const clamp = (value, lo, hi) => Math.min(Math.max(value, lo), hi);
@@ -85,89 +103,6 @@ function saveColumns(columns) {
   } catch {
     // Remembering the split is a nicety, not a requirement.
   }
-}
-
-/** A small "?" that opens a one-paragraph beginner explanation, and never takes space. */
-function SectionHelp({ title, children }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <span className="help">
-      <button
-        type="button"
-        className="help-dot"
-        aria-label={`What is ${title}?`}
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        ?
-      </button>
-      {open ? (
-        <>
-          <span className="help-backdrop" onClick={() => setOpen(false)} />
-          <span className="help-pop" role="note">
-            {children}
-          </span>
-        </>
-      ) : null}
-    </span>
-  );
-}
-
-/** A panel heading in plain language, with a one-line purpose underneath. */
-function PanelHead({ title, hint, help }) {
-  return (
-    <div className="panel-head">
-      <div className="panel-head-row">
-        <h3>{title}</h3>
-        {help ? <SectionHelp title={title}>{help}</SectionHelp> : null}
-      </div>
-      {hint ? <p className="panel-hint">{hint}</p> : null}
-    </div>
-  );
-}
-
-/**
- * One section of the inspector, isolated: if it cannot render, that section
- * says so honestly and the rest of the panels keep working, because a learner
- * must never lose the whole view to a single bad value.
- */
-class PanelError extends Component {
-  state = { failed: false, message: "" };
-
-  static getDerivedStateFromError(error) {
-    return { failed: true, message: String(error?.message ?? error) };
-  }
-
-  render() {
-    if (this.state.failed) {
-      return (
-        <p className="empty panel-failed">
-          This section could not be shown ({this.state.message}). Everything
-          else still works.
-        </p>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-/** The step *after* this one, in the learner's words: a line, or the reason. */
-function stepLabel(event) {
-  if (!event) return "end of the run";
-  if (event.line) return `line ${event.line}`;
-  const words = {
-    output: "printing",
-    input: "asking for input",
-    call: `calling ${event.function}`,
-    return: `returning from ${event.function}`,
-    exception: "an error being raised",
-    unwind: "an error leaving a call",
-    step_limit: "the step limit",
-    timeout: "the time limit",
-    output_limit: "the output limit",
-    error: "the run ending with an error",
-  };
-  return words[event.event] ?? event.event;
 }
 
 /** One line of code, with the run markers, a result hint and hover values. */
@@ -217,267 +152,6 @@ function CodeLine({ number, text, current, justRan, error, hint, values, onJump 
   );
 }
 
-function VariableRow({ entry, change, onChange, watched, onWatch }) {
-  // An argument is already explained by its "argument" tag; no NEW/after noise.
-  // A slot change inside a list or object is shown on the object itself.
-  const badged =
-    change && change.kind !== "slot" && change.kind !== "new-slot" && !change.arg;
-  return (
-    <li className={`var-row${badged ? " changed" : ""}`}>
-      <button type="button" className="var-name" onClick={onWatch} aria-pressed={watched}>
-        {entry.name}
-      </button>
-      <span className="var-eq">=</span>
-      <span className="var-value">{entry.text}</span>
-      {entry.isArg ? <span className="tag">argument</span> : null}
-      {badged ? (
-        <span className={`tag tag-${change.kind}`}>{change.kind === "new" ? "NEW" : "CHANGED"}</span>
-      ) : null}
-      {badged && change.kind === "changed" ? (
-        <span className="var-delta">
-          was {change.from} (line {change.line})
-        </span>
-      ) : null}
-      {badged ? (
-        <span className="var-after">
-          after this line: {change.to}
-        </span>
-      ) : null}
-      {watched && onChange ? (
-        <button type="button" className="var-jump" onClick={() => onChange(entry.name)}>
-          history
-        </button>
-      ) : null}
-    </li>
-  );
-}
-
-function WatchHistory({ name, entries, index, onJump, onClose }) {
-  return (
-    <div className="watch">
-      <div className="watch-head">
-        <strong>{name}</strong> over time
-        <button type="button" className="ghost" onClick={onClose}>
-          ✕
-        </button>
-      </div>
-      <ol className="watch-list">
-        {entries.map((entry) => (
-          <li key={entry.index}>
-            <button
-              type="button"
-              className={`watch-step${entry.index === index ? " on" : ""}`}
-              onClick={() => onJump(entry.index)}
-            >
-              step {entry.index + 1}
-            </button>
-            <span className="var-value">{entry.value}</span>
-            <span className="watch-line">{entry.line ? `line ${entry.line}` : entry.function}</span>
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
-}
-
-function ChangeList({ log, index, onJump }) {
-  const shown = log.filter((entry) => entry.index <= index).slice(-40).reverse();
-  if (shown.length === 0) return <p className="empty">Nothing has changed yet.</p>;
-  return (
-    <ol className="changes">
-      {shown.map((entry, i) => (
-        <li key={`${entry.index}-${entry.name}-${i}`}>
-          <button type="button" className="change-jump" onClick={() => onJump(entry.index)}>
-            step {entry.index + 1}
-          </button>
-          <span className="change-name">{entry.name}</span>
-          <span className="change-values">
-            {entry.from === null ? "" : `${entry.from} → `}
-            <strong>{entry.to}</strong>
-          </span>
-          <span className="watch-line">{entry.line ? `line ${entry.line}` : ""}</span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function CallList({ callStack, selectedId, onSelect }) {
-  if (callStack.length === 0) return <p className="empty">Nothing is running yet.</p>;
-  return (
-    <ol className="calls">
-      {callStack.map((frame, i) => (
-        <li
-          key={frame.frameId}
-          className={`call${frame.frameId === selectedId ? " on" : ""}${i === 0 ? " top" : ""}`}
-        >
-          <button type="button" className="call-main" onClick={() => onSelect(frame.frameId)}>
-            <span className="call-name">
-              {frame.function === MODULE ? "top level (the whole program)" : frame.function}
-              {frame.function === MODULE ? "" : ` call #${frame.callNumber}`}
-            </span>
-            {frame.args.length > 0 ? (
-              <span className="call-args">
-                {frame.args.map((arg) => `${arg.name} = ${arg.text}`).join(", ")}
-              </span>
-            ) : null}
-            <span className="call-where">
-              {frame.callLine
-                ? `called from line ${frame.callLine}`
-                : frame.line
-                  ? `on line ${frame.line}`
-                  : "the program starts here"}
-            </span>
-            {frame.returnValue !== null ? (
-              <span className="call-return">
-                returned {frame.returnValue}
-                {frame.callLine ? ` to line ${frame.callLine}` : ""}
-              </span>
-            ) : null}
-          </button>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function SlotLabel({ label, heap }) {
-  if (label === null || label === undefined) return null;
-  const text = typeof label === "object" ? formatValue(label, heap) : String(label);
-  return <div className="slot-label">{text}</div>;
-}
-
-function SlotValue({ value, heap }) {
-  return <span>{showValue(value, heap)}</span>;
-}
-
-/** The lists, dicts and objects the program remembers, with changed slots lit. */
-function HeapObjects({ heap, names, changes }) {
-  const ids = Object.keys(heap ?? {});
-  if (ids.length === 0) return null;
-  return (
-    <div className="objects">
-      {ids.map((id) => {
-        const object = heap[id];
-        const changed = changes?.get(id);
-        const labels = names.get(id) ?? [];
-        const slots = slotEntries(object);
-        const typeLabel = object.class ?? object.type;
-        return (
-          <div key={id} className={`object-card${changed ? " changed" : ""}`}>
-            <div className="object-head">
-              <span className="object-names">
-                {labels.length > 0 ? labels.join(" and ") : `${typeLabel}`}
-              </span>
-              <span className="object-type">{typeLabel}</span>
-            </div>
-            <div className="slots">
-              {slots.map((entry) => (
-                <div
-                  key={entry.key}
-                  className={`slot${changed?.has(entry.key) ? " changed" : ""}`}
-                >
-                  <SlotLabel label={entry.label} heap={heap} />
-                  <div className="slot-value">
-                    <SlotValue value={entry.value} heap={heap} />
-                  </div>
-                </div>
-              ))}
-              {object.more ? <div className="slot slot-more">+{object.more} more</div> : null}
-              {slots.length === 0 ? <div className="slot slot-empty">empty</div> : null}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function FlowNode({ node, runs, activeSet }) {
-  const active = activeSet.has(node);
-  const count = countFor(node, runs);
-  const badge = count > 0 ? <span className="flow-count">×{count}</span> : null;
-
-  if (node.kind === "statement") {
-    return (
-      <div className={`flow-node flow-statement${active ? " flow-active" : ""}`}>
-        <code>{node.text}</code>
-        {badge}
-      </div>
-    );
-  }
-
-  if (node.kind === "branch") {
-    return (
-      <div className={`flow-node flow-branch${active ? " flow-active" : ""}`}>
-        {node.arms.map((arm, i) => (
-          <div key={i} className="flow-arm">
-            <div className={`flow-arm-label${arm.test === null ? " flow-else" : ""}`}>
-              {arm.test === null ? "else" : `if ${arm.test}`}
-            </div>
-            <div className="flow-body">
-              {arm.body.length === 0 ? (
-                <p className="empty">(nothing)</p>
-              ) : (
-                arm.body.map((child, j) => (
-                  <FlowNode key={j} node={child} runs={runs} activeSet={activeSet} />
-                ))
-              )}
-            </div>
-          </div>
-        ))}
-        {badge}
-      </div>
-    );
-  }
-
-  return (
-    <div className={`flow-node flow-loop${active ? " flow-active" : ""}`}>
-      <div className="flow-loop-header">
-        <span className="flow-loop-arrow">↻</span>
-        <code>{node.header}</code>
-        {badge}
-      </div>
-      <div className="flow-body">
-        {node.body.length === 0 ? (
-          <p className="empty">(nothing)</p>
-        ) : (
-          node.body.map((child, j) => (
-            <FlowNode key={j} node={child} runs={runs} activeSet={activeSet} />
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Flowchart({ flow, functionName, trace, line }) {
-  const chart = flowFor(flow, functionName);
-  const runs = useMemo(() => runsByLine(trace, functionName), [trace, functionName]);
-  const activeSet = useMemo(
-    () => new Set(pathToLine(chart?.nodes ?? [], line)),
-    [chart, line],
-  );
-
-  if (flow?.error) {
-    return (
-      <p className="empty">
-        The code has a syntax error on line {flow.error.line ?? "?"}, so there is no flowchart yet.
-      </p>
-    );
-  }
-  if (!chart || chart.nodes.length === 0) {
-    return <p className="empty">Nothing to draw yet</p>;
-  }
-  return (
-    <div className="flow">
-      {chart.nodes.map((node, i) => (
-        <FlowNode key={i} node={node} runs={runs} activeSet={activeSet} />
-      ))}
-    </div>
-  );
-}
-
 function Splitter({ name, onGrab, onMove, onRelease }) {
   return (
     <div
@@ -494,28 +168,27 @@ function Splitter({ name, onGrab, onMove, onRelease }) {
   );
 }
 
-/** The variables list, switched between the before and after state. */
-function variableRows(view, showAfter) {
-  const rows = (view.frame?.variables ?? []).map((entry) => ({ ...entry }));
-  if (!showAfter) return rows;
-  const byName = new Map(rows.map((row) => [row.name, row]));
-  for (const change of view.changes) {
-    if (change.kind === "slot" || change.kind === "new-slot") continue;
-    const row = byName.get(change.name);
-    if (row) row.text = change.to;
-    else rows.push({ name: change.name, text: change.to, isArg: Boolean(change.arg) });
-  }
-  return rows;
-}
-
 export default function App() {
   const [source, setSource] = useState(EXAMPLES[START_EXAMPLE].code);
   const [result, setResult] = useState(null);
   const [flow, setFlow] = useState(null);
-  const [viewMode, setViewMode] = useState("beginner");
+  // The format-2 flowchart graph, built from the same code as the run. The
+  // Control Flow Graph canvas draws this; the older tree above still feeds the
+  // simple outline and the explanations.
+  const [flowGraph, setFlowGraph] = useState(null);
+  // The learning mode is workspace-wide: it decides how much technical
+  // detail every surface uses, and it is remembered between visits.
+  const [mode, setModeState] = useState(() => loadMode());
+  // Which drawing the canvas pane shows. It is held beside the step as its own
+  // piece of state and changed only through `selectViz`, which carries every
+  // other field through untouched — so changing canvas can never move the run.
+  const [vizState, setVizState] = useState(initialViz);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
+  // A fresh session gets the slowed-down default. A saved speed only wins if
+  // it is still one of the speeds the picker offers; anything else falls back.
+  const [speed, setSpeedState] = useState(() => loadSpeed());
+  const [showTraceDetails, setShowTraceDetails] = useState(false);
   const [engine, setEngine] = useState("idle");
   const [running, setRunning] = useState(false);
   const [editing, setEditing] = useState(true);
@@ -529,9 +202,13 @@ export default function App() {
   const [inputsText, setInputsText] = useState("");
   const [dismissed, setDismissed] = useState(() => new Set());
   // On a phone the Run button lives behind the Code tab, so start there.
-  const [tab, setTab] = useState(() => (window.innerWidth < 900 ? "code" : "graph"));
+  const [pane, setPane] = useState(() => (window.innerWidth < 900 ? "code" : "graph"));
 
   const timer = useRef(null);
+  // Mirrors `index` for the playback timer, which must not be rebuilt on
+  // every step just to see where the program has reached.
+  const indexRef = useRef(0);
+  const paneRefs = useRef([]);
   const layoutRef = useRef(null);
   const splitDrag = useRef(null);
   const currentLine = useRef(null);
@@ -541,12 +218,39 @@ export default function App() {
 
   useEffect(() => saveColumns(columns), [columns]);
 
+  // Both preferences are written through a handler, so a blocked or missing
+  // localStorage never stops the control working for this session - it just
+  // stops being remembered.
+  const setMode = (next) => {
+    const chosen = isLearningMode(next) ? next : DEFAULT_MODE;
+    setModeState(chosen);
+    saveMode(chosen);
+    // Textbook opens on the control-flow reading of the run, because that is
+    // the vocabulary it teaches. From there the learner picks any canvas they
+    // like and is never dragged back: this fires only on entering the mode,
+    // never while already in it.
+    if (chosen === "textbook" && mode !== "textbook") setViz("flow");
+  };
+  const setSpeed = (next) => {
+    setSpeedState(isSpeed(next) ? next : DEFAULT_SPEED);
+    saveSpeed(next);
+  };
+  // Choosing a canvas touches the canvas and nothing else — never the step,
+  // never the playing state, never the speed.
+  const setViz = (next) => {
+    if (!isVizMode(next)) return;
+    setVizState((state) => selectViz(state, next));
+    saveViz(next);
+  };
+  const viz = vizState.viz;
+
   const trace = useMemo(() => result?.trace ?? [], [result]);
   const graph = useMemo(() => buildExecutionGraph(trace, source), [trace, source]);
   const view = useMemo(
     () => getStepView(trace, index, source, { frameId: selectedCall, steps: graph.steps }),
     [trace, index, source, selectedCall, graph],
   );
+  const detail = useMemo(() => modeDetail(mode), [mode]);
   const log = useMemo(() => changeLog(trace), [trace]);
   // A program that reads the keyboard needs values to read. They are supplied
   // by hand, one per line, and passed to the tracer unchanged — if the program
@@ -584,6 +288,27 @@ export default function App() {
     [trace, index],
   );
 
+  // The raw coordinates of this step, offered only through the Developer menu.
+  // They come from the same view every panel reads, so they can never describe
+  // a different moment than the one on screen.
+  const traceFacts = useMemo(
+    () => [
+      { label: "event", value: view.kind ?? "—" },
+      { label: "step", value: `${index + 1} of ${trace.length}` },
+      { label: "line", value: view.line ?? "—" },
+      { label: "function", value: view.function },
+      { label: "frame id", value: view.frameId ?? "—" },
+      // Depth is 0 for the module frame, so it is one less than the frame
+      // count. The graph already reports it this way; reporting the count
+      // here as "depth" put two different numbers behind one label.
+      { label: "depth", value: String(Math.max(view.frames.length - 1, 0)) },
+      { label: "graph node", value: view.nodeId ?? "—" },
+      { label: "heap objects", value: String(Object.keys(view.before?.heap ?? {}).length) },
+      { label: "printed so far", value: `${output.length} characters` },
+    ],
+    [view, index, trace.length, output],
+  );
+
   const line = view.line;
   // One code panel: editable until a run, then read-only with the line lit up.
   const stepping = !editing && result !== null;
@@ -619,7 +344,7 @@ export default function App() {
 
   const jumpTo = (i) => {
     setPlaying(false);
-    setIndex(Math.max(0, Math.min(i, Math.max(trace.length - 1, 0))));
+    setIndex(clampStep(i, trace.length));
   };
 
   // Clicking a call selects its own variables and jumps to where it started.
@@ -648,12 +373,14 @@ export default function App() {
     setPlaying(false);
     setRunning(true);
     try {
-      const [r, f] = await Promise.all([
+      const [r, f, fg] = await Promise.all([
         runTrace(source, { inputs }),
         buildFlowchart(source),
+        buildFlowchartGraph(source),
       ]);
       setResult(r);
       setFlow(f);
+      setFlowGraph(fg);
       // A run that crashed opens on the step that failed, so the line that
       // broke is already lit up when the error message appears.
       setIndex(r?.error ? errorStep(r.trace) : 0);
@@ -673,20 +400,29 @@ export default function App() {
     }
   }
 
+  // Keep the timer's view of the current step in step with React's.
+  useEffect(() => {
+    indexRef.current = index;
+  }, [index]);
+
   useEffect(() => {
     if (!playing || trace.length === 0) {
       clearInterval(timer.current);
       return undefined;
     }
     timer.current = setInterval(() => {
-      setIndex((i) => {
-        if (i >= trace.length - 1) {
-          setPlaying(false);
-          return i;
-        }
-        return i + 1;
-      });
-    }, 800 / speed);
+      // React state updaters may run twice, so nothing with a side effect
+      // belongs inside one. The tick works it out for itself instead: advance
+      // the step, or stop the player, both as ordinary calls made by the timer
+      // that caused them. Reading the step through a ref also means the timer
+      // keeps one steady cadence rather than being rebuilt on every step.
+      const current = indexRef.current;
+      if (current >= trace.length - 1) {
+        setPlaying(false);
+        return;
+      }
+      setIndex(current + 1);
+    }, playbackIntervalMs(speed));
     return () => clearInterval(timer.current);
   }, [playing, speed, trace.length]);
 
@@ -698,6 +434,10 @@ export default function App() {
       }
       const tag = event.target?.tagName;
       if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT") return;
+      // A tab strip owns its arrow keys. Stealing them here would move the
+      // program at the same moment as the tab, which is precisely the thing
+      // this workspace must never do.
+      if (event.target?.closest?.('[role="tablist"]')) return;
       if (event.key === "ArrowRight") {
         setIndex((i) => Math.min(i + 1, trace.length - 1));
       } else if (event.key === "ArrowLeft") {
@@ -745,9 +485,58 @@ export default function App() {
     return map;
   }, [view]);
 
-  const rows = variableRows(view, showAfter);
-  const defined = view.frame?.defined ?? [];
-  const previews = view.changes.filter((change) => change.kind === "new");
+  // Everything the inspector reads, in one place. It is rebuilt every render
+  // on purpose: the panels must never be handed a snapshot of an older step.
+  const inspectorCtx = {
+    result,
+    view,
+    trace,
+    index,
+    source,
+    line,
+    callTitle,
+    currentNode,
+    previousEvent,
+    nextEvent,
+    nextReason,
+    jumpTo,
+    concept,
+    showConcept,
+    dismissed,
+    dismissConcept: (name) => setDismissed((set) => new Set(set).add(name)),
+    detail,
+    showAfter,
+    setShowAfter,
+    changeByName,
+    watched,
+    setWatched,
+    history,
+    olderCalls,
+    selectedCall,
+    jumpToCall,
+    clearSelectedCall: () => setSelectedCall(null),
+    heap: view.before?.heap,
+    heapNames,
+    objectChanged,
+    output,
+    log,
+  };
+
+  // Arrow keys belong to whichever tab strip the pointer is in: on a tab they
+  // move the tab, and anywhere else they still step the program, as before.
+  const onPaneKeyDown = (event) => {
+    const from = PANES.findIndex((entry) => entry.id === event.target?.dataset?.paneid);
+    if (from < 0) return;
+    let to = -1;
+    if (event.key === "ArrowRight") to = (from + 1) % PANES.length;
+    else if (event.key === "ArrowLeft") to = (from - 1 + PANES.length) % PANES.length;
+    else if (event.key === "Home") to = 0;
+    else if (event.key === "End") to = PANES.length - 1;
+    else return;
+    event.preventDefault();
+    setPane(PANES[to].id);
+    paneRefs.current[to]?.focus();
+  };
 
   return (
     <div className="app">
@@ -756,6 +545,22 @@ export default function App() {
         <span className={`engine engine-${engine}`}>
           Python engine: {engine === "ready" ? "ready" : engine}
         </span>
+        {/* The learning mode belongs to the whole workspace, not to one pane,
+            so it lives in the bar that is on screen whichever pane you are in. */}
+        <div className="state-toggle mode-switch" role="group" aria-label="Learning mode">
+          {LEARNING_MODES.map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={mode === id ? "on" : ""}
+              aria-pressed={mode === id}
+              title={MODE_BLURBS[id]}
+              onClick={() => setMode(id)}
+            >
+              {MODE_LABELS[id]}
+            </button>
+          ))}
+        </div>
         <span className="step-count">
           {trace.length > 0 ? `Step ${index + 1} of ${trace.length}` : "Not run yet"}
         </span>
@@ -764,10 +569,10 @@ export default function App() {
       <main
         className={`layout${resizing ? " resizing" : ""}`}
         ref={layoutRef}
-        data-tab={tab}
+        data-tab={pane}
         style={{ "--col-left": `${columns.left}%`, "--col-mid": `${columns.mid}%` }}
       >
-        <section className="pane code-pane panel" data-pane="code">
+        <section className="pane code-pane panel" data-pane="code" id="pane-code">
           <div className="pane-head">
             <h3>Your Python code</h3>
             {stepping && (
@@ -848,141 +653,74 @@ export default function App() {
           onRelease={releaseSplitter}
         />
 
-        {/* Section A: the current step. This is the teaching surface, so it
-            keeps the full prose; the inspector below starts at B. */}
-        <PanelError>
-        <div className="explain" data-pane="teach">
-          <div className="explain-head">
-            <div className="explain-label">A · What's happening</div>
-            <span className="explain-where">
-              {result ? (
-                <>
-                  line {line ?? "?"} · {callTitle}
-                </>
-              ) : null}
-            </span>
-          </div>
-
-          {result ? (
-            <>
-              {view.code ? <code className="step-code">{view.code.text}</code> : null}
-              {currentNode?.action ? (
-                <p className="step-action">{currentNode.action}</p>
-              ) : null}
-              <div className="explain-part">
-                <div className="explain-part-label">Just happened</div>
-                <p className="explain-text just">{view.explanation.justHappened ?? "Nothing yet."}</p>
-              </div>
-              <div className="explain-part">
-                <div className="explain-part-label">About to happen</div>
-                <p className="explain-text about">{view.explanation.aboutToHappen}</p>
-              </div>
-              {view.explanation.why ? (
-                <div className="explain-part">
-                  <div className="explain-part-label">Why this line runs now</div>
-                  <p className="explain-text why">{view.explanation.why}</p>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <p className="explain-text about">
-              Press Run and this will explain each step in plain English.
-            </p>
-          )}
-
-          {showConcept && concept && !dismissed.has(view.explanation.concept) ? (
-            <div className="concept-card">
-              <strong>{concept.term}</strong>
-              <span>{concept.blurb}</span>
+        {/* On narrow windows the canvas and the inspector take turns, so the
+            code column keeps its own tab. From 1280px up this bar is hidden
+            and both are on screen together. It follows the same pattern as the
+            inspector strip: one tab stop, arrows to move, Home and End to jump. */}
+        <div className="tabs" role="tablist" aria-label="Workspace" onKeyDown={onPaneKeyDown}>
+          {PANES.map(({ id, label, phoneOnly }, i) => {
+            const active = pane === id;
+            return (
               <button
+                key={id}
                 type="button"
-                className="ghost"
-                aria-label="Dismiss this card"
-                onClick={() =>
-                  setDismissed((set) => new Set(set).add(view.explanation.concept))
+                role="tab"
+                id={`pane-tab-${id}`}
+                data-paneid={id}
+                aria-selected={active}
+                aria-controls={`pane-${id}`}
+                tabIndex={active ? 0 : -1}
+                ref={(node) => {
+                  paneRefs.current[i] = node;
+                }}
+                className={`tab${active ? " on" : ""}${phoneOnly ? " tab-code" : ""}`}
+                onClick={() => setPane(id)}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        <section className="pane graph-pane" data-pane="graph" id="pane-graph">
+          <VisualizationPane
+            viz={viz}
+            onVizChange={setViz}
+            heading={
+              <h3>
+                Visualize
+                {result && <span className="flow-of"> — {callTitle}</span>}
+              </h3>
+            }
+          >
+            {viz === "flow" ? (
+              <ControlFlowChart
+                flow={flowGraph}
+                flowTree={flow}
+                trace={trace}
+                index={index}
+                onJump={jumpTo}
+                note={
+                  flowGraph?.error
+                    ? "There is nothing to draw: the code has a syntax error, so it never ran."
+                    : null
                 }
-              >
-                ✕
-              </button>
-            </div>
-          ) : null}
-
-          {result?.error ? (
-            <p className="error-inline">
-              <strong>{result.error.type}</strong> on line {result.error.line ?? "?"}:{" "}
-              {result.error.message}
-            </p>
-          ) : null}
-        </div>
-        </PanelError>
-
-        <div className="tabs" role="tablist" aria-label="Panels">
-          {TABS.map(({ id, label, phoneOnly }) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              className={`tab${tab === id ? " on" : ""}${phoneOnly ? " tab-code" : ""}`}
-              onClick={() => setTab(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <section className="pane graph-pane" data-pane="graph">
-          <div className="flow-head">
-            <h3>
-              Execution graph
-              {result && <span className="flow-of"> — {callTitle}</span>}
-            </h3>
-            <div className="state-toggle flow-view" role="group" aria-label="How much detail to show">
-              <button
-                type="button"
-                className={viewMode === "beginner" ? "on" : ""}
-                onClick={() => setViewMode("beginner")}
-                title="Plain English, values and changes, nothing technical"
-              >
-                Beginner
-              </button>
-              <button
-                type="button"
-                className={viewMode === "advanced" ? "on" : ""}
-                onClick={() => setViewMode("advanced")}
-                title="The same graph with trace details: frames, run counts, wire labels"
-              >
-                Advanced
-              </button>
-              <button
-                type="button"
-                className={viewMode === "textbook" ? "on" : ""}
-                onClick={() => setViewMode("textbook")}
-                title="The textbook flowchart for the function you are inside"
-              >
-                Textbook
-              </button>
-            </div>
-          </div>
-          {viewMode === "textbook" ? (
-            <div className="pane-scroll">
-              <Flowchart flow={flow} functionName={view.function} trace={trace} line={line} />
-            </div>
-          ) : (
-            <ExecutionGraph
-              trace={trace}
-              source={source}
-              graph={graph}
-              index={index}
-              mode={viewMode}
-              onJump={jumpTo}
-              note={
-                flow?.error
-                  ? "There is nothing to draw: the code has a syntax error, so it never ran."
-                  : null
-              }
-            />
-          )}
+              />
+            ) : (
+              <CallTree
+                trace={trace}
+                source={source}
+                index={index}
+                currentFrameId={view.frameId ?? null}
+                onJumpCall={jumpToCall}
+                note={
+                  flow?.error
+                    ? "There is nothing to draw: the code has a syntax error, so it never ran."
+                    : null
+                }
+              />
+            )}
+          </VisualizationPane>
         </section>
 
         <Splitter
@@ -992,298 +730,27 @@ export default function App() {
           onRelease={releaseSplitter}
         />
 
-        <section className="pane side-pane" data-pane="side">
-          <div className="side-scroll">
-            <PanelError>
-            <section className="panel" data-card="variables">
-              <PanelHead
-                title="B · Variables"
-                hint="What the program remembers right now."
-                help="Each name is a labelled box. The list shows the values just before the highlighted line runs. Click a name to see how it changed over time."
-              />
-              <div className="state-toggle">
-                <button
-                  type="button"
-                  className={showAfter ? "" : "on"}
-                  onClick={() => setShowAfter(false)}
-                >
-                  Before this line
-                </button>
-                <button
-                  type="button"
-                  className={showAfter ? "on" : ""}
-                  onClick={() => setShowAfter(true)}
-                >
-                  After this line
-                </button>
-              </div>
-              {rows.length === 0 ? (
-                <p className="empty">No variables yet.</p>
-              ) : (
-                <ul className="vars">
-                  {rows.map((entry) => (
-                    <VariableRow
-                      key={entry.name}
-                      entry={entry}
-                      change={changeByName.get(entry.name)}
-                      watched={watched === entry.name}
-                      onWatch={() => setWatched((name) => (name === entry.name ? null : entry.name))}
-                    />
-                  ))}
-                </ul>
-              )}
-              {previews.length > 0 ? (
-                <p className="preview">
-                  After this line:{" "}
-                  {previews.map((change) => `${change.name} = ${change.to}`).join(", ")}
-                </p>
-              ) : null}
-              {view.shared.map((note) => (
-                <p key={note.id} className="shared-note">
-                  {note.text}
-                </p>
-              ))}
-              {watched ? (
-                <WatchHistory
-                  name={watched}
-                  entries={history}
-                  index={index}
-                  onJump={jumpTo}
-                  onClose={() => setWatched(null)}
-                />
-              ) : null}
-              {defined.length > 0 ? (
-                <p className="defined">Defined here: {defined.join(", ")}</p>
-              ) : null}
-              <div className="object-wrap">
-                <HeapObjects heap={view.before?.heap} names={heapNames} changes={objectChanged} />
-              </div>
-              <details className="panel-more">
-                <summary>Every change so far ({log.length})</summary>
-                <p className="panel-hint">Click a step to jump to it.</p>
-                <ChangeList log={log} index={index} onJump={jumpTo} />
-              </details>
-            </section>
-            </PanelError>
-
-            <PanelError>
-              <section className="panel" data-card="flow">
-                <PanelHead
-                  title="C · Execution flow"
-                  hint="Where control came from, where it is, and where it goes."
-                  help="Every step is one of three places: the line that just finished, the line about to run, and the line that comes after it. Each row says why."
-                />
-                <ol className="flow-steps">
-                  <li className="flow-step past">
-                    <span className="flow-tag">before</span>
-                    <button
-                      type="button"
-                      className="flow-line"
-                      onClick={() => jumpTo(index - 1)}
-                      disabled={index === 0}
-                    >
-                      {previousEvent ? stepLabel(previousEvent) : "nothing yet"}
-                    </button>
-                    <p className="flow-why">
-                      {view.explanation.justHappened ?? "Nothing has run yet."}
-                    </p>
-                  </li>
-                  <li className="flow-step now">
-                    <span className="flow-tag">now</span>
-                    <span className="flow-line">{stepLabel(view.event)}</span>
-                    <p className="flow-why">
-                      {view.explanation.why ?? view.explanation.aboutToHappen}
-                    </p>
-                  </li>
-                  <li className="flow-step next">
-                    <span className="flow-tag">next</span>
-                    <button
-                      type="button"
-                      className="flow-line"
-                      onClick={() => jumpTo(index + 1)}
-                      disabled={!nextEvent}
-                    >
-                      {stepLabel(nextEvent)}
-                    </button>
-                    <p className="flow-why">{nextReason ?? "The run stops here."}</p>
-                  </li>
-                </ol>
-              </section>
-            </PanelError>
-
-            <PanelError>
-              <section className="panel" data-card="stack">
-                <PanelHead
-                  title="D · Calls and returns"
-                  hint="Which call is running now, and which are waiting for it."
-                  help="Each time a function runs, Python gives it its own fresh set of variables. The newest call is on top; when it finishes, its result goes back to the line that asked for it, and the call below carries on."
-                />
-                <CallList
-                  callStack={view.callStack}
-                  selectedId={view.frame?.frameId ?? null}
-                  onSelect={jumpToCall}
-                />
-                {olderCalls > 0 ? (
-                  <p className="preview">
-                    {olderCalls} older call{olderCalls === 1 ? " is" : "s are"} waiting for this
-                    one to finish.
-                  </p>
-                ) : null}
-                {selectedCall !== null && selectedCall !== view.frameId ? (
-                  <p className="preview">
-                    Showing an older call's variables.{" "}
-                    <button type="button" className="ghost" onClick={() => setSelectedCall(null)}>
-                      back to current
-                    </button>
-                  </p>
-                ) : null}
-              </section>
-            </PanelError>
-
-            <PanelError>
-              <section className="panel" data-card="output">
-                <PanelHead
-                  title="E · Output"
-                  hint="What the program printed."
-                  help="print() shows text here. It never changes a variable."
-                />
-                <pre className="output">
-                  {output || <span className="empty">(nothing printed yet)</span>}
-                </pre>
-              </section>
-            </PanelError>
-
-            <PanelError>
-              <section className="panel" data-card="trace">
-                <PanelHead
-                  title="Trace details"
-                  hint="The raw numbers the panels above are built from."
-                  help="Every description above comes from this one event: its type, the frame it runs in, and the graph node that draws it. Nothing here is added by hand."
-                />
-                <details className="trace-more" open={viewMode === "advanced"}>
-                  <summary>Show trace internals</summary>
-                  <dl className="trace-facts">
-                    <div>
-                      <dt>event</dt>
-                      <dd>{view.kind ?? "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>step</dt>
-                      <dd>
-                        {index + 1} of {trace.length}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>line</dt>
-                      <dd>{view.line ?? "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>function</dt>
-                      <dd>{view.function}</dd>
-                    </div>
-                    <div>
-                      <dt>frame id</dt>
-                      <dd>{view.frameId ?? "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>depth</dt>
-                      <dd>{view.frames.length}</dd>
-                    </div>
-                    <div>
-                      <dt>graph node</dt>
-                      <dd>{view.nodeId ?? "—"}</dd>
-                    </div>
-                    <div>
-                      <dt>heap objects</dt>
-                      <dd>{Object.keys(view.before?.heap ?? {}).length}</dd>
-                    </div>
-                    <div>
-                      <dt>printed so far</dt>
-                      <dd>{output.length} characters</dd>
-                    </div>
-                  </dl>
-                </details>
-              </section>
-            </PanelError>
-          </div>
+        <section className="pane side-pane" data-pane="side" id="pane-inspector">
+          <Inspector ctx={inspectorCtx} />
         </section>
       </main>
 
-      <footer className="controls-bar">
-        <div className="controls">
-          <button type="button" onClick={() => jumpTo(0)} disabled={!trace.length}>
-            ⏮
-          </button>
-          <button
-            type="button"
-            onClick={() => jumpTo(index - 1)}
-            disabled={!trace.length}
-          >
-            ◀ Back
-          </button>
-          <button
-            type="button"
-            className="play"
-            onClick={() => setPlaying((p) => !p)}
-            disabled={!trace.length}
-          >
-            {playing ? "⏸ Pause" : "▶ Play"}
-          </button>
-          <button
-            type="button"
-            onClick={() => jumpTo(index + 1)}
-            disabled={!trace.length}
-          >
-            Next ▶
-          </button>
-          <button
-            type="button"
-            onClick={() => jumpTo(trace.length - 1)}
-            disabled={!trace.length}
-          >
-            ⏭
-          </button>
-          <input
-            type="range"
-            min={0}
-            max={Math.max(trace.length - 1, 0)}
-            value={index}
-            onChange={(event) => jumpTo(Number(event.target.value))}
-            disabled={!trace.length}
-            aria-label="Step"
-          />
-          <select
-            value={speed}
-            onChange={(event) => setSpeed(Number(event.target.value))}
-            aria-label="Playback speed"
-          >
-            <option value={0.5}>0.5×</option>
-            <option value={1}>1×</option>
-            <option value={2}>2×</option>
-            <option value={4}>4×</option>
-          </select>
-        </div>
-
-        <div className="bar-actions">
-          <button type="button" className="ghost" onClick={() => setGlossaryOpen(true)}>
-            Glossary
-          </button>
-          <details className="dev-menu">
-            <summary>Developer</summary>
-            <div className="dev-pop">
-              <label className="dev-check">
-                <input
-                  type="checkbox"
-                  checked={showJson}
-                  onChange={(event) => setShowJson(event.target.checked)}
-                />
-                Show raw trace JSON
-              </label>
-              {showJson && <pre className="json">{JSON.stringify(result, null, 2)}</pre>}
-            </div>
-          </details>
-        </div>
-      </footer>
+      <PlaybackBar
+        trace={trace}
+        index={index}
+        playing={playing}
+        speed={speed}
+        onJump={jumpTo}
+        onTogglePlay={() => setPlaying((p) => !p)}
+        onSpeedChange={setSpeed}
+        onOpenGlossary={() => setGlossaryOpen(true)}
+        showJson={showJson}
+        onShowJsonChange={setShowJson}
+        result={result}
+        traceFacts={traceFacts}
+        showTraceDetails={showTraceDetails}
+        onShowTraceDetailsChange={setShowTraceDetails}
+      />
 
       {glossaryOpen && (
         <div className="drawer-backdrop" onClick={() => setGlossaryOpen(false)}>

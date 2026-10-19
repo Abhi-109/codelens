@@ -25,10 +25,20 @@
   margin: 0;
 }
 
+/* The learning-mode switch owns the space to its left, so the count sits
+   beside it instead of being pushed off on its own. */
 .step-count {
-  margin-left: auto;
   font-size: 12px;
   color: var(--text);
+}
+
+/* The learning mode is workspace-wide, so it lives in the bar that is on
+   screen whichever pane is showing - and it drops the spacing the panel
+   state-toggles assume. */
+.mode-switch {
+  margin-left: auto;
+  margin-bottom: 0;
+  flex: none;
 }
 
 .engine {
@@ -54,14 +64,14 @@
 }
 
 /* Columns are sized in percentages so the splitter can remember them. The wide
-   layout is three columns; narrower windows fold the panels into tabs. */
+   layout is three columns; narrower windows fold the panes into tabs. */
 .layout {
   display: grid;
   flex: 1;
   min-height: 0;
   gap: 0;
   grid-template-columns: var(--col-left, 30%) 8px var(--col-mid, 44%) 8px minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .layout.resizing {
@@ -69,29 +79,25 @@
   user-select: none;
 }
 
-/* Wide: code | graph | explanation above variables / stack / output. */
+/* Wide: code | graph | the six-section inspector, each a full-height column. */
 [data-pane="code"] {
-  grid-area: 1 / 1 / 3 / 2;
+  grid-area: 1 / 1 / 2 / 2;
 }
 
 [data-split="left"] {
-  grid-area: 1 / 2 / 3 / 3;
+  grid-area: 1 / 2 / 2 / 3;
 }
 
 [data-pane="graph"] {
-  grid-area: 1 / 3 / 3 / 4;
+  grid-area: 1 / 3 / 2 / 4;
 }
 
 [data-split="mid"] {
-  grid-area: 1 / 4 / 3 / 5;
-}
-
-[data-pane="teach"] {
-  grid-area: 1 / 5 / 2 / 6;
+  grid-area: 1 / 4 / 2 / 5;
 }
 
 [data-pane="side"] {
-  grid-area: 2 / 5 / 3 / 6;
+  grid-area: 1 / 5 / 2 / 6;
 }
 
 /* The tab bar only exists once the columns stop fitting side by side. */
@@ -414,17 +420,8 @@
   white-space: nowrap;
 }
 
-/* The main teaching element, so it stays the biggest text on the page. It can
-   still shrink and scroll if an explanation plus concept card gets long. */
-.explain {
-  min-height: 0;
-  max-height: 38vh;
-  overflow: auto;
-  border: 1px solid var(--accent-border);
-  border-radius: 12px;
-  padding: 10px 12px;
-  background: var(--accent-bg);
-}
+/* The explanation is the teaching element, so its section keeps the accent
+   surface the old pinned card had - now as one tab inside .inspector below. */
 
 .explain-head {
   display: flex;
@@ -851,22 +848,85 @@
   padding: 6px 14px 14px;
 }
 
-/* The right column scrolls as one, so long variable lists never push the
-   output off screen. */
-.side-pane .side-scroll {
+/* --- The inspector: one card, six sections, one step between them -------- */
+
+.side-pane {
+  flex: 1;
+}
+
+.inspector {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The strip works like the mode toggles in the top bar: segments that wrap
+   rather than scroll. Six labels will not fit across the quarter of a 1280px
+   window the inspector gets, and a tab hidden behind a scrollbar is a tab
+   nobody can find - so the second row is designed for, not tolerated. */
+.inspector .inspector-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding-bottom: 8px;
+}
+
+.inspector .inspector-tab {
+  flex: none;
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.inspector .inspector-tab:hover:not(:disabled) {
+  border-color: var(--accent-border);
+}
+
+.inspector .inspector-tab.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.inspector .inspector-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The card under the strip. It scrolls alone, so a long variable list or a
+   long output never pushes the strip off the top of the column. */
+.inspector .inspector-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-}
-
-.side-scroll .panel {
   padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  text-align: left;
 }
 
-.side-scroll .output {
+.inspector .inspector-body:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The explanation keeps the accent surface its old pinned card had. */
+.inspector[data-section="explain"] .inspector-body {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.inspector .output {
   margin: 0;
   max-height: none;
 }
@@ -927,22 +987,9 @@
   font-weight: 600;
 }
 
-.panel-more {
-  margin-top: 8px;
-}
-
-.panel-more > summary,
-.trace-more > summary {
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--accent);
-}
-
-.panel-more .panel-hint {
-  margin-top: 4px;
-}
-
-.panel-more .changes {
+/* The change list is capped, so a long history scrolls inside the card
+   instead of turning the whole section into one endless column. */
+.inspector .changes {
   max-height: 260px;
   overflow: auto;
 }
@@ -1008,8 +1055,78 @@ button.flow-line:disabled {
   line-height: 1.35;
 }
 
-.trace-more {
-  margin-top: 4px;
+/* Where this step sits in the trace's own coordinates: Advanced's one-line
+   execution metadata, which describes the step rather than re-telling it. */
+.meta-strip {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--accent-border);
+}
+
+.meta-strip-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.meta-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 14px;
+  margin: 6px 0 0;
+}
+
+.meta-facts > div {
+  display: flex;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+.meta-facts dt {
+  color: var(--text);
+}
+
+.meta-facts dd {
+  margin: 0;
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+/* Advanced only: which call these variables belong to, and where it sits. */
+.scope-line {
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+/* Textbook and Advanced name the type of every value; Beginner does not. */
+.tag-type {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* The control flow folded into Explain: three rows, each one a jump. */
+.flow-block {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--accent-border);
+}
+
+.flow-block-head h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.flow-block-head .panel-hint {
+  margin-top: 2px;
 }
 
 .trace-facts {
@@ -1481,22 +1598,86 @@ h3 {
   cursor: pointer;
 }
 
-/* The graph fills whatever pane it is given and never grows the page. */
-.exec-graph {
+/* --- The visualization canvas: one surface for all three drawings ---------- */
+
+/* The pane is a column: heading and canvas strip, then whichever drawing the
+   strip selected, then the toolbar that drives it. */
+.viz-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.viz-head {
+  flex: none;
+}
+
+.viz-tabs {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--code-bg);
+}
+
+.viz-tab {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
+}
+
+.viz-tab:hover {
+  color: var(--text-h);
+  border-color: var(--border-strong);
+}
+
+.viz-tab.on {
+  background: var(--surface);
+  border-color: var(--accent-border);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.viz-tab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.viz-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The drawing fills whatever pane it is given and never grows the page. */
+.viz-canvas {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
   height: clamp(300px, 52vh, 520px);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--code-bg);
   padding: 6px;
 }
 
-/* Expand turns the same pane into a full-screen overlay — one graph, one
+/* Expand turns the same pane into a full-screen overlay â€” one drawing, one
    transform, just a much bigger box for it to fit into. */
-.exec-expanded {
+.viz-expanded {
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -1507,11 +1688,11 @@ h3 {
   background: var(--bg);
 }
 
-/* A fixed pane the graph is *panned* inside — no native scrollbars, ever. */
-.exec-view {
+/* A fixed pane the drawing is *panned* inside â€” no native scrollbars. */
+.viz-view {
   position: relative;
   flex: 1;
-  min-height: 0;
+  min-height: 130px;
   overflow: hidden;
   border-radius: 6px;
   cursor: grab;
@@ -1519,105 +1700,50 @@ h3 {
   user-select: none;
 }
 
-.exec-view:active {
+.viz-view:active {
   cursor: grabbing;
 }
 
-.exec-view svg {
+.viz-view svg {
   display: block;
 }
 
-.exec-empty {
+.viz-empty {
   display: grid;
   place-items: center;
   height: 100%;
   margin: 0;
+  padding: 12px;
+  text-align: center;
 }
 
-/* Tooltip lives beside the node, never over it. */
-.exec-tip {
-  position: absolute;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 8px;
-  border: 1px solid var(--accent-border);
-  border-radius: 8px;
-  background: var(--bg);
-  box-shadow: var(--shadow-md);
-  pointer-events: none;
+.viz-pending {
+  display: block;
+  height: 100%;
 }
 
-.exec-tip-where {
-  font-size: 11px;
+.viz-hint,
+.viz-note {
+  margin: 0;
+  max-width: 48ch;
+  font-size: 13px;
+  line-height: 1.55;
   color: var(--text);
 }
 
-.exec-tip code {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text-h);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.exec-tip-runs {
-  font-size: 11px;
-  color: var(--text);
-}
-
-/* Clicking a node that ran many times asks which run to jump to. */
-.exec-runs-pop {
-  position: absolute;
-  z-index: 6;
-  top: 8px;
-  left: 8px;
-  width: min(260px, 82%);
-  padding: 8px 10px;
-  border: 1px solid var(--accent-border);
-  border-radius: 10px;
-  background: var(--bg);
-  box-shadow: var(--shadow-md);
-  cursor: default;
-}
-
-.exec-runs-head {
+.viz-caption {
+  flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text-h);
+  gap: 6px;
+  padding: 5px 2px 0;
+  font-size: 11.5px;
+  color: var(--text);
 }
 
-.exec-runs-list {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
+.viz-tools {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.exec-runs-list button {
-  padding: 2px 7px;
-  border-radius: 6px;
-  font-size: 11px;
-}
-
-.exec-runs-list button.on {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.exec-runs-pop .panel-hint {
-  margin-top: 4px;
-}
-
-.exec-tools {
-  display: flex;
+  flex: none;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
@@ -1626,7 +1752,7 @@ h3 {
   color: var(--text);
 }
 
-.exec-tools button {
+.viz-tools button {
   font: inherit;
   padding: 2px 9px;
   border: 1px solid var(--border);
@@ -1636,17 +1762,11 @@ h3 {
   cursor: pointer;
 }
 
-.exec-tools button:hover {
+.viz-tools button:hover {
   border-color: var(--accent);
 }
 
-/* The toolbar labels shorten on a phone; see the phone rules at the end of
-   this file. Everything the long label said stays in the button's title. */
-.exec-narrow {
-  display: none;
-}
-
-.exec-toggle {
+.viz-toggle {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -1657,211 +1777,22 @@ h3 {
   cursor: pointer;
 }
 
-.exec-toggle input {
+.viz-toggle input {
   margin: 0;
   accent-color: var(--accent);
 }
 
-/* A card is one line of code, as it ran in one call: header, code, action,
-   values and where control goes next. */
-.exec-card-box {
-  fill: var(--bg);
-  stroke: var(--border);
-  stroke-width: 1.5;
+/* The toolbar labels shorten on a phone; the long wording stays in `title`. */
+.viz-narrow {
+  display: none;
 }
 
-.exec-card-colour {
-  fill: var(--call-colour, var(--accent));
-}
-
-/* Each call gets its own stripe colour, so its cards read as one unit:
-   the arguments it was given, its lines, and what it handed back. The colours
-   themselves live in the tokens, one set per theme. */
-.exec-call-0 {
-  --call-colour: var(--call-0);
-}
-
-.exec-call-1 {
-  --call-colour: var(--call-1);
-}
-
-.exec-call-2 {
-  --call-colour: var(--call-2);
-}
-
-.exec-call-3 {
-  --call-colour: var(--call-3);
-}
-
-.exec-call-4 {
-  --call-colour: var(--call-4);
-}
-
-.exec-call-5 {
-  --call-colour: var(--call-5);
-}
-
-.exec-card-where {
-  font-family: var(--sans);
-  font-size: 11px;
-  font-weight: 600;
-  fill: var(--text);
-}
-
-.exec-card-badges {
-  font-family: var(--sans);
-  font-size: 10px;
-  font-weight: 600;
-  fill: var(--call-colour, var(--accent));
-}
-
-.exec-card-code {
-  font-family: var(--mono);
-  font-size: 12.5px;
-  fill: var(--text-h);
-}
-
-.exec-card-action {
-  font-family: var(--sans);
-  font-size: 12px;
-  fill: var(--text-h);
-}
-
-.exec-card-values {
-  font-family: var(--mono);
-  font-size: 11.5px;
-  fill: var(--text);
-}
-
-/* A value this line changes is the most important thing on the card. */
-.exec-card-changed {
-  fill: var(--accent);
-  font-weight: 600;
-}
-
-.exec-card-next {
-  font-family: var(--sans);
-  font-size: 10.5px;
-  fill: var(--text);
-}
-
-.exec-card-chip {
-  font-family: var(--mono);
-  font-size: 10px;
-  fill: var(--text-h);
-}
-
-/* Not reached yet sits back; the line running now is unmistakable. */
-.exec-card-ahead {
-  opacity: 0.45;
-}
-
-.exec-card-current .exec-card-box,
-.exec-card:focus .exec-card-box {
-  stroke: var(--accent);
-  stroke-width: 2.5;
-  filter: drop-shadow(0 0 7px var(--accent-border));
-}
-
-.exec-card:focus {
-  outline: none;
-}
-
-/* A finished call folds into one row; dashed, so it reads as "there is more". */
-.exec-fold-box {
-  fill: var(--bg);
-  stroke: var(--border);
-  stroke-width: 1.5;
-  stroke-dasharray: 5 4;
-}
-
-.exec-fold-title {
-  font-family: var(--sans);
-  font-size: 11.5px;
-  font-weight: 600;
-  fill: var(--text-h);
-}
-
-.exec-fold-note {
-  font-family: var(--sans);
-  font-size: 10px;
-  fill: var(--text);
-}
-
-/* Edge colour by kind, so calls, returns and loops are told apart. */
-.exec-edge-line {
-  fill: none;
-  stroke: var(--text);
-  stroke-width: 1.4;
-  opacity: 0.4;
-}
-
-.exec-edge-call .exec-edge-line {
-  stroke: var(--edge-call);
-}
-
-.exec-edge-return .exec-edge-line {
-  stroke: var(--edge-return);
-}
-
-.exec-edge-back .exec-edge-line {
-  stroke: var(--edge-back);
-  stroke-dasharray: 5 4;
-}
-
-.exec-edge-error .exec-edge-line {
-  stroke: var(--edge-error);
-  stroke-dasharray: 2 3;
-}
-
-/* The wire out of the line running now, so "where next" is visible. */
-.exec-edge-leaving .exec-edge-line {
-  opacity: 1;
-  stroke-width: 2.4;
-}
-
-.exec-arrow {
-  fill: var(--text);
-}
-
-.exec-arrow-call {
-  fill: var(--edge-call);
-}
-
-.exec-arrow-return {
-  fill: var(--edge-return);
-}
-
-.exec-arrow-back {
-  fill: var(--edge-back);
-}
-
-.exec-arrow-error {
-  fill: var(--edge-error);
-}
-
-/* Advanced mode labels the long wires saying why control moved. */
-.exec-edge-label {
-  font-family: var(--sans);
-  font-size: 9px;
-  fill: var(--text);
-  paint-order: stroke;
-  stroke: var(--code-bg);
-  stroke-width: 3px;
-  stroke-linejoin: round;
-}
-
-.exec-clickable {
-  cursor: pointer;
-}
-
-/* The legend explains the reasons in words, not just colours. */
-.exec-legend-menu {
+.viz-legend-menu {
   position: relative;
   margin-left: auto;
 }
 
-.exec-legend-menu > summary {
+.viz-legend-menu > summary {
   cursor: pointer;
   font-size: 11px;
   color: var(--text);
@@ -1871,22 +1802,11 @@ h3 {
   border-radius: 6px;
 }
 
-.exec-legend-menu > summary::-webkit-details-marker {
+.viz-legend-menu > summary::-webkit-details-marker {
   display: none;
 }
 
-.exec-legend {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 3px 10px;
-  margin: 8px 0 0;
-  padding: 8px 0 0;
-  border-top: 1px solid var(--border);
-  font-size: 11px;
-}
-
-/* The legend teaches the model first, then names the wire colours. */
-.exec-legend-pop {
+.viz-legend-pop {
   position: absolute;
   right: 0;
   bottom: calc(100% + 6px);
@@ -1900,131 +1820,562 @@ h3 {
   text-align: left;
 }
 
-.exec-howto p {
+.viz-howto p {
   margin: 0 0 7px;
   font-size: 11px;
   line-height: 1.45;
   color: var(--text);
 }
 
-.exec-howto p:last-child {
+.viz-howto p:last-child {
   margin-bottom: 0;
 }
 
-.exec-howto strong {
+.viz-howto strong {
   color: var(--text-h);
 }
 
-.exec-legend dt {
+.viz-legend {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.viz-legend dt {
   color: var(--text-h);
   font-weight: 600;
   white-space: nowrap;
 }
 
-.exec-legend dt::before {
+/* The chip is the box the drawing uses, so the legend and the diagram agree. */
+.viz-legend dt::before {
   content: "";
   display: inline-block;
-  width: 10px;
+  width: 11px;
+  height: 9px;
   margin-right: 5px;
-  border-top: 2px solid var(--text);
-  vertical-align: middle;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  vertical-align: -1px;
 }
 
-.exec-legend dd {
+.viz-legend dd {
   margin: 0;
   color: var(--text);
 }
 
-.exec-legend .exec-legend-here::before {
-  border-color: var(--accent);
+.viz-legend .ct-running {
+  color: var(--accent);
 }
 
-.exec-legend .exec-legend-call::before {
-  border-color: var(--edge-call);
+.viz-legend .ct-waiting {
+  color: var(--text-h);
 }
 
-.exec-legend .exec-legend-return::before {
-  border-color: var(--edge-return);
+.viz-legend .ct-done {
+  color: var(--teal);
 }
 
-.exec-legend .exec-legend-back::before {
-  border-color: var(--edge-back);
-  border-top-style: dashed;
+.viz-legend .ct-failed {
+  color: var(--danger);
 }
 
-.exec-legend .exec-legend-error::before {
-  border-color: var(--edge-error);
-  border-top-style: dotted;
+.viz-legend .ct-failed::before {
+  background: var(--danger-bg);
 }
 
-.exec-legend .exec-legend-runs::before {
-  border-top-style: none;
+.viz-legend .ct-future {
+  color: var(--text);
 }
 
-/* --- Narrow windows: the panels fold into tabs --------------------------- */
+.viz-legend .ct-future::before {
+  border-style: dashed;
+}
 
-/* One panel at a time, chosen by the tab. */
+/* --- Call tree: one box per real call, nested under its caller ------------- */
+
+.ct-links {
+  pointer-events: none;
+}
+
+.ct-link-line {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  opacity: 0.7;
+  transition:
+    stroke var(--dur-med) ease,
+    stroke-width var(--dur-med) ease,
+    opacity var(--dur-med) ease;
+}
+
+/* The connector reads like the call it draws: violet going down, teal coming
+   back with a value, red when an exception took that path. */
+.ct-link-waiting .ct-link-line {
+  stroke: var(--edge-call);
+  opacity: 0.95;
+}
+
+.ct-link-running .ct-link-line {
+  stroke: var(--accent);
+  stroke-width: 2.4;
+  opacity: 1;
+}
+
+.ct-link-done .ct-link-line {
+  stroke: var(--edge-return);
+  opacity: 0.9;
+}
+
+.ct-link-failed .ct-link-line {
+  stroke: var(--edge-error);
+  stroke-dasharray: 3 3;
+  opacity: 1;
+}
+
+.ct-link-future .ct-link-line {
+  stroke: var(--border-strong);
+  stroke-dasharray: 5 4;
+  opacity: 0.5;
+}
+
+/* The value travelling back up: always present, faded in on the step the
+   return was recorded. */
+.ct-link-value {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  fill: var(--edge-return);
+  opacity: 0;
+  paint-order: stroke;
+  stroke: var(--code-bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  transition: opacity 280ms ease;
+}
+
+.ct-link-rising .ct-link-value {
+  opacity: 1;
+}
+
+.ct-node {
+  cursor: pointer;
+}
+
+.ct-box {
+  fill: var(--bg);
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  transition:
+    fill var(--dur-med) ease,
+    stroke var(--dur-med) ease,
+    stroke-width var(--dur-med) ease,
+    opacity var(--dur-med) ease;
+}
+
+.ct-label {
+  font-family: var(--mono);
+  font-size: 13px;
+  fill: var(--text-h);
+}
+
+.ct-value {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--text);
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.ct-value-in {
+  opacity: 1;
+}
+
+.ct-node.ct-done .ct-value {
+  fill: var(--edge-return);
+}
+
+.ct-node.ct-failed .ct-value {
+  fill: var(--edge-error);
+}
+
+/* Has not started: present, but clearly not part of the run yet. */
+.ct-node.ct-future {
+  opacity: 0.55;
+}
+
+.ct-node.ct-future .ct-box {
+  stroke-dasharray: 5 4;
+}
+
+.ct-node.ct-waiting .ct-box {
+  stroke: var(--edge-call);
+}
+
+/* The call running now is the one thing that must never be ambiguous. */
+.ct-node.ct-running .ct-box {
+  fill: var(--accent-bg);
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.ct-node.ct-current .ct-box {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.ct-node.ct-failed .ct-box {
+  fill: var(--danger-bg);
+  stroke: var(--edge-error);
+  stroke-width: 2;
+}
+
+/* The step the exception was raised on: red outline and no doubt about it. */
+.ct-node.ct-raising .ct-box {
+  stroke: var(--edge-error);
+  stroke-width: 3;
+}
+
+.ct-node:focus {
+  outline: none;
+}
+
+.ct-node:focus-visible .ct-box {
+  stroke: var(--focus);
+  stroke-width: 3;
+}
+
+/* A folded subtree hangs one pill on the connector into it. */
+.ct-unfold {
+  cursor: pointer;
+}
+
+.ct-unfold rect {
+  fill: var(--surface);
+  stroke: var(--accent-border);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+  transition:
+    stroke var(--dur-fast) ease,
+    fill var(--dur-fast) ease;
+}
+
+.ct-unfold:hover rect {
+  stroke: var(--accent);
+}
+
+.ct-unfold-text {
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  fill: var(--accent);
+  text-anchor: middle;
+}
+
+.ct-unfold:focus {
+  outline: none;
+}
+
+.ct-unfold:focus-visible rect {
+  stroke: var(--focus);
+  stroke-width: 2;
+}
+
+/* --- Control flow: the shapes the code has, and the path this run took ---- */
+
+/* The function strip sits over the drawing; both live in the canvas pane. */
+.cfg-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.cfg-fns {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.cfg-fn-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.cfg-fn {
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--code-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.cfg-fn:hover {
+  color: var(--text-h);
+  border-color: var(--border-strong);
+}
+
+/* A chart the run really entered is marked, so the strip doubles as a map of
+   which functions mattered. */
+.cfg-fn-ran::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--teal);
+  vertical-align: 2px;
+}
+
+.cfg-fn.on {
+  background: var(--surface);
+  border-color: var(--accent-border);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.cfg-fn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* The five shape families, one colour each, so a glance tells kinds apart. */
+.cfg-shape {
+  fill: var(--bg);
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  transition:
+    fill var(--dur-med) ease,
+    stroke var(--dur-med) ease,
+    stroke-width var(--dur-med) ease;
+}
+
+.cfg-shape-start,
+.cfg-shape-end,
+.cfg-shape-return {
+  stroke: var(--teal);
+}
+
+.cfg-shape-io {
+  stroke: var(--copper);
+}
+
+.cfg-shape-decision,
+.cfg-shape-loop {
+  stroke: var(--yellow);
+}
+
+.cfg-shape-call {
+  stroke: var(--purple);
+}
+
+.cfg-call-bar {
+  stroke: var(--copper);
+  stroke-width: 2;
+  fill: none;
+}
+
+.cfg-text {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  fill: var(--text-h);
+  pointer-events: none;
+}
+
+/* Never reached by this run: drawn, clearly secondary, and nothing to click. */
+.cfg-node.cfg-unreached {
+  opacity: 0.5;
+}
+
+.cfg-node.cfg-unreached .cfg-shape {
+  stroke-dasharray: 5 4;
+}
+
+.cfg-node.cfg-executed .cfg-shape {
+  fill: var(--code-bg);
+}
+
+.cfg-node.cfg-running .cfg-shape {
+  fill: var(--accent-bg);
+  stroke: var(--accent);
+  stroke-width: 2.6;
+}
+
+.cfg-node.cfg-running {
+  opacity: 1;
+}
+
+.cfg-node.cfg-raising {
+  opacity: 1;
+}
+
+.cfg-node.cfg-raising .cfg-shape {
+  fill: var(--danger-bg);
+  stroke: var(--edge-error);
+  stroke-width: 3;
+}
+
+.cfg-node:focus {
+  outline: none;
+}
+
+.cfg-node:focus-visible .cfg-shape {
+  stroke: var(--focus);
+  stroke-width: 3;
+}
+
+.cfg-edge-line {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  transition:
+    stroke var(--dur-med) ease,
+    stroke-width var(--dur-med) ease;
+}
+
+.cfg-arrow {
+  fill: var(--border-strong);
+  stroke: none;
+  transition: fill var(--dur-med) ease;
+}
+
+.cfg-edge-back .cfg-edge-line {
+  stroke: var(--muted);
+}
+
+.cfg-edge-back .cfg-arrow {
+  fill: var(--muted);
+}
+
+/* Yes / No, lifted clear of the arrow it labels. */
+.cfg-edge-label {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--text);
+  paint-order: stroke;
+  stroke: var(--code-bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* An arrow this run really travelled. */
+.cfg-edge.cfg-taken .cfg-edge-line {
+  stroke: var(--edge-return);
+  stroke-width: 2.2;
+}
+
+.cfg-edge.cfg-taken .cfg-arrow {
+  fill: var(--edge-return);
+}
+
+.cfg-edge.cfg-taken .cfg-edge-label {
+  fill: var(--edge-return);
+}
+
+/* The arrow the token takes out of the box it is on now â€” the one that makes
+   a Yes or a No true. */
+.cfg-edge.cfg-current .cfg-edge-line {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.cfg-edge.cfg-current .cfg-arrow {
+  fill: var(--accent);
+}
+
+.cfg-edge.cfg-current .cfg-edge-label {
+  fill: var(--accent);
+  font-size: 12px;
+}
+
+.viz-legend .cfg-running {
+  color: var(--accent);
+}
+
+.viz-legend .cfg-executed {
+  color: var(--edge-return);
+}
+
+.viz-legend .cfg-unreached {
+  color: var(--text);
+}
+
+.viz-legend .cfg-unreached::before {
+  border-style: dashed;
+}
+
+.viz-legend .cfg-raising {
+  color: var(--danger);
+}
+
+.viz-legend .cfg-raising::before {
+  background: var(--danger-bg);
+}
+
+/* --- Narrow windows: the canvas and the inspector take turns ------------- */
+
+/* Only the pane the tab names is drawn; the other is off screen entirely, so
+   neither wastes room and neither has to share a viewport with the other. */
 @media (max-width: 1279px) {
   .layout:not([data-tab="graph"]) [data-pane="graph"],
-  .layout[data-tab="graph"] [data-pane="side"],
-  .layout[data-tab="variables"] [data-card]:not([data-card="variables"]),
-  .layout[data-tab="flow"] [data-card]:not([data-card="flow"]):not([data-card="trace"]),
-  .layout[data-tab="stack"] [data-card]:not([data-card="stack"]),
-  .layout[data-tab="output"] [data-card]:not([data-card="output"]) {
+  .layout:not([data-tab="inspector"]) [data-pane="side"] {
     display: none;
   }
 
-  /* Two columns: the code, and an explanation above a tabbed panel. */
+  /* Two columns: the code, and the tabbed pane beside it. */
   .layout {
     grid-template-columns: var(--col-left, 32%) 8px minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   [data-pane="code"] {
-    grid-area: 1 / 1 / 4 / 2;
+    grid-area: 1 / 1 / 3 / 2;
   }
 
   [data-split="left"] {
-    grid-area: 1 / 2 / 4 / 3;
-  }
-
-  [data-pane="teach"] {
-    grid-area: 1 / 3 / 2 / 4;
+    grid-area: 1 / 2 / 3 / 3;
   }
 
   .tabs {
     display: flex;
-    grid-area: 2 / 3 / 3 / 4;
+    grid-area: 1 / 3 / 2 / 4;
   }
 
   [data-pane="graph"],
   [data-pane="side"] {
-    grid-area: 3 / 3 / 4 / 4;
+    grid-area: 2 / 3 / 3 / 4;
   }
 
   [data-split="mid"] {
     display: none;
   }
-
-  /* Keep the explanation a summary here so the graph gets the room. */
-  .explain {
-    max-height: 20vh;
-  }
 }
 
-/* Phones: one column, everything behind the tab bar, graph capped. */
+/* Phones: one column, the tab bar and then whichever pane it names. */
 @media (max-width: 899px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
-  }
-
-  [data-pane="teach"] {
-    grid-area: 1 / 1 / 2 / 2;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .tabs {
-    grid-area: 2 / 1 / 3 / 2;
+    grid-area: 1 / 1 / 2 / 2;
   }
 
   .tab-code {
@@ -2034,41 +2385,38 @@ h3 {
   [data-pane="code"],
   [data-pane="graph"],
   [data-pane="side"] {
-    grid-area: 3 / 1 / 4 / 2;
+    grid-area: 2 / 1 / 3 / 2;
   }
 
   .splitter {
     display: none;
   }
 
-  .explain {
-    max-height: 30vh;
-  }
-
   .layout:not([data-tab="code"]) [data-pane="code"],
   .layout:not([data-tab="graph"]) [data-pane="graph"],
-  .layout:not([data-tab="variables"]):not([data-tab="flow"]):not([data-tab="stack"]):not(
-      [data-tab="output"]
-    )
-    [data-pane="side"] {
+  .layout:not([data-tab="inspector"]) [data-pane="side"] {
     display: none;
   }
 
-  /* Six tabs on a phone: let them scroll sideways rather than wrap. */
+  /* Three tabs on a phone: let them scroll sideways rather than wrap. */
   .tabs {
     overflow-x: auto;
     flex-wrap: nowrap;
   }
 
-  [data-pane="graph"] .exec-graph {
+  [data-pane="graph"] .viz-canvas {
     max-height: 50vh;
   }
 
-  /* A phone gives the graph barely 200px. Buy back the room the graph itself
-     does not need: a one-line title, one row of tools that scrolls sideways,
-     and a shorter explanation while the Graph tab is the one you are on. */
-  .layout[data-tab="graph"] .explain {
-    max-height: 20vh;
+  /* The top bar carries the learning mode now, so on the narrowest screens it
+     gives up its own row rather than squeezing the engine badge. */
+  .app > header {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .mode-switch {
+    margin-left: auto;
   }
 
   [data-pane="graph"] .flow-head h3 {
@@ -2089,23 +2437,23 @@ h3 {
     font-size: 11px;
   }
 
-  [data-pane="graph"] .exec-tools {
+  [data-pane="graph"] .viz-tools {
     flex-wrap: nowrap;
     overflow-x: auto;
     gap: 4px;
     font-size: 10.5px;
   }
 
-  .exec-wide {
+  .viz-wide {
     display: none;
   }
 
-  .exec-narrow {
+  .viz-narrow {
     display: inline;
   }
 
-  /* Never let the graph collapse to a sliver: one card must fit. */
-  [data-pane="graph"] .exec-view {
+  /* Never let the drawing collapse to a sliver: one box must fit. */
+  [data-pane="graph"] .viz-view {
     min-height: 130px;
   }
 }
@@ -2117,6 +2465,20 @@ h3 {
   .slot.changed,
   .flow-statement.flow-active code {
     animation: none;
+  }
+
+  /* Every state change in the canvas is already legible as a colour; the
+     transition is decoration, so it goes. Values still appear â€” instantly. */
+  .ct-box,
+  .ct-value,
+  .ct-link-line,
+  .ct-link-value,
+  .ct-unfold rect,
+  .cfg-shape,
+  .cfg-edge-line,
+  .cfg-arrow,
+  .viz-tab {
+    transition: none;
   }
 }
 
