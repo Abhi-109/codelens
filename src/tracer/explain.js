@@ -21,7 +21,7 @@ export const CONCEPTS = {
   condition: {
     term: "Condition",
     blurb:
-      "A condition is a question with a yes/no answer, like marks >= 90. Python answers True or False and takes the branch that matches.",
+      "A condition is a question with a yes/no answer, like count >= 90. Python answers True or False and takes the branch that matches.",
   },
   loop: {
     term: "Loop",
@@ -127,7 +127,7 @@ function variableShow(variables, heap, name) {
   return showValue(variables[name], heap);
 }
 
-/** Substitutes known variable names in a condition, so "marks >= 90" reads "68 >= 90". */
+/** Substitutes known variable names in a condition, so "count >= 90" reads "68 >= 90". */
 export function substituteVars(text, variables, heap) {
   let out = text.replace(/[A-Za-z_]\w*/g, (name) => {
     if (!(name in variables)) return name;
@@ -602,7 +602,11 @@ export function explainTransition(trace, index, source = "") {
     const sameIndex = previousInFrameIndex(trace, index, event.frame_id);
     if (sameIndex < 0) return "This is the first line that runs.";
     const same = trace[sameIndex];
-    if (same.line === event.line) return null;
+    if (same.line === event.line) {
+      // Something on this very line called out and has come back: the line
+      // never stopped running, so say that rather than nothing at all.
+      return `Line ${event.line} is still running: the value it called for has come back.`;
+    }
     if (same.line > event.line) {
       return `The loop body finished, so Python jumped back up to line ${event.line} for the next round.`;
     }
@@ -615,7 +619,7 @@ export function explainTransition(trace, index, source = "") {
   }
 
   if (event.event === "call") {
-    if (event.function === "<module>") return null;
+    if (event.function === "<module>") return "This is where the program starts.";
     const frame = event.frames?.[event.frames.length - 1];
     const at = frame?.call_line;
     return at != null
@@ -626,6 +630,42 @@ export function explainTransition(trace, index, source = "") {
   if (event.event === "return") {
     if (event.function === "<module>") return "The last line finished, so the program ends.";
     return `${event.function}() reached a return, so its result goes back and the caller carries on.`;
+  }
+
+  // From here on there is no branch to explain — control is here because the
+  // line printed, asked, failed or was stopped. Say which, in plain words.
+  if (event.event === "output") {
+    return event.line != null
+      ? `Line ${event.line} is printing, so this text appears now.`
+      : "The program printed this text, then carries on.";
+  }
+  if (event.event === "input") {
+    return `Line ${event.line ?? "?"} asked for a value, so the program waits for it here.`;
+  }
+  if (event.event === "exception") {
+    const type = event.exception?.type ?? "an error";
+    return event.line != null
+      ? `Line ${event.line} raised ${type}, so control leaves that line here.`
+      : `${type} was raised, so control leaves this line here.`;
+  }
+  if (event.event === "unwind") {
+    return event.function === "<module>"
+      ? "The error reached the end of the program, so the run stops."
+      : `The error passed out of ${event.function}(), so that frame closes without a result.`;
+  }
+  if (event.event === "error") {
+    return event.phase === "parse"
+      ? "Python rejected the code before anything ran, so this is where the program ends."
+      : "The run ended with this error, so nothing after it happened.";
+  }
+  if (event.event === "step_limit") {
+    return `The run reached its limit of ${event.limit ?? "the"} steps, so tracing stopped here.`;
+  }
+  if (event.event === "timeout") {
+    return "The run reached its time limit, so tracing stopped here.";
+  }
+  if (event.event === "output_limit") {
+    return `The run reached its limit of ${event.limit ?? "the"} printed characters, so tracing stopped here.`;
   }
 
   return null;

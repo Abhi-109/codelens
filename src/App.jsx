@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Component, useEffect, useMemo, useRef, useState } from "react";
 import { buildFlowchart, onEngineStatus, runTrace } from "./tracer/client";
-import { CONCEPTS, isNewConcept } from "./tracer/explain";
+import { CONCEPTS, explainStep, isNewConcept } from "./tracer/explain";
 import { countFor, flowFor, pathToLine, runsByLine } from "./tracer/flow";
 import { namesById, objectChanges, slotEntries } from "./tracer/objects";
 import { formatValue, showValue } from "./tracer/values";
@@ -123,6 +123,50 @@ function PanelHead({ title, hint, help }) {
       {hint ? <p className="panel-hint">{hint}</p> : null}
     </div>
   );
+}
+
+/**
+ * One section of the inspector, isolated: if it cannot render, that section
+ * says so honestly and the rest of the panels keep working, because a learner
+ * must never lose the whole view to a single bad value.
+ */
+class PanelError extends Component {
+  state = { failed: false, message: "" };
+
+  static getDerivedStateFromError(error) {
+    return { failed: true, message: String(error?.message ?? error) };
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <p className="empty panel-failed">
+          This section could not be shown ({this.state.message}). Everything
+          else still works.
+        </p>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/** The step *after* this one, in the learner's words: a line, or the reason. */
+function stepLabel(event) {
+  if (!event) return "end of the run";
+  if (event.line) return `line ${event.line}`;
+  const words = {
+    output: "printing",
+    input: "asking for input",
+    call: `calling ${event.function}`,
+    return: `returning from ${event.function}`,
+    exception: "an error being raised",
+    unwind: "an error leaving a call",
+    step_limit: "the step limit",
+    timeout: "the time limit",
+    output_limit: "the output limit",
+    error: "the run ending with an error",
+  };
+  return words[event.event] ?? event.event;
 }
 
 /** One line of code, with the run markers, a result hint and hover values. */
@@ -284,7 +328,10 @@ function CallList({ callStack, selectedId, onSelect }) {
                   : "the program starts here"}
             </span>
             {frame.returnValue !== null ? (
-              <span className="call-return">returned {frame.returnValue}</span>
+              <span className="call-return">
+                returned {frame.returnValue}
+                {frame.callLine ? ` to line ${frame.callLine}` : ""}
+              </span>
             ) : null}
           </button>
         </li>
@@ -452,7 +499,7 @@ function variableRows(view, showAfter) {
   if (!showAfter) return rows;
   const byName = new Map(rows.map((row) => [row.name, row]));
   for (const change of view.changes) {
-    if (change.kind === "slot") continue;
+    if (change.kind === "slot" || change.kind === "new-slot") continue;
     const row = byName.get(change.name);
     if (row) row.text = change.to;
     else rows.push({ name: change.name, text: change.to, isArg: Boolean(change.arg) });
@@ -478,6 +525,7 @@ export default function App() {
   const [selectedCall, setSelectedCall] = useState(null);
   const [watched, setWatched] = useState(null);
   const [showAfter, setShowAfter] = useState(false);
+  const [inputsText, setInputsText] = useState("");
   const [dismissed, setDismissed] = useState(() => new Set());
   // On a phone the Run button lives behind the Code tab, so start there.
   const [tab, setTab] = useState(() => (window.innerWidth < 900 ? "code" : "graph"));
@@ -499,6 +547,15 @@ export default function App() {
     [trace, index, source, selectedCall, graph],
   );
   const log = useMemo(() => changeLog(trace), [trace]);
+  // A program that reads the keyboard needs values to read. They are supplied
+  // by hand, one per line, and passed to the tracer unchanged — if the program
+  // asks for more than were given, the trace says so with a real EOFError.
+  const usesInput = useMemo(() => /\binput\s*\(/.test(source), [source]);
+  const inputs = useMemo(() => {
+    const lines = inputsText.split("\n");
+    while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+    return lines;
+  }, [inputsText]);
   const history = useMemo(
     () => (watched ? variableHistory(trace, watched) : []),
     [trace, watched],
@@ -539,6 +596,14 @@ export default function App() {
             : ""
         }`
       : "the top level";
+
+  // Sections A and C read the same step view every other panel reads, so they
+  // cannot drift: one event in, one description out.
+  const currentNode = graph.nodes.find((node) => node.id === view.nodeId) ?? null;
+  const previousEvent = index > 0 ? trace[index - 1] : null;
+  const nextEvent = trace[index + 1] ?? null;
+  const nextReason = nextEvent ? explainStep(trace, index + 1, source).text : null;
+  const olderCalls = Math.max(view.callStack.length - 1, 0);
 
   // Keep the lit-up line in view without ever scrolling the page.
   useEffect(() => {
@@ -582,7 +647,10 @@ export default function App() {
     setPlaying(false);
     setRunning(true);
     try {
-      const [r, f] = await Promise.all([runTrace(source), buildFlowchart(source)]);
+      const [r, f] = await Promise.all([
+        runTrace(source, { inputs }),
+        buildFlowchart(source),
+      ]);
       setResult(r);
       setFlow(f);
       // A run that crashed opens on the step that failed, so the line that
@@ -733,6 +801,19 @@ export default function App() {
               aria-label="Your Python code"
             />
           )}
+
+          {usesInput ? (
+            <label className="inputs">
+              <span>Values for input(), one per line</span>
+              <textarea
+                value={inputsText}
+                onChange={(event) => setInputsText(event.target.value)}
+                rows={2}
+                aria-label="Values for input(), one per line"
+                spellCheck="false"
+              />
+            </label>
+          ) : null}
 
           <div className="pane-foot">
             <select
@@ -904,9 +985,40 @@ export default function App() {
 
         <section className="pane side-pane" data-pane="side">
           <div className="side-scroll">
+            <PanelError>
+              <section className="panel" data-card="step">
+                <PanelHead
+                  title="A · This step"
+                  hint="Where you are, in plain English, and why."
+                  help="One step of the run: the line about to run, what it does, and the decision that brought control here. It is the same wording the graph card uses, so the two can never disagree."
+                />
+                {result ? (
+                  <>
+                    <p className="step-where">
+                      <strong>{view.line ? `line ${view.line}` : `step ${index + 1}`}</strong>
+                      <span> · {callTitle}</span>
+                    </p>
+                    {view.code ? <code className="step-code">{view.code.text}</code> : null}
+                    {currentNode?.action ? (
+                      <p className="step-action">{currentNode.action}</p>
+                    ) : null}
+                    <p className="explain-text about">{view.explanation.aboutToHappen}</p>
+                    {view.explanation.why ? (
+                      <p className="explain-text why">
+                        <span className="step-label">Why</span> {view.explanation.why}
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="empty">Run your code and this describes each step.</p>
+                )}
+              </section>
+            </PanelError>
+
+            <PanelError>
             <section className="panel" data-card="variables">
               <PanelHead
-                title="Variables"
+                title="B · Variables"
                 hint="What the program remembers right now."
                 help="Each name is a labelled box. The list shows the values just before the highlighted line runs. Click a name to see how it changed over time."
               />
@@ -967,48 +1079,153 @@ export default function App() {
               <div className="object-wrap">
                 <HeapObjects heap={view.before?.heap} names={heapNames} changes={objectChanged} />
               </div>
+              <details className="panel-more">
+                <summary>Every change so far ({log.length})</summary>
+                <p className="panel-hint">Click a step to jump to it.</p>
+                <ChangeList log={log} index={index} onJump={jumpTo} />
+              </details>
             </section>
+            </PanelError>
 
-            <section className="panel" data-card="changes">
-              <PanelHead
-                title="Changes"
-                hint="Every value the program changed, newest first. Click a step to jump to it."
-                help="This is the story of the run: which variable changed, from what, to what, and on which line."
-              />
-              <ChangeList log={log} index={index} onJump={jumpTo} />
-            </section>
+            <PanelError>
+              <section className="panel" data-card="flow">
+                <PanelHead
+                  title="C · Execution flow"
+                  hint="Where control came from, where it is, and where it goes."
+                  help="Every step is one of three places: the line that just finished, the line about to run, and the line that comes after it. Each row says why."
+                />
+                <ol className="flow-steps">
+                  <li className="flow-step past">
+                    <span className="flow-tag">before</span>
+                    <button
+                      type="button"
+                      className="flow-line"
+                      onClick={() => jumpTo(index - 1)}
+                      disabled={index === 0}
+                    >
+                      {previousEvent ? stepLabel(previousEvent) : "nothing yet"}
+                    </button>
+                    <p className="flow-why">
+                      {view.explanation.justHappened ?? "Nothing has run yet."}
+                    </p>
+                  </li>
+                  <li className="flow-step now">
+                    <span className="flow-tag">now</span>
+                    <span className="flow-line">{stepLabel(view.event)}</span>
+                    <p className="flow-why">
+                      {view.explanation.why ?? view.explanation.aboutToHappen}
+                    </p>
+                  </li>
+                  <li className="flow-step next">
+                    <span className="flow-tag">next</span>
+                    <button
+                      type="button"
+                      className="flow-line"
+                      onClick={() => jumpTo(index + 1)}
+                      disabled={!nextEvent}
+                    >
+                      {stepLabel(nextEvent)}
+                    </button>
+                    <p className="flow-why">{nextReason ?? "The run stops here."}</p>
+                  </li>
+                </ol>
+              </section>
+            </PanelError>
 
-            <section className="panel" data-card="stack">
-              <PanelHead
-                title="Function calls"
-                hint="Where the program is right now."
-                help="Each time a function runs, Python gives it its own fresh set of variables. The newest call is on top; when it finishes, we return to the one below."
-              />
-              <CallList
-                callStack={view.callStack}
-                selectedId={view.frame?.frameId ?? null}
-                onSelect={jumpToCall}
-              />
-              {selectedCall !== null && selectedCall !== view.frameId ? (
-                <p className="preview">
-                  Showing an older call's variables.{" "}
-                  <button type="button" className="ghost" onClick={() => setSelectedCall(null)}>
-                    back to current
-                  </button>
-                </p>
-              ) : null}
-            </section>
+            <PanelError>
+              <section className="panel" data-card="stack">
+                <PanelHead
+                  title="D · Calls and returns"
+                  hint="Which call is running now, and which are waiting for it."
+                  help="Each time a function runs, Python gives it its own fresh set of variables. The newest call is on top; when it finishes, its result goes back to the line that asked for it, and the call below carries on."
+                />
+                <CallList
+                  callStack={view.callStack}
+                  selectedId={view.frame?.frameId ?? null}
+                  onSelect={jumpToCall}
+                />
+                {olderCalls > 0 ? (
+                  <p className="preview">
+                    {olderCalls} older call{olderCalls === 1 ? " is" : "s are"} waiting for this
+                    one to finish.
+                  </p>
+                ) : null}
+                {selectedCall !== null && selectedCall !== view.frameId ? (
+                  <p className="preview">
+                    Showing an older call's variables.{" "}
+                    <button type="button" className="ghost" onClick={() => setSelectedCall(null)}>
+                      back to current
+                    </button>
+                  </p>
+                ) : null}
+              </section>
+            </PanelError>
 
-            <section className="panel" data-card="output">
-              <PanelHead
-                title="Output"
-                hint="What the program printed."
-                help="print() shows text here. It never changes a variable."
-              />
-              <pre className="output">
-                {output || <span className="empty">(nothing printed yet)</span>}
-              </pre>
-            </section>
+            <PanelError>
+              <section className="panel" data-card="output">
+                <PanelHead
+                  title="E · Output"
+                  hint="What the program printed."
+                  help="print() shows text here. It never changes a variable."
+                />
+                <pre className="output">
+                  {output || <span className="empty">(nothing printed yet)</span>}
+                </pre>
+              </section>
+            </PanelError>
+
+            <PanelError>
+              <section className="panel" data-card="trace">
+                <PanelHead
+                  title="Trace details"
+                  hint="The raw numbers the panels above are built from."
+                  help="Every description above comes from this one event: its type, the frame it runs in, and the graph node that draws it. Nothing here is added by hand."
+                />
+                <details className="trace-more" open={viewMode === "advanced"}>
+                  <summary>Show trace internals</summary>
+                  <dl className="trace-facts">
+                    <div>
+                      <dt>event</dt>
+                      <dd>{view.kind ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>step</dt>
+                      <dd>
+                        {index + 1} of {trace.length}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>line</dt>
+                      <dd>{view.line ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>function</dt>
+                      <dd>{view.function}</dd>
+                    </div>
+                    <div>
+                      <dt>frame id</dt>
+                      <dd>{view.frameId ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>depth</dt>
+                      <dd>{view.frames.length}</dd>
+                    </div>
+                    <div>
+                      <dt>graph node</dt>
+                      <dd>{view.nodeId ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt>heap objects</dt>
+                      <dd>{Object.keys(view.before?.heap ?? {}).length}</dd>
+                    </div>
+                    <div>
+                      <dt>printed so far</dt>
+                      <dd>{output.length} characters</dd>
+                    </div>
+                  </dl>
+                </details>
+              </section>
+            </PanelError>
           </div>
         </section>
       </main>
