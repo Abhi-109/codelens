@@ -10,16 +10,8 @@ import { useEffect, useState } from 'react';
 import { Link } from '../router.jsx';
 import { useRouter } from '../routerContext.js';
 import { currentTheme, toggleTheme } from '../theme.js';
+import { FOOTER_LINKS, isActive, NAV } from './nav.js';
 import './shell.css';
-
-const NAV = [
-  { to: '/', label: 'Home', match: 'home' },
-  { to: '/visualizer/python', label: 'Python Visualizer', match: 'python-visualizer' },
-  { to: '/visualizer/data-structures', label: 'Data Structures', match: ['data-structures', 'data-structure'] },
-  { to: '/learn', label: 'Learn', match: ['learn', 'lesson'] },
-  { to: '/docs', label: 'Docs', match: ['docs', 'doc'] },
-  { to: '/about', label: 'About', match: 'about' },
-];
 
 /** Sun/moon switch. Reads the painted theme, so it can never show the wrong
  *  icon even if the theme was changed by the boot script or the OS. */
@@ -62,10 +54,6 @@ function ThemeToggle() {
       )}
     </button>
   );
-}
-
-function isActive(routeName, match) {
-  return Array.isArray(match) ? match.includes(routeName) : match === routeName;
 }
 
 export function AppShell({ children, wide = false }) {
@@ -155,11 +143,11 @@ export function AppShell({ children, wide = false }) {
               </p>
             </div>
             <nav className="shell-footer-links" aria-label="Footer">
-              <Link to="/visualizer/python">Python Visualizer</Link>
-              <Link to="/visualizer/data-structures">Data Structures</Link>
-              <Link to="/learn">Learn</Link>
-              <Link to="/docs">Docs</Link>
-              <Link to="/about">About</Link>
+              {FOOTER_LINKS.map((item) => (
+                <Link key={item.to} to={item.to}>
+                  {item.label}
+                </Link>
+              ))}
             </nav>
           </div>
           <p className="shell-footer-note">

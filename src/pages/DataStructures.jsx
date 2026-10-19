@@ -18,7 +18,7 @@ export default function DataStructures() {
   return (
     <div>
       <PageHeader
-        crumbs={[{ label: 'Visualizer' }, { label: 'Data Structures' }]}
+        crumbs={[{ label: 'Visualize', to: '/get-started' }, { label: 'Data Structures' }]}
         title="Data structure visualizer"
         subtitle="Watch arrays, stacks, queues and linked lists change as you apply operations to them — separate from the Python tracer."
       />

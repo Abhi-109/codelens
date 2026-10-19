@@ -1,11 +1,13 @@
 # CodeLens
 
-**Watch your Python code run, one step at a time.**
+**Watch your code run, one step at a time.**
 
-CodeLens is a free, in-browser tool for people learning to program. Write or pick a
-Python program, press Run, and watch it replay step by step as diagrams and
+CodeLens is a free, in-browser code visualization and programming education tool for
+people learning to program. Write or pick a
+program, press Run, and watch it replay step by step as diagrams and
 plain-English explanations: variables as boxes, lists as numbered slots, function
-calls as stacked cards, and the code itself as a flowchart.
+calls as stacked cards, and the code itself as a flowchart. Python is the first
+supported language; more are planned.
 
 It is built for a **complete beginner** — a school student or first-year college
 student with no coding background. Every step gets a short sentence in everyday

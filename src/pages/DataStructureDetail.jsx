@@ -20,7 +20,7 @@ export default function DataStructureDetail({ type }) {
     <div>
       <PageHeader
         crumbs={[
-          { label: 'Visualizer', to: '/visualizer/python' },
+          { label: 'Visualize', to: '/get-started' },
           { label: 'Data Structures', to: '/visualizer/data-structures' },
           { label: name },
         ]}

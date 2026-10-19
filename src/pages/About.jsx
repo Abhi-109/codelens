@@ -6,8 +6,8 @@ import './pages.css';
 
 const FACTS = [
   {
-    title: 'Python runs in your browser',
-    body: 'Programs execute with Pyodide inside a Web Worker on your own machine. There is no server, no account, and your code is never uploaded.',
+    title: 'Your code runs in your browser',
+    body: 'Programs execute locally in a Web Worker on your own machine — today via Pyodide, a Python runtime. There is no server, no account, and your code is never uploaded.',
   },
   {
     title: 'Every step comes from a real trace',

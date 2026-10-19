@@ -57,8 +57,8 @@ export default function GetStarted() {
       </div>
 
       <p className="lang-foot">
-        Only one language runs today, and we say so everywhere: the visualizer that exists is
-        Python, so Python is the only card you can open.
+        Only one language runs today, and we say so plainly: Python. Every other card is a
+        plan, not a promise — they don't link anywhere yet.
       </p>
     </div>
   );

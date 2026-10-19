@@ -273,7 +273,7 @@ function HeroPreview() {
 export default function Home() {
   usePageMeta(
     "CodeLens - See your code come to life",
-    "Watch a Python program run one step at a time: the line about to run, every variable, the call stack and the output, explained in plain English.",
+    "CodeLens is a code visualization and programming education platform: see your code come to life. Watch a program run one step at a time — the line about to run, every variable, the call stack and the output, explained in plain English. Python is the first supported language.",
   );
 
   return (
