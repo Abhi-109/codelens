@@ -38,8 +38,8 @@
 }
 
 .btn-primary:hover {
-  border-color: var(--btn-primary-bg);
-  filter: brightness(1.12);
+  border-color: var(--btn-primary-hover-bg);
+  background: var(--btn-primary-hover-bg);
 }
 
 .card {

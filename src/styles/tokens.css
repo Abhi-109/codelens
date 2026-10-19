@@ -73,6 +73,10 @@
   --btn-primary-bg: #0b1020;
   --btn-primary-fg: #ffffff;
 
+  /* Hover must be *visible*. brightness() barely moves a near-black, so the
+     lift is a real colour: #1c2536 keeps white text at 15.36:1 (AAA). */
+  --btn-primary-hover-bg: #1c2536;
+
   /* Hero: second headline line, blue -> violet in light. */
   --hero-grad-from: #3b5bff;
   --hero-grad-to: #7c3aed;
@@ -127,9 +131,11 @@
 
   --on-accent: #ffffff;
 
-  /* Primary buttons stay blue on a dark surface. */
+  /* Primary buttons stay blue on a dark surface. The hover is the same blue
+     at brightness(1.12) (#3477ff), pinned as a token so both themes agree. */
   --btn-primary-bg: #2f6bff;
   --btn-primary-fg: #ffffff;
+  --btn-primary-hover-bg: #3477ff;
 
   /* Hero: second headline line, blue -> cyan in dark. */
   --hero-grad-from: #4d8cff;
