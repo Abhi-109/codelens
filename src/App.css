@@ -280,8 +280,8 @@
 }
 
 .run {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
   color: var(--on-accent);
   font-weight: 600;
 }
@@ -414,7 +414,7 @@
   margin-left: 10px;
   padding: 0 6px;
   border-radius: 6px;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-size: 12px;
   white-space: nowrap;
@@ -2159,10 +2159,14 @@ h3 {
   outline-offset: 2px;
 }
 
-/* The five shape families, one colour each, so a glance tells kinds apart. */
+/* The five shape families, one colour each, so a glance tells kinds apart.
+   Neutral (assignments, expressions, raises) is slate; input/output is
+   copper; decisions and loops take the same amber as the arrow that loops
+   back to them; calls are violet, the colour calls are everywhere else in the
+   app; start/end/return are teal. */
 .cfg-shape {
   fill: var(--bg);
-  stroke: var(--muted);
+  stroke: var(--slate);
   stroke-width: 1.5;
   transition:
     fill var(--dur-med) ease,
@@ -2182,15 +2186,15 @@ h3 {
 
 .cfg-shape-decision,
 .cfg-shape-loop {
-  stroke: var(--yellow);
+  stroke: var(--edge-back);
 }
 
 .cfg-shape-call {
-  stroke: var(--purple);
+  stroke: var(--violet);
 }
 
 .cfg-call-bar {
-  stroke: var(--copper);
+  stroke: var(--violet);
   stroke-width: 2;
   fill: none;
 }
@@ -2267,12 +2271,14 @@ h3 {
   transition: fill var(--dur-med) ease;
 }
 
+/* The arrow that loops back to the test that guards it: the same amber as the
+   decision shape it points at, so a loop reads as one piece. */
 .cfg-edge-back .cfg-edge-line {
-  stroke: var(--muted);
+  stroke: var(--edge-back);
 }
 
 .cfg-edge-back .cfg-arrow {
-  fill: var(--muted);
+  fill: var(--edge-back);
 }
 
 /* Yes / No, lifted clear of the arrow it labels. */
@@ -2543,9 +2549,11 @@ h3 {
     font-size: 11px;
   }
 
+  /* A scroller was tried here and it cost more than it saved: the last button
+     arrived cut in half ("Expa") with an affordance nobody could see, and
+     "How to read this" sat off the right edge entirely. Two rows of 10.5px
+     buttons is a few pixels of height and every control stays reachable. */
   [data-pane="graph"] .viz-tools {
-    flex-wrap: nowrap;
-    overflow-x: auto;
     gap: 4px;
     font-size: 10.5px;
   }

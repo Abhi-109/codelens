@@ -50,18 +50,36 @@
   /* Names the playground already uses, retuned to this palette. */
   --text: #5b6478;
   --text-h: #0f172a;
+  /* Accent as *text* and as a thin graphic. On a light surface the same blue
+     can also be the fill white sits on - both directions clear 4.5:1 here.
+     That is precisely what stops being true in the dark theme, where the two
+     roles are split for real. */
   --accent: #3b5bff;
+  --accent-fill: #3b5bff;
   --accent-bg: rgb(59 91 255 / 8%);
   --accent-border: rgb(59 91 255 / 35%);
   --code-bg: #f1f3fa;
 
-  /* Accents. */
-  --teal: #14b8a6;
+  /* Accents. Dark enough to read as text on a white panel: #14b8a6 only
+     managed 2.49:1 here, which is under what a graphic needs and well under
+     what the 11px return value needs. */
+  --teal: #0f766e;
   --violet: #7c3aed;
 
-  /* Status. Kept dark enough to read on a white surface. */
-  --ok: #16a34a;
-  --warn: #d97706;
+  /* The control-flow canvas colours its five shape families, and these two are
+     the rest of that set: the neutral family (assignments, expressions and
+     raises) and input/output. Decisions and loops take --edge-back instead -
+     already the colour of the arrow that loops back to them, so the loop
+     machinery is one colour end to end. Every one of these is measured as a
+     *stroke*: a shape outline has to clear 3:1 or the family stops being
+     distinguishable, which is the whole point of the colour. */
+  --slate: #64748b;
+  --copper: #c2410c;
+
+  /* Status. Kept dark enough to read on a white surface - and measured, not
+     guessed: #16a34a and #d97706 only reached 3.30 and 3.19:1. */
+  --ok: #15803d;
+  --warn: #b45309;
   --danger: #dc2626;
   --danger-bg: rgb(220 38 38 / 7%);
 
@@ -85,10 +103,15 @@
   --hero-wash-a: rgb(124 58 237 / 15%);
   --hero-wash-b: rgb(59 91 255 / 9%);
 
-  /* Execution-graph edge colours, by meaning. */
+  /* Execution-graph edge colours, by meaning. The return path is the same
+     teal as --teal, for the same reason: it has to clear 4.5:1, because the
+     legend prints it as text and the value riding on the arrow does too. */
   --edge-call: #8b5cf6;
-  --edge-return: #14b8a6;
-  --edge-back: #ca8a04;
+  --edge-return: #0f766e;
+  /* Also the colour of the decision and loop shapes, which this edge returns
+     to. Darkened from #ca8a04, which only managed 2.75:1 on this background -
+     invisible until now because nothing referenced it. */
+  --edge-back: #a16207;
   --edge-error: #dc2626;
 
   /* One colour per call depth, so nested calls can be told apart. */
@@ -115,13 +138,24 @@
 
   --text: #8e99b4;
   --text-h: #e8ecf8;
-  --accent: #2f6bff;
-  --accent-bg: rgb(47 107 255 / 12%);
-  --accent-border: rgb(47 107 255 / 45%);
+  /* Accent as *text* on a dark surface. #2f6bff only reached 4.24:1 on the
+     page and 3.94:1 on a panel, so every link, label and legend was under
+     AA; #4d8cff is the blue the hero already used here, and it clears 5.5:1
+     on both. The fill that white text sits on goes the other way - lighten
+     that and white starts to sink - so it is its own token below. */
+  --accent: #4d8cff;
+  --accent-fill: #2a65f7;
+  --accent-bg: rgb(77 140 255 / 12%);
+  --accent-border: rgb(77 140 255 / 45%);
   --code-bg: #0d1424;
 
   --teal: #22d3c5;
   --violet: #8b5cf6;
+
+  /* The same two control-flow families as in light, opened up for a dark
+     surface. Decisions and loops still take --edge-back. */
+  --slate: #94a3b8;
+  --copper: #fb923c;
 
   /* Status on a dark surface: lighter tints, same meanings. */
   --ok: #4ade80;
@@ -131,11 +165,14 @@
 
   --on-accent: #ffffff;
 
-  /* Primary buttons stay blue on a dark surface. The hover is the same blue
-     at brightness(1.12) (#3477ff), pinned as a token so both themes agree. */
-  --btn-primary-bg: #2f6bff;
+  /* Primary buttons stay blue on a dark surface. Both values are chosen
+     against the white label on them, not by eye: 4.88:1 at rest and 4.55:1
+     on hover, where the old #2f6bff / #3477ff pair gave 4.50 and 4.02 - the
+     hover state failed AA outright. The hover is a touch lighter, so the
+     lift still reads as a lift. */
+  --btn-primary-bg: #2a65f7;
   --btn-primary-fg: #ffffff;
-  --btn-primary-hover-bg: #3477ff;
+  --btn-primary-hover-bg: #2f6afe;
 
   /* Hero: second headline line, blue -> cyan in dark. */
   --hero-grad-from: #4d8cff;

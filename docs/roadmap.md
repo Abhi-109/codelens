@@ -144,11 +144,11 @@ every mode, inspector tab and learning mode.
 
 ### Stage 5 — Polish and QA
 
-- [ ] Dark and light theme pass on labels, controls and edges; contrast fixed
+- [x] Dark and light theme pass on labels, controls and edges; contrast fixed
       through design tokens
-- [ ] Keyboard, ARIA and focus check across all three canvases
-- [ ] Responsive check at desktop, tablet and phone
-- [ ] Empty / loading / input-required / success / exception states checked
+- [x] Keyboard, ARIA and focus check across all three canvases
+- [x] Responsive check at desktop, tablet and phone
+- [x] Empty / loading / input-required / success / exception states checked
       against real examples
 
 ## Teaching UI pass
@@ -268,13 +268,14 @@ Out of scope for version 1 — see [scope.md](scope.md) for the full list.
 
 ## Status
 
-Tier 1 is done. The recorder, tracer, teaching layer, object diagrams, and the
-card-list flowchart all work end to end. The main view is now the **execution
-graph** (`src/flowchart/executionGraph.js` + `ExecutionGraph.jsx`): one card per
-executed line, laid out automatically in run order and indented per call depth,
-so recursion reads as a staircase rather than a dagre tower. Each card carries
-the code, a plain-English action, the values that matter, what changed, and
-where control goes next; finished calls fold away. The textbook flowchart is
+Tier 1 is done. The recorder, tracer, teaching layer and object diagrams work
+end to end, and the visualization is now **three canvases over one trace**
+(rebuild stages 1-5, above): a **call tree** by default, a **control flow
+graph** laid out deterministically with no layout dependency, and a **combined
+view** that puts the tree beside the live stack or variables. The old
+execution-graph card timeline was retired along with its component; its pure
+mapping utilities (`executionGraph.js`, `layoutGraph.js`, `nodeBody.js`,
+`reasons.js`) are kept and still feed the step view. The textbook flowchart is
 still reachable behind the same **Beginner / Advanced / Textbook** control.
 
 The playground is one viewport-height screen — code | graph | inspector —

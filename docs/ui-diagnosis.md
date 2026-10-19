@@ -1,9 +1,16 @@
 # UI diagnosis: making every panel teach, and keeping the panels in sync
 
 Written before any code changed in this task. Everything below is checked
-against the real code (`src/App.jsx`, `src/tracer/explain.js`,
-`src/flowchart/ExecutionGraph.jsx`) and against real traces produced by
-`tracer-poc/tracer.py`. The traces used are in the "Evidence" section.
+against the real code (`src/App.jsx`, `src/tracer/explain.js`) and against
+real traces produced by `tracer-poc/tracer.py`. The traces used are in the
+"Evidence" section.
+
+> **Partly superseded.** The graph panel this diagnosis measured
+> (`src/flowchart/ExecutionGraph.jsx`) has been retired and replaced by the
+> call tree, control flow and combined canvases (see
+> [roadmap.md](roadmap.md)); its "Graph panel" findings below are kept as
+> history. The convention itself — one current step driving every panel —
+> still holds, and now drives those three canvases as well.
 
 ## The one convention
 

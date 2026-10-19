@@ -127,13 +127,11 @@ src/tracer/              reads the JSON in the browser
     └── objects.js        builds the object diagrams
     │
     ▼
-src/flowchart/           draws the execution graph from the same trace
-    ├── executionGraph.js the node model: depth, action, runs, call frames (pure)
-    ├── layoutGraph.js    automatic layout: rows in run order, edge lanes (pure)
-    ├── nodeBody.js       what each card shows: values, changes, next (pure)
-    ├── reasons.js        why each edge was taken, with the real values (pure)
-    ├── viewport.js       fit / zoom / pan maths, centring the current card (pure)
-    └── ExecutionGraph.jsx the graph component
+src/flowchart/           draws the same trace three ways
+    ├── callTree.js, callTreeLayout.js canvas 1: the calls this run made, nested
+    ├── mapTrace.js, layout.js         the format-2 chart, laid out with no dependency
+    ├── controlFlow.js, shapes.jsx     canvas 2: a trace step -> a shape, an arrow, a branch
+    └── viewport.js                    fit / zoom / pan maths, shared by all three (pure)
     │
     ▼
 src/visualizer/          the workspace beside the canvas
@@ -174,9 +172,10 @@ Three suites, all of which should pass on every commit:
 
 ```bash
 npm run test:tracer   # 95 Python tests: the tracer, the flowchart model and the corpus
-npm run test:js       # 292 JS tests: the call tree and control flow model and layout, the
+npm run test:js       # 295 JS tests: the call tree and control flow model and layout, the
                       # graph, the teaching layer, the corpus, the router, the homepage
-                      # preview, the language picker and the workspace modules
+                      # preview, the language picker, the workspace modules and the
+                      # design tokens' contrast
 npm run lint          # oxlint
 npm run build         # production build
 ```
@@ -215,6 +214,7 @@ codelens/
 │   ├── routes.jsx          # route name -> page component, plus <Site>
 │   ├── theme.js            # theme resolve / persist / toggle (pure part tested)
 │   ├── styles/tokens.css   # design tokens: colour, spacing, radius, both themes
+│   ├── styles/contrast.test.mjs # WCAG audit of those tokens, in both themes
 │   ├── index.css           # document base: type, focus ring, reduced motion
 │   ├── shell/
 │   │   ├── AppShell.jsx    # nav, theme toggle, breadcrumbs, footer
@@ -313,8 +313,8 @@ in [docs/scope.md](docs/scope.md).
 
 Working end to end, and teaching: the tracer runs the bundled examples plus a
 45-program corpus covering 32 categories of Python, and the UI replays any of
-them as an execution graph with per-step cards, a five-section inspector, and
-plain-English explanations for every kind of step. The playground now sits
+them on three canvases — call tree, control flow and combined — with a
+six-section inspector and plain-English explanations for every kind of step. The playground now sits
 inside a real site — landing page, language picker, learn, docs and about —
 behind one shared shell with a remembered dark/light theme. Built with React
 19, Vite, and Pyodide.
