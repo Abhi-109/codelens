@@ -125,8 +125,22 @@ every mode, inspector tab and learning mode.
 
 ### Stage 4 — Animation and playback
 
-- [ ] Transitions for active node/edge/status changes that never move the whole
-      graph, never block manual stepping, and respect `prefers-reduced-motion`
+- [x] State changes animate as colour and opacity only: `.ct-node`, `.ct-box`,
+      `.ct-value`, `.ct-link-line`, `.cfg-node`, `.cfg-shape`, `.cfg-edge-line`.
+      Geometry is never transitioned, so a step cannot reflow the drawing —
+      verified by comparing the layout attributes across steps on both canvases
+- [x] A call's return value is mounted from the first step but held at opacity 0
+      until its own `return` event, then fades in (tested: status `future` /
+      `running` / `waiting` → opacity 0; `done` → fade to 1)
+- [x] Interrupted transitions supersede — CSS retargets; there is no
+      `transitionend` listener, no animation queue and no timer between the step
+      and the DOM, so a manual step lands in ~20 ms and 20 rapid clicks produce
+      exactly 20 steps
+- [x] `prefers-reduced-motion: reduce` drops every canvas transition to `none`
+      (measured in-browser: `transition-property: none`)
+- [x] Playback baseline unchanged: measured 1225–1231 ms at 1× against the
+      `800 ÷ 0.65 = 1230.77 ms` baseline, 613–617 ms at 2×, speed persisted to
+      `codelens-speed`, and play stops by itself at the last step
 
 ### Stage 5 — Polish and QA
 

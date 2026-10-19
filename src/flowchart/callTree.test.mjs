@@ -124,6 +124,35 @@ test("callStatus walks a call from future to running to done", () => {
   ]);
 });
 
+test("a call's value is revealed only from the step its own return was recorded", () => {
+  // The parent's answer is drawn the moment, and only from the moment, the
+  // trace recorded it - not when the run as a whole happened to finish.
+  const trace = factTrace();
+  const tree = buildCallTree(trace, FACT_SOURCE);
+  let checked = 0;
+  for (const node of tree.nodes) {
+    if (node.returnIndex === null) continue;
+    checked += 1;
+
+    for (let i = 0; i < node.returnIndex; i += 1) {
+      const before = callStatus(node, i, null);
+      assert.ok(
+        before === "future" || before === "waiting" || before === "running",
+        `${node.label} must not show its value at step ${i} (was ${before})`,
+      );
+    }
+
+    for (let i = node.returnIndex; i < trace.length; i += 1) {
+      const after = callStatus(node, i, null);
+      assert.ok(
+        after === "done" || after === "failed",
+        `${node.label} must show its value from step ${node.returnIndex} on (step ${i} was ${after})`,
+      );
+    }
+  }
+  assert.ok(checked > 1, "the tree has calls whose returns were recorded");
+});
+
 test("callStatus needs no step to stay consistent with itself", () => {
   const trace = factTrace();
   const tree = buildCallTree(trace, FACT_SOURCE);

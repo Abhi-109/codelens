@@ -174,7 +174,7 @@ Three suites, all of which should pass on every commit:
 
 ```bash
 npm run test:tracer   # 95 Python tests: the tracer, the flowchart model and the corpus
-npm run test:js       # 291 JS tests: the call tree and control flow model and layout, the
+npm run test:js       # 292 JS tests: the call tree and control flow model and layout, the
                       # graph, the teaching layer, the corpus, the router, the homepage
                       # preview, the language picker and the workspace modules
 npm run lint          # oxlint

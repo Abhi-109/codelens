@@ -1675,7 +1675,7 @@ h3 {
   padding: 6px;
 }
 
-/* Expand turns the same pane into a full-screen overlay â€” one drawing, one
+/* Expand turns the same pane into a full-screen overlay — one drawing, one
    transform, just a much bigger box for it to fit into. */
 .viz-expanded {
   position: fixed;
@@ -1688,7 +1688,7 @@ h3 {
   background: var(--bg);
 }
 
-/* A fixed pane the drawing is *panned* inside â€” no native scrollbars. */
+/* A fixed pane the drawing is *panned* inside — no native scrollbars. */
 .viz-view {
   position: relative;
   flex: 1;
@@ -1962,8 +1962,14 @@ h3 {
   opacity: 1;
 }
 
+/* The group carries the *state* - future/running/done - and the drawing inside
+   it carries the colour. Only opacity and colour ever move here: x, y, width
+   and height are set once by the layout and are never transitioned, so a step
+   can never make the graph reflow under the reader's eye. */
 .ct-node {
   cursor: pointer;
+  opacity: 1;
+  transition: opacity var(--dur-med) ease;
 }
 
 .ct-box {
@@ -2196,6 +2202,14 @@ h3 {
   pointer-events: none;
 }
 
+/* The group holds the state, the shape holds the colour - and only those move.
+   Geometry is fixed by the layout, so stepping through a run changes nothing
+   but ink, and the boxes stay exactly where the reader put them. */
+.cfg-node {
+  opacity: 1;
+  transition: opacity var(--dur-med) ease;
+}
+
 /* Never reached by this run: drawn, clearly secondary, and nothing to click. */
 .cfg-node.cfg-unreached {
   opacity: 0.5;
@@ -2288,7 +2302,7 @@ h3 {
   fill: var(--edge-return);
 }
 
-/* The arrow the token takes out of the box it is on now â€” the one that makes
+/* The arrow the token takes out of the box it is on now — the one that makes
    a Yes or a No true. */
 .cfg-edge.cfg-current .cfg-edge-line {
   stroke: var(--accent);
@@ -2560,12 +2574,14 @@ h3 {
   }
 
   /* Every state change in the canvas is already legible as a colour; the
-     transition is decoration, so it goes. Values still appear â€” instantly. */
+     transition is decoration, so it goes. Values still appear instantly. */
+  .ct-node,
   .ct-box,
   .ct-value,
   .ct-link-line,
   .ct-link-value,
   .ct-unfold rect,
+  .cfg-node,
   .cfg-shape,
   .cfg-edge-line,
   .cfg-arrow,
