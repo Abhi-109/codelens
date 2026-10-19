@@ -1,0 +1,551 @@
+{
+  "async-await": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 10,
+    "exception": null,
+    "frames": 2,
+    "output": "42\n",
+    "status": "completed",
+    "steps": 4
+  },
+  "booleans": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 16,
+    "exception": null,
+    "frames": 1,
+    "output": "True\nFalse True\nTrue\n",
+    "status": "completed",
+    "steps": 6
+  },
+  "break-continue": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 36,
+    "exception": null,
+    "frames": 1,
+    "output": "1\n2\n4\n5\ndone\n",
+    "status": "completed",
+    "steps": 24
+  },
+  "call-chain": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 16,
+    "exception": null,
+    "frames": 3,
+    "output": "12\n",
+    "status": "completed",
+    "steps": 6
+  },
+  "class-basic": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 25,
+    "exception": null,
+    "frames": 2,
+    "output": "1\nRex ['sit']\n",
+    "status": "completed",
+    "steps": 11
+  },
+  "class-inheritance": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 23,
+    "exception": null,
+    "frames": 2,
+    "output": "Rex says woof\n",
+    "status": "completed",
+    "steps": 11
+  },
+  "class-property": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 22,
+    "exception": null,
+    "frames": 2,
+    "output": "5\n",
+    "status": "completed",
+    "steps": 12
+  },
+  "combo-class-loop-dict": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 35,
+    "exception": null,
+    "frames": 2,
+    "output": "15 ['Asha', 'Ravi']\n",
+    "status": "completed",
+    "steps": 19
+  },
+  "combo-exception-loop": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 38,
+    "exception": {
+      "message": "integer division or modulo by zero",
+      "type": "ZeroDivisionError"
+    },
+    "frames": 2,
+    "output": "5 2\n0 skipped\n2 5\n",
+    "status": "completed",
+    "steps": 16
+  },
+  "combo-nested-loop-call": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 32,
+    "exception": null,
+    "frames": 2,
+    "output": "25\n",
+    "status": "completed",
+    "steps": 20
+  },
+  "combo-recursion-list": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 22,
+    "exception": null,
+    "frames": 5,
+    "output": "15\n",
+    "status": "completed",
+    "steps": 10
+  },
+  "comprehension": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 22,
+    "exception": null,
+    "frames": 1,
+    "output": "[0, 1, 4, 9] [0, 8] ['a', 'b']\n",
+    "status": "completed",
+    "steps": 14
+  },
+  "dict-basics": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 11,
+    "exception": null,
+    "frames": 1,
+    "output": "11\n[('Asha', 12), ('Meera', 11), ('Ravi', 14)]\n",
+    "status": "completed",
+    "steps": 5
+  },
+  "dict-nested": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 11,
+    "exception": null,
+    "frames": 1,
+    "output": "['apple', 'pear'] 2\n",
+    "status": "completed",
+    "steps": 5
+  },
+  "error-division": {
+    "error_line": 2,
+    "error_phase": "runtime",
+    "error_type": "ZeroDivisionError",
+    "events": 16,
+    "exception": {
+      "message": "division by zero",
+      "type": "ZeroDivisionError"
+    },
+    "frames": 2,
+    "output": "3.0\n",
+    "status": "error",
+    "steps": 5
+  },
+  "error-index": {
+    "error_line": 3,
+    "error_phase": "runtime",
+    "error_type": "IndexError",
+    "events": 9,
+    "exception": {
+      "message": "list index out of range",
+      "type": "IndexError"
+    },
+    "frames": 1,
+    "output": "10\n",
+    "status": "error",
+    "steps": 3
+  },
+  "error-name": {
+    "error_line": 2,
+    "error_phase": "runtime",
+    "error_type": "NameError",
+    "events": 6,
+    "exception": {
+      "message": "name 'totl' is not defined",
+      "type": "NameError"
+    },
+    "frames": 1,
+    "output": "",
+    "status": "error",
+    "steps": 2
+  },
+  "error-syntax": {
+    "error_line": 1,
+    "error_phase": "compile",
+    "error_type": "SyntaxError",
+    "events": 1,
+    "exception": null,
+    "frames": 0,
+    "output": "",
+    "status": "error",
+    "steps": 0
+  },
+  "exception-caught": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 16,
+    "exception": null,
+    "frames": 2,
+    "output": "ok 5.0\nfinished\n",
+    "status": "completed",
+    "steps": 6
+  },
+  "exception-custom": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 22,
+    "exception": {
+      "message": "n is too big",
+      "type": "TooBig"
+    },
+    "frames": 2,
+    "output": "caught: n is too big\n",
+    "status": "completed",
+    "steps": 10
+  },
+  "for-loop": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 17,
+    "exception": null,
+    "frames": 1,
+    "output": "15\n",
+    "status": "completed",
+    "steps": 13
+  },
+  "function-args": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 15,
+    "exception": null,
+    "frames": 2,
+    "output": "Hi, Asha\nHello, Ravi\n",
+    "status": "completed",
+    "steps": 5
+  },
+  "function-basic": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 11,
+    "exception": null,
+    "frames": 2,
+    "output": "Hello, Asha\n",
+    "status": "completed",
+    "steps": 5
+  },
+  "function-star-args": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 15,
+    "exception": null,
+    "frames": 2,
+    "output": "6 ['a', 'b']\n",
+    "status": "completed",
+    "steps": 5
+  },
+  "generator": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 20,
+    "exception": null,
+    "frames": 2,
+    "output": "1\n2\n",
+    "status": "completed",
+    "steps": 8
+  },
+  "generator-delegates": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 26,
+    "exception": {
+      "message": "",
+      "type": "StopIteration"
+    },
+    "frames": 3,
+    "output": "['a', 'b', 'c']\n",
+    "status": "completed",
+    "steps": 7
+  },
+  "if-elif-else": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 9,
+    "exception": null,
+    "frames": 1,
+    "output": "B\n",
+    "status": "completed",
+    "steps": 5
+  },
+  "import-module": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 10,
+    "exception": null,
+    "frames": 1,
+    "output": "3\n4.0\n",
+    "status": "completed",
+    "steps": 4
+  },
+  "io-input": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 14,
+    "exception": null,
+    "frames": 1,
+    "output": "Your name? Asha\nHello Asha\ndone!",
+    "status": "completed",
+    "steps": 3
+  },
+  "io-print-options": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 13,
+    "exception": null,
+    "frames": 1,
+    "output": "one | two\nno newline...continues\n",
+    "status": "completed",
+    "steps": 3
+  },
+  "lambda-key": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 7,
+    "exception": null,
+    "frames": 1,
+    "output": "['a', 'bb', 'ccc']\n",
+    "status": "completed",
+    "steps": 3
+  },
+  "limit-output": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 6,
+    "exception": {
+      "message": "The program printed more than 10000 characters.",
+      "type": "_StopTrace"
+    },
+    "frames": 1,
+    "output": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "status": "output_limit",
+    "steps": 1
+  },
+  "limit-steps": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 402,
+    "exception": null,
+    "frames": 1,
+    "output": "",
+    "status": "step_limit",
+    "steps": 400
+  },
+  "limit-timeout": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 63,
+    "exception": null,
+    "frames": 1,
+    "output": "",
+    "status": "timeout",
+    "steps": 61
+  },
+  "list-basics": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 13,
+    "exception": null,
+    "frames": 1,
+    "output": "apple 2 cherry\n",
+    "status": "completed",
+    "steps": 5
+  },
+  "list-mutation": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 10,
+    "exception": null,
+    "frames": 1,
+    "output": "[99, 20]\n",
+    "status": "completed",
+    "steps": 6
+  },
+  "nested-loops": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 29,
+    "exception": null,
+    "frames": 1,
+    "output": "*/**/***/\n",
+    "status": "completed",
+    "steps": 25
+  },
+  "numbers": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 18,
+    "exception": null,
+    "frames": 1,
+    "output": "3 1 3.5 1024\n0.30000000000000004\n",
+    "status": "completed",
+    "steps": 6
+  },
+  "recursion": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 26,
+    "exception": null,
+    "frames": 6,
+    "output": "120\n",
+    "status": "completed",
+    "steps": 12
+  },
+  "recursion-mutual": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 39,
+    "exception": null,
+    "frames": 6,
+    "output": "True False\n",
+    "status": "completed",
+    "steps": 13
+  },
+  "scope-closure": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 14,
+    "exception": null,
+    "frames": 2,
+    "output": "7\n",
+    "status": "completed",
+    "steps": 6
+  },
+  "scope-global": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 15,
+    "exception": null,
+    "frames": 2,
+    "output": "2\n",
+    "status": "completed",
+    "steps": 7
+  },
+  "set-basics": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 16,
+    "exception": null,
+    "frames": 1,
+    "output": "True False\n[3, 4]\n[1, 2]\n",
+    "status": "completed",
+    "steps": 6
+  },
+  "strings": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 14,
+    "exception": null,
+    "frames": 1,
+    "output": "codelens\nCode has 4 letters\nLens\n",
+    "status": "completed",
+    "steps": 6
+  },
+  "ternary": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 7,
+    "exception": null,
+    "frames": 1,
+    "output": "4 is even\n",
+    "status": "completed",
+    "steps": 3
+  },
+  "tuple-unpack": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 12,
+    "exception": null,
+    "frames": 1,
+    "output": "4 3 7\n",
+    "status": "completed",
+    "steps": 4
+  },
+  "variables": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 18,
+    "exception": null,
+    "frames": 1,
+    "output": "Asha 12 1.52 True None\n",
+    "status": "completed",
+    "steps": 6
+  },
+  "while-loop": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 22,
+    "exception": null,
+    "frames": 1,
+    "output": "3\n2\n1\nLiftoff\n",
+    "status": "completed",
+    "steps": 12
+  }
+}
