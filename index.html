@@ -4,7 +4,27 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>codelens</title>
+    <meta name="description" content="CodeLens — see your code come to life. Watch any supported Python program run one step at a time: variables, calls, output and a plain-English explanation of every line." />
+    <title>CodeLens — See your code come to life</title>
+    <script>
+      // Set the theme before first paint so the page never flashes the wrong
+      // colours. Mirrors src/theme.js: stored choice, else OS preference,
+      // else light.
+      (function () {
+        try {
+          var stored = localStorage.getItem('codelens-theme');
+          var theme =
+            stored === 'dark' || stored === 'light'
+              ? stored
+              : window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light';
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

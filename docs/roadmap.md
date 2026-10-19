@@ -5,6 +5,23 @@ project is left in a runnable, demoable state after each task.
 
 ## Tier 1: Housekeeping
 
+- [x] Remove the unused `@dagrejs/dagre` dependency (the graph has been
+      hand-rolled since the rebuild)
+- [x] **Design tokens** (`src/styles/tokens.css`): colour, spacing, radius and
+      both themes in one file; `App.css` no longer hardcodes a single colour
+- [x] **Dark/light theme** with a toggle in the nav, persisted in
+      `localStorage` (`codelens-theme`), set before first paint so there is no
+      flash; falls back to the OS preference
+- [x] **Application shell**: shared nav with breadcrumbs, footer, and
+      loading / empty / error / 404 states (`src/shell/`)
+- [x] **Routing**: hand-rolled History-API router (no new dependency); all ten
+      routes resolve and survive refresh; `/visualizer/python` is the existing
+      playground, unchanged
+- [x] Landing page, language selection page (Python available, others marked
+      Coming Soon and unclickable), about page
+- [ ] Homepage preview driven by the real engine (lazy-loaded)
+- [ ] Learn lessons and docs pages
+
 - [x] Replace the Vite template `README.md` with a real one
 - [x] Add `.gitattributes` and normalize line endings to LF
 - [x] Add `docs/roadmap.md` (this file)
@@ -113,7 +130,8 @@ The biggest win for a beginner. No tracer or trace-format changes.
 - [x] `input()` support via a "Values for input()" box (one value per line; a
       program that asks for more than were given still ends in the real EOFError)
 - [ ] Friendly errors: type, message, line, and a "did you mean" suggestion for `NameError`
-- [ ] Light/dark theme, remembered in `localStorage`
+- [x] Light/dark theme, remembered in `localStorage` (done in Tier 1 alongside
+      the design tokens and app shell)
 - [x] Responsive layout: four panes on a laptop, tabs (Code / Explain / Graph /
       Panels) below 1280px, verified down to 375×667 with the current card on screen
 - [ ] Accessibility: focus rings, `aria-live` explanations, full keyboard use

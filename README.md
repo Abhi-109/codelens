@@ -78,7 +78,11 @@ CodeLens fixes both halves of that:
   what the code did). Every kind of step — printing, asking, failing, being stopped
   by a limit — gets an answer to "why is control here?". Jargon is explained at
   first use by a dismissible concept card, and a glossary drawer collects the terms.
-- **Works where beginners are** — phone and laptop, light and dark themes.
+- **Works where beginners are** — phone and laptop, light and dark themes, with
+  a theme toggle that is remembered and never flashes the wrong colours.
+- **A real site around it** — a landing page, a language picker, and docs,
+  learn and about pages behind one shared shell with breadcrumbs, a footer,
+  and loading / empty / error / 404 states.
 
 ## How it works
 
@@ -139,7 +143,7 @@ Three suites, all of which should pass on every commit:
 
 ```bash
 npm run test:tracer   # 95 Python tests: the tracer, the flowchart model and the corpus
-npm run test:js       # 144 JS tests: the graph, the teaching layer, the corpus again
+npm run test:js       # 162 JS tests: the graph, the teaching layer, the corpus, the router
 npm run lint          # oxlint
 npm run build         # production build
 ```
@@ -168,9 +172,23 @@ codelens/
 │   ├── graph-diagnosis.md  # why the old graph did not teach, and the rebuild plan
 │   ├── ui-diagnosis.md     # per-panel purpose, and the "line about to run" convention
 │   ├── flowchart-format.md # the textbook flowchart's node/edge contract
+│   ├── implementation-plan.md # the site build: audit, phases, and status
 │   └── roadmap.md          # what is built, what is next
 ├── src/
-│   ├── App.jsx             # the UI, including the inspector's five sections
+│   ├── main.jsx            # mounts the router and paints the stored theme
+│   ├── router.js           # route table + path matching (pure, tested)
+│   ├── router.jsx          # <Router> and <Link> over the History API
+│   ├── routerContext.js    # the context the shell and pages read
+│   ├── routes.jsx          # route name -> page component, plus <Site>
+│   ├── theme.js            # theme resolve / persist / toggle (pure part tested)
+│   ├── styles/tokens.css   # design tokens: colour, spacing, radius, both themes
+│   ├── index.css           # document base: type, focus ring, reduced motion
+│   ├── shell/
+│   │   ├── AppShell.jsx    # nav, theme toggle, breadcrumbs, footer
+│   │   ├── states.jsx      # loading, empty, error and 404 states
+│   │   └── shell.css
+│   ├── pages/              # one file per route (home, get-started, learn, ...)
+│   ├── App.jsx             # the Python visualizer UI (unchanged by the shell)
 │   ├── App.css
 │   ├── flowchart/
 │   │   ├── executionGraph.js    # the execution graph's node model (pure)
@@ -225,5 +243,7 @@ in [docs/scope.md](docs/scope.md).
 Working end to end, and teaching: the tracer runs the bundled examples plus a
 45-program corpus covering 32 categories of Python, and the UI replays any of
 them as an execution graph with per-step cards, a five-section inspector, and
-plain-English explanations for every kind of step. Built with React 19, Vite,
-and Pyodide.
+plain-English explanations for every kind of step. The playground now sits
+inside a real site — landing page, language picker, learn, docs and about —
+behind one shared shell with a remembered dark/light theme. Built with React
+19, Vite, and Pyodide.

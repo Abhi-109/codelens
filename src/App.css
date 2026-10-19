@@ -1,30 +1,25 @@
-/* The playground is one screen tall: the page itself never scrolls, and each
-   panel scrolls internally only when its own content is too long. */
-html,
-body,
-#root {
-  height: 100%;
-}
-
+/* The playground is one screen tall: it fills whatever area the shell gives
+   it, the page itself never scrolls, and each panel scrolls internally only
+   when its own content is too long. (html/body/#root sizing lives in
+   index.css, and colour tokens in styles/tokens.css.) */
 .app {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
   padding: 8px 10px;
   box-sizing: border-box;
   overflow: hidden;
 }
 
-header {
+.app > header {
   display: flex;
   align-items: baseline;
   gap: 12px;
   flex: none;
 }
 
-header h1 {
+.app > header h1 {
   font-size: 20px;
   letter-spacing: -0.5px;
   margin: 0;
@@ -44,18 +39,18 @@ header h1 {
 }
 
 .engine-ready {
-  color: #16a34a;
-  border-color: #16a34a;
+  color: var(--ok);
+  border-color: var(--ok);
 }
 
 .engine-loading {
-  color: #d97706;
-  border-color: #d97706;
+  color: var(--warn);
+  border-color: var(--warn);
 }
 
 .engine-failed {
-  color: #dc2626;
-  border-color: #dc2626;
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 /* Columns are sized in percentages so the splitter can remember them. The wide
@@ -258,7 +253,7 @@ header h1 {
   tab-size: 4;
 }
 
-button {
+.app button {
   font: inherit;
   font-size: 14px;
   padding: 6px 12px;
@@ -269,11 +264,11 @@ button {
   cursor: pointer;
 }
 
-button:hover:not(:disabled) {
+.app button:hover:not(:disabled) {
   border-color: var(--accent-border);
 }
 
-button:disabled {
+.app button:disabled {
   opacity: 0.45;
   cursor: default;
 }
@@ -281,7 +276,7 @@ button:disabled {
 .run {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
@@ -299,20 +294,20 @@ button:disabled {
 
 .status-error,
 .status-engine_error {
-  color: #dc2626;
-  border-color: #dc2626;
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .status-step_limit,
 .status-timeout,
 .status-output_limit {
-  color: #d97706;
-  border-color: #d97706;
+  color: var(--warn);
+  border-color: var(--warn);
 }
 
 .status-completed {
-  color: #16a34a;
-  border-color: #16a34a;
+  color: var(--ok);
+  border-color: var(--ok);
 }
 
 .code-view {
@@ -363,13 +358,13 @@ button:disabled {
 
 /* The line the program broke on, so a failure points at itself. */
 .code-line.code-error {
-  box-shadow: inset 3px 0 0 #dc2626;
-  background: rgb(220 38 38 / 8%);
+  box-shadow: inset 3px 0 0 var(--danger);
+  background: var(--danger-bg);
 }
 
 .code-line.code-error .code-mark,
 .code-line.code-error .code-text {
-  color: #dc2626;
+  color: var(--danger);
 }
 
 .code-mark {
@@ -414,7 +409,7 @@ button:disabled {
   padding: 0 6px;
   border-radius: 6px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -494,7 +489,7 @@ button:disabled {
 .error-inline {
   margin: 8px 0 0;
   font-size: 13px;
-  color: #dc2626;
+  color: var(--danger);
 }
 
 .concept-card {
@@ -782,7 +777,7 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-md);
 }
 
 .dev-check {
@@ -1075,7 +1070,7 @@ button.flow-line:disabled {
   color: var(--text-h);
   font-size: 12px;
   line-height: 1.45;
-  box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
+  box-shadow: var(--shadow-md);
 }
 
 /* The before/after switch over the highlighted line. */
@@ -1198,8 +1193,8 @@ button.flow-line:disabled {
 }
 
 .tag-changed {
-  border-color: #d97706;
-  color: #d97706;
+  border-color: var(--warn);
+  color: var(--warn);
 }
 
 .preview {
@@ -1332,7 +1327,7 @@ button.flow-line:disabled {
 
 .call-return {
   font-size: 11px;
-  color: #14b8a6;
+  color: var(--teal);
 }
 
 .object-wrap {
@@ -1550,7 +1545,7 @@ h3 {
   border: 1px solid var(--accent-border);
   border-radius: 8px;
   background: var(--bg);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-md);
   pointer-events: none;
 }
 
@@ -1583,7 +1578,7 @@ h3 {
   border: 1px solid var(--accent-border);
   border-radius: 10px;
   background: var(--bg);
-  box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
+  box-shadow: var(--shadow-md);
   cursor: default;
 }
 
@@ -1680,55 +1675,30 @@ h3 {
 }
 
 /* Each call gets its own stripe colour, so its cards read as one unit:
-   the arguments it was given, its lines, and what it handed back. */
+   the arguments it was given, its lines, and what it handed back. The colours
+   themselves live in the tokens, one set per theme. */
 .exec-call-0 {
-  --call-colour: #aa3bff;
+  --call-colour: var(--call-0);
 }
 
 .exec-call-1 {
-  --call-colour: #0d9488;
+  --call-colour: var(--call-1);
 }
 
 .exec-call-2 {
-  --call-colour: #c2410c;
+  --call-colour: var(--call-2);
 }
 
 .exec-call-3 {
-  --call-colour: #2563eb;
+  --call-colour: var(--call-3);
 }
 
 .exec-call-4 {
-  --call-colour: #db2777;
+  --call-colour: var(--call-4);
 }
 
 .exec-call-5 {
-  --call-colour: #15803d;
-}
-
-@media (prefers-color-scheme: dark) {
-  .exec-call-0 {
-    --call-colour: #c084fc;
-  }
-
-  .exec-call-1 {
-    --call-colour: #4fd1c5;
-  }
-
-  .exec-call-2 {
-    --call-colour: #fbbf24;
-  }
-
-  .exec-call-3 {
-    --call-colour: #93c5fd;
-  }
-
-  .exec-call-4 {
-    --call-colour: #f9a8d4;
-  }
-
-  .exec-call-5 {
-    --call-colour: #86efac;
-  }
+  --call-colour: var(--call-5);
 }
 
 .exec-card-where {
@@ -1827,20 +1797,20 @@ h3 {
 }
 
 .exec-edge-call .exec-edge-line {
-  stroke: #8b5cf6;
+  stroke: var(--edge-call);
 }
 
 .exec-edge-return .exec-edge-line {
-  stroke: #14b8a6;
+  stroke: var(--edge-return);
 }
 
 .exec-edge-back .exec-edge-line {
-  stroke: #ca8a04;
+  stroke: var(--edge-back);
   stroke-dasharray: 5 4;
 }
 
 .exec-edge-error .exec-edge-line {
-  stroke: #dc2626;
+  stroke: var(--edge-error);
   stroke-dasharray: 2 3;
 }
 
@@ -1855,19 +1825,19 @@ h3 {
 }
 
 .exec-arrow-call {
-  fill: #8b5cf6;
+  fill: var(--edge-call);
 }
 
 .exec-arrow-return {
-  fill: #14b8a6;
+  fill: var(--edge-return);
 }
 
 .exec-arrow-back {
-  fill: #ca8a04;
+  fill: var(--edge-back);
 }
 
 .exec-arrow-error {
-  fill: #dc2626;
+  fill: var(--edge-error);
 }
 
 /* Advanced mode labels the long wires saying why control moved. */
@@ -1926,7 +1896,7 @@ h3 {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 18%);
+  box-shadow: var(--shadow-md);
   text-align: left;
 }
 
@@ -1970,20 +1940,20 @@ h3 {
 }
 
 .exec-legend .exec-legend-call::before {
-  border-color: #8b5cf6;
+  border-color: var(--edge-call);
 }
 
 .exec-legend .exec-legend-return::before {
-  border-color: #14b8a6;
+  border-color: var(--edge-return);
 }
 
 .exec-legend .exec-legend-back::before {
-  border-color: #ca8a04;
+  border-color: var(--edge-back);
   border-top-style: dashed;
 }
 
 .exec-legend .exec-legend-error::before {
-  border-color: #dc2626;
+  border-color: var(--edge-error);
   border-top-style: dotted;
 }
 

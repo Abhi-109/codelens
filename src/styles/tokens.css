@@ -1,0 +1,134 @@
+/* Design tokens: the single source of truth for colour, spacing, radius and
+   type. Components below this file never name a raw colour.
+
+   The theme is the `data-theme` attribute on <html> — "dark" or "light" — set
+   by the boot script in index.html before first paint, then kept in step by
+   src/theme.js. :root alone is the light default, so a browser without the
+   attribute still gets a finished theme rather than a broken half-state. */
+
+:root {
+  /* 4px spacing scale. Every gap in the app is one of these. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, Consolas, monospace;
+
+  /* Subtle borders, not heavy shadows. Shadows only for things that float. */
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 6%);
+  --shadow-md: 0 8px 24px rgb(15 23 42 / 10%);
+
+  --dur-fast: 120ms;
+  --dur-med: 200ms;
+}
+
+/* --- Light (default) ------------------------------------------------------ */
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f6f7fc;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --border: #e3e6f0;
+  --border-strong: #c9cede;
+
+  /* Names the playground already uses, retuned to this palette. */
+  --text: #5b6478;
+  --text-h: #0f172a;
+  --accent: #3b5bff;
+  --accent-bg: rgb(59 91 255 / 8%);
+  --accent-border: rgb(59 91 255 / 35%);
+  --code-bg: #f1f3fa;
+
+  /* Accents. */
+  --teal: #14b8a6;
+  --violet: #7c3aed;
+
+  /* Status. Kept dark enough to read on a white surface. */
+  --ok: #16a34a;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --danger-bg: rgb(220 38 38 / 7%);
+
+  /* Text on top of the accent colour. */
+  --on-accent: #ffffff;
+
+  /* Execution-graph edge colours, by meaning. */
+  --edge-call: #8b5cf6;
+  --edge-return: #14b8a6;
+  --edge-back: #ca8a04;
+  --edge-error: #dc2626;
+
+  /* One colour per call depth, so nested calls can be told apart. */
+  --call-0: #aa3bff;
+  --call-1: #0d9488;
+  --call-2: #c2410c;
+  --call-3: #2563eb;
+  --call-4: #db2777;
+  --call-5: #15803d;
+
+  --focus: #3b5bff;
+}
+
+/* --- Dark ----------------------------------------------------------------- */
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0a0f1e;
+  --surface: #111827;
+  --raised: #151e32;
+  --border: #1f2a44;
+  --border-strong: #2c3a5c;
+
+  --text: #8e99b4;
+  --text-h: #e8ecf8;
+  --accent: #2f6bff;
+  --accent-bg: rgb(47 107 255 / 12%);
+  --accent-border: rgb(47 107 255 / 45%);
+  --code-bg: #0d1424;
+
+  --teal: #22d3c5;
+  --violet: #8b5cf6;
+
+  /* Status on a dark surface: lighter tints, same meanings. */
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --danger-bg: rgb(248 113 113 / 10%);
+
+  --on-accent: #ffffff;
+
+  --edge-call: #8b5cf6;
+  --edge-return: #22d3c5;
+  --edge-back: #fbbf24;
+  --edge-error: #f87171;
+
+  /* The same six call colours, lifted for a dark surface. */
+  --call-0: #c084fc;
+  --call-1: #4fd1c5;
+  --call-2: #fbbf24;
+  --call-3: #93c5fd;
+  --call-4: #f9a8d4;
+  --call-5: #86efac;
+
+  --focus: #6b9bff;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-md: 0 8px 24px rgb(0 0 0 / 45%);
+}
