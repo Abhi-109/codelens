@@ -375,18 +375,134 @@ function MemoryPanel({ ctx }) {
   );
 }
 
+const OUTCOME_LABELS = {
+  handled: "Handled",
+  uncaught: "Uncaught",
+  raised: "Raised",
+};
+
+function OutputRuns({ segments, onJump, future = false }) {
+  return segments.map((segment) => (
+    <button
+      key={segment.at}
+      type="button"
+      className="output-chunk"
+      onClick={() => onJump(segment.at)}
+      title={`Step ${segment.at + 1}${segment.line ? `, line ${segment.line}` : ""}`}
+      aria-label={`Jump to step ${segment.at + 1}, which printed: ${
+        segment.text.replace(/\s+/g, " ").trim().slice(0, 80) || "(whitespace)"
+      }`}
+      data-future={future ? "true" : undefined}
+    >
+      {segment.text}
+    </button>
+  ));
+}
+
+function InputLog({ entries, onJump, future = false }) {
+  return (
+    <ul className="input-log" aria-label={future ? "Later input" : "Input supplied"}>
+      {entries.map((entry) => (
+        <li key={entry.index}>
+          <button type="button" className="ghost" onClick={() => onJump(entry.index)}>
+            Step {entry.index + 1}
+            {entry.line ? ` · line ${entry.line}` : ""}
+          </button>
+          <span className="input-prompt">{entry.prompt || "(no prompt)"}</span>
+          <span aria-hidden="true">→</span>
+          <code>{entry.value}</code>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ErrorLog({ entries, onJump }) {
+  return (
+    <ul className="error-log">
+      {entries.map((entry) => (
+        <li key={`${entry.event}-${entry.index}-${entry.type}`}>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => onJump(entry.index)}
+            disabled={entry.index == null}
+          >
+            {entry.index == null ? "No step" : `Step ${entry.index + 1}`}
+          </button>
+          <strong>{entry.type}</strong>
+          {entry.line ? <span>line {entry.line}</span> : null}
+          <span className="error-message">{entry.message || "(no message recorded)"}</span>
+          <span className="cmp-outcome" data-outcome={entry.outcome}>
+            {OUTCOME_LABELS[entry.outcome] ?? entry.outcome}
+          </span>
+          {entry.recorded === false ? (
+            <span className="cmp-note">reported by the run, no separate trace event</span>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function OutputPanel({ ctx }) {
-  const { output } = ctx;
+  const { output, jumpTo } = ctx;
+  const futureChars = output.futureText.length;
   return (
     <>
       <PanelHead
         title="Output"
-        hint="What the program printed."
-        help="print() shows text here. It never changes a variable."
+        hint="What the program printed, up to this step."
+        help="Only output at or before the highlighted step is shown in the console. Output that comes later is folded away under a clear 'not run yet' heading. Input prompts and values and any errors are listed separately, and every row jumps to the trace step it came from."
       />
-      <pre className="output">
-        {output || <span className="empty">(nothing printed yet)</span>}
-      </pre>
+
+      <div className="output-console" aria-label="Output printed up to the current step">
+        {output.pastSegments.length > 0 ? (
+          <OutputRuns segments={output.pastSegments} onJump={jumpTo} />
+        ) : (
+          <span className="empty">(nothing printed yet)</span>
+        )}
+      </div>
+
+      {output.futureSegments.length > 0 ? (
+        <details className="output-later">
+          <summary>
+            Later output — not run yet ({output.futureSegments.length} printed run
+            {output.futureSegments.length === 1 ? "" : "s"}, {futureChars} characters)
+          </summary>
+          <div className="output-console later" aria-label="Later recorded output">
+            <OutputRuns segments={output.futureSegments} onJump={jumpTo} future />
+          </div>
+        </details>
+      ) : null}
+
+      {output.inputs.length > 0 ? (
+        <section className="output-section" aria-labelledby="output-input-title">
+          <h4 id="output-input-title">Input supplied</h4>
+          <InputLog entries={output.inputs} onJump={jumpTo} />
+        </section>
+      ) : null}
+
+      {output.futureInputs.length > 0 ? (
+        <details className="output-later">
+          <summary>Later input ({output.futureInputs.length})</summary>
+          <InputLog entries={output.futureInputs} onJump={jumpTo} future />
+        </details>
+      ) : null}
+
+      {output.errors.length > 0 ? (
+        <section className="output-section" aria-labelledby="output-error-title">
+          <h4 id="output-error-title">Errors</h4>
+          <ErrorLog entries={output.errors} onJump={jumpTo} />
+        </section>
+      ) : null}
+
+      {output.futureErrors.length > 0 ? (
+        <details className="output-later">
+          <summary>Later errors ({output.futureErrors.length})</summary>
+          <ErrorLog entries={output.futureErrors} onJump={jumpTo} />
+        </details>
+      ) : null}
     </>
   );
 }

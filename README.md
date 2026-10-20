@@ -55,7 +55,7 @@ CodeLens fixes both halves of that:
 - **Function calls** — each call on the stack with its arguments and the line that
   called it; click one to see that call's own variables and jump to where it
   started, and a finished call shows what it returned and to which line.
-- **Three canvases, one run** — the Visualize pane offers a strip of drawings,
+- **Four canvases, one run** — the Visualize pane offers a strip of drawings,
   and every one of them is a window onto the *same* execution: switching canvas
   carries the step, the playing state and the speed through untouched.
   - **Call tree** — every call the program made, nested under the call that made
@@ -83,6 +83,17 @@ CodeLens fixes both halves of that:
     whole history. It draws the inspector's *own* panels, fed the inspector's own
     step view, so the two sides cannot disagree — and choosing between them, or
     switching canvas away and back, leaves the step where it was.
+  - **Timeline** — one table row per *real* trace step: Step, Line, Event, Code,
+    Variables and Output. It is virtualised, so a 1,500-step run still draws about
+    thirty rows; the current row is highlighted and scrolled into view, and
+    clicking any row jumps to exactly that step. Event labels separate ordinary
+    lines, calls, returns, changes, branches, loops, input, output and errors, and
+    **Only changes** never hides the step being played. **Compare steps** opens two
+    independent endpoints without moving playback: variables are marked Added,
+    Removed, Changed or Unchanged (or "Not comparable" when a different frame owns
+    the name), nested lists/dicts are matched by the trace's own object ids, and
+    the panel also compares call-stack depth, output, input and errors. Equal,
+    reversed, empty and out-of-range endpoints are handled explicitly.
   - Fit, zoom, pan, follow, expand and a "How to read this" legend behave the same
     on every canvas, on a laptop and on a phone, and honour reduced motion. From
     the keyboard, arrow keys pan, `+`/`-` zoom, `0` resets and `F` fits; tabbing
@@ -94,9 +105,12 @@ CodeLens fixes both halves of that:
 - **Inspector in five sections** — A this step (line, plain English, why), B
   variables (values, scope, changes), C execution flow (before / now / next with
   reasons), D calls and returns (arguments, locals, waiting calls, returned value
-  and its destination), E output. Trace internals sit behind a disclosure that
-  Advanced mode opens. If one section cannot render, it says so and the rest keep
-  working.
+  and its destination), E output. The output console keeps the program's exact
+  spaces and line breaks, folds later output behind a clear "not run yet" heading,
+  and lists the real input prompts/values and any handled or uncaught errors with
+  a jump back to the step that recorded them. Trace internals sit behind a
+  disclosure that Advanced mode opens. If one section cannot render, it says so
+  and the rest keep working.
 - **Code panel that reads itself** — long lines wrap, the next line wears a `▶`,
   the line that just ran keeps a faint mark, the highlighted line shows its result
   inline (`x = 5` → `10`), and hovering a name shows its current value. A program
@@ -137,16 +151,19 @@ src/tracer/              reads the JSON in the browser
     └── objects.js        builds the object diagrams and reference edges
     │
     ▼
-src/flowchart/           draws the same trace three ways
-    ├── callTree.js, callTreeLayout.js canvas 1: the calls this run made, nested
+src/flowchart/           draws the same trace as a call tree or a flowchart
+    ├── callTree.js, callTreeLayout.js the calls this run made, nested
     ├── mapTrace.js, layout.js         the format-2 chart, laid out with no dependency
-    ├── controlFlow.js, shapes.jsx     canvas 2: a trace step -> a shape, an arrow, a branch
-    └── viewport.js                    fit / zoom / pan maths, shared by all three (pure)
+    ├── controlFlow.js, shapes.jsx     a trace step -> a shape, an arrow, a branch
+    └── viewport.js                    fit / zoom / pan maths, shared by both (pure)
     │
     ▼
 src/visualizer/          the workspace beside the canvas
     ├── Inspector.jsx     six tabbed sections (Explain…History), real ARIA tabs
     ├── PlaybackBar.jsx   stepping, timeline, speed, and the Developer menu
+    ├── TimelinePane.jsx, timeline.js the virtualised step table and its pure rows
+    ├── StepComparison.jsx, compare.js the two-step diff and its endpoint state
+    ├── output.js         exact past/later output, input prompts and error entries
     ├── playback.js       milliseconds per step, plus the saved preference
     ├── learningMode.js   what Beginner / Advanced / Textbook are allowed to change
     ├── workspace.js      step clamping and tab selection, so they cannot tangle
@@ -182,10 +199,11 @@ Three suites, all of which should pass on every commit:
 
 ```bash
 npm run test:tracer   # 95 Python tests: the tracer, the flowchart model and the corpus
-npm run test:js       # 315 JS tests: the call tree and control flow model and layout, the
+npm run test:js       # 338 JS tests: the call tree and control flow model and layout, the
                       # graph, the teaching layer, the corpus, the router, the homepage
                       # preview, the language picker, the workspace modules, variable
-                      # history and the design tokens' contrast
+                      # history, the timeline and comparison helpers, output/input/error
+                      # entries, and the design tokens' contrast
 npm run lint          # oxlint
 npm run build         # production build
 ```

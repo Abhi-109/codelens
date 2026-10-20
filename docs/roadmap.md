@@ -300,10 +300,11 @@ Out of scope for version 1 — see [scope.md](scope.md) for the full list.
 ## Status
 
 Tier 1 is done. The recorder, tracer, teaching layer and object diagrams work
-end to end, and the visualization is now **three canvases over one trace**
+end to end, and the visualization is now **four canvases over one trace**
 (rebuild stages 1-5, above): a **call tree** by default, a **control flow
-graph** laid out deterministically with no layout dependency, and a **combined
-view** that puts the tree beside the live stack or variables. The old
+graph** laid out deterministically with no layout dependency, a **combined
+view** that puts the tree beside the live stack or variables, and a virtualised
+**timeline** with one row per recorded step. The old
 execution-graph card timeline was retired along with its component; its pure
 mapping utilities (`executionGraph.js`, `layoutGraph.js`, `nodeBody.js`,
 `reasons.js`) are kept and still feed the step view. The textbook flowchart is
@@ -318,9 +319,27 @@ sits in a single bar under all three panes. The **Beginner / Advanced /
 Textbook** control that used to sit above the graph now lives in the top bar,
 so it reaches every pane; it changes explanation level and technical detail
 for the whole workspace, never the trace itself. This workspace is Phase A of
-an approved redesign, the richer Variables, Call Stack and Memory views are
-Phase B, and the large-run, value and keyboard-navigation pass is Phase C; the
-later phases are waiting on review.
+an approved redesign; the richer Variables, Call Stack and Memory views are
+Phase B, the large-run, value and keyboard-navigation pass is Phase C, and
+Phase D adds the timeline, two-step comparison and the output/input/error pass.
+
+Phase D's timeline is pure rows over the real trace (Step, Line, Event, Code,
+Variables, Output), virtualised at a fixed height and filtered by **Only
+changes** without ever hiding the current step. Comparison lives in the
+Timeline pane, keeps its own two endpoints and open flag, and never moves
+playback. It compares top-frame variables and scopes, nested objects by the
+trace's stable object ids, call-stack depth/frames, output, and the input and
+error events between the endpoints. Equal, reversed, empty, incomplete and
+out-of-range endpoints are explicit; an object missing from the later snapshot
+is labelled "Only baseline", not destroyed. The Output inspector now keeps
+exact output text, folds later output separately, and lists real prompts,
+submitted values and handled/uncaught errors with jump targets.
+
+Deliberately deferred: collapsing repeated loop rounds ("rounds 2 to 9 are
+similar"), a live "waiting for input" state (inputs are still supplied before
+the run), and reconstructing state between recorded steps. A trace only exposes
+the state its recorded steps carry, so the comparison says "Not comparable"
+rather than inventing more.
 
 Breadth is proven rather than claimed: `tracer-poc/corpus.py` holds ~45 programs
 across 32 categories of Python, `test_corpus.py` checks the tracer against them
@@ -335,7 +354,7 @@ visualizer uses, so every value on it comes from the engine, and the language
 grid marks Python as the only card that opens anything
 (`src/pages/preview.js`, `src/pages/languages.js`, both tested).
 
-All suites pass: 95 Python tests, 315 JS tests, plus lint and a production
+All suites pass: 95 Python tests, 338 JS tests, plus lint and a production
 build. Two opt-in checks need a local Pyodide install: `npm run test:pyodide`
 and `npm run check:explain`. What remains on A3 is debounced generation; see the
 roadmap above for the rest.

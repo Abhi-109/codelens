@@ -37,7 +37,7 @@ function storeWith(values = {}, { throws = false } = {}) {
 test("every offered canvas has a name and a plain-English blurb", () => {
   assert.deepEqual(
     VIZ_MODES,
-    ["tree", "flow", "combined"],
+    ["tree", "flow", "combined", "timeline"],
     "Call tree is the canvas a fresh run opens on",
   );
   assert.equal(DEFAULT_VIZ, "tree");

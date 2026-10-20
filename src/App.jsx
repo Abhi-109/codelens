@@ -9,7 +9,16 @@ import CombinedView from "./visualizer/CombinedView.jsx";
 import Inspector from "./visualizer/Inspector.jsx";
 import PlaybackBar from "./visualizer/PlaybackBar.jsx";
 import CallTree from "./visualizer/CallTree.jsx";
+import TimelinePane from "./visualizer/TimelinePane.jsx";
 import VisualizationPane from "./visualizer/VisualizationPane.jsx";
+import { outputView } from "./visualizer/output.js";
+import {
+  closeComparison,
+  initialComparison,
+  openComparison,
+  setComparisonEndpoint,
+  swapComparison,
+} from "./visualizer/compare.js";
 import { DEFAULT_SPEED, isSpeed, loadSpeed, playbackIntervalMs, saveSpeed } from "./visualizer/playback.js";
 import {
   LEARNING_MODES,
@@ -199,6 +208,10 @@ export default function App() {
   const [resizing, setResizing] = useState(false);
   const [selectedCall, setSelectedCall] = useState(null);
   const [watched, setWatched] = useState(null);
+  // Comparison mode owns only its two endpoints and whether it is open. The
+  // playback step stays in `index`, so opening or changing a comparison can
+  // never move the run.
+  const [comparison, setComparison] = useState(initialComparison);
   const [showAfter, setShowAfter] = useState(false);
   const [inputsText, setInputsText] = useState("");
   const [dismissed, setDismissed] = useState(() => new Set());
@@ -279,15 +292,8 @@ export default function App() {
     [view],
   );
 
-  const output = useMemo(
-    () =>
-      trace
-        .slice(0, index + 1)
-        .filter((event) => event.event === "output")
-        .map((event) => event.text)
-        .join(""),
-    [trace, index],
-  );
+  const output = useMemo(() => outputView(trace, index, result), [trace, index, result]);
+  const outputText = output.pastText;
 
   // The raw coordinates of this step, offered only through the Developer menu.
   // They come from the same view every panel reads, so they can never describe
@@ -305,9 +311,9 @@ export default function App() {
       { label: "depth", value: String(Math.max(view.frames.length - 1, 0)) },
       { label: "graph node", value: view.nodeId ?? "—" },
       { label: "heap objects", value: String(Object.keys(view.before?.heap ?? {}).length) },
-      { label: "printed so far", value: `${output.length} characters` },
+      { label: "printed so far", value: `${outputText.length} characters` },
     ],
-    [view, index, trace.length, output],
+    [view, index, trace.length, outputText],
   );
 
   const line = view.line;
@@ -347,6 +353,15 @@ export default function App() {
     setPlaying(false);
     setIndex(clampStep(i, trace.length));
   };
+
+  // Comparison handlers touch only the comparison state. None of them calls
+  // `jumpTo`, so choosing endpoints leaves the playback position alone.
+  const startComparison = () => setComparison((state) => openComparison(state, index, trace.length));
+  const stopComparison = () => setComparison((state) => closeComparison(state));
+  const changeEndpoint = (which, value) =>
+    setComparison((state) => setComparisonEndpoint(state, which, value, trace.length));
+  const swapEndpoints = () => setComparison((state) => swapComparison(state));
+  const useCurrentAsEndpoint = (which) => changeEndpoint(which, index);
 
   // Clicking a call selects its own variables and jumps to where it started.
   const jumpToCall = (frameId) => {
@@ -388,6 +403,7 @@ export default function App() {
       setEditing(false);
       setSelectedCall(null);
       setWatched(null);
+      setComparison(initialComparison());
       setDismissed(new Set());
     } catch (error) {
       setResult({
@@ -435,6 +451,9 @@ export default function App() {
       }
       const tag = event.target?.tagName;
       if (tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT") return;
+      // Space on a focused button already performs that button's action. If the
+      // workspace also toggled playback, one key press would do two things.
+      if (event.key === " " && event.target?.closest?.("button, a[href], summary, [role='button']")) return;
       // A tab strip owns its arrow keys. Stealing them here would move the
       // program at the same moment as the tab, which is precisely the thing
       // this workspace must never do.
@@ -722,6 +741,19 @@ export default function App() {
                     ? "There is nothing to draw: the code has a syntax error, so it never ran."
                     : null
                 }
+              />
+            ) : viz === "timeline" ? (
+              <TimelinePane
+                trace={trace}
+                source={source}
+                index={index}
+                onJump={jumpTo}
+                compareState={comparison}
+                onOpenCompare={startComparison}
+                onCloseCompare={stopComparison}
+                onChangeEndpoint={changeEndpoint}
+                onSwapEndpoints={swapEndpoints}
+                onUseCurrent={useCurrentAsEndpoint}
               />
             ) : (
               <CallTree

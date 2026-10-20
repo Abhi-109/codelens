@@ -14,7 +14,7 @@
  */
 
 /** Every canvas the workspace can draw, in the order they are offered. */
-export const VIZ_MODES = ["tree", "flow", "combined"];
+export const VIZ_MODES = ["tree", "flow", "combined", "timeline"];
 
 export const DEFAULT_VIZ = "tree";
 export const VIZ_STORAGE_KEY = "codelens-viz";
@@ -23,12 +23,14 @@ export const VIZ_LABELS = {
   tree: "Call tree",
   flow: "Control flow",
   combined: "Combined",
+  timeline: "Timeline",
 };
 
 export const VIZ_BLURBS = {
   tree: "Every call the program made, nested under the call that made it",
   flow: "The decision shapes the code has, with the path this run took lit up",
   combined: "The call tree beside the stack and the variables of the current step",
+  timeline: "Every recorded step in order, with its line, values and output",
 };
 
 /** True when `value` names a canvas this build actually has. */

@@ -3067,6 +3067,698 @@ h3 {
   }
 }
 
+/* --- Execution timeline and step comparison ------------------------------ */
+
+.tl-root {
+  gap: 8px;
+  padding: 8px;
+  overflow: hidden;
+}
+
+.tl-controls {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tl-summary {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.tl-summary strong {
+  color: var(--text-h);
+}
+
+.tl-filter,
+.tl-compare {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tl-compare[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.tl-filter input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.tl-table {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 160px;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.tl-head,
+.tl-row {
+  display: grid;
+  grid-template-columns:
+    44px 40px 82px minmax(100px, 1.35fr) minmax(80px, 1fr)
+    minmax(70px, 0.85fr);
+  align-items: center;
+  min-width: 0;
+}
+
+.tl-head {
+  flex: none;
+  min-height: 27px;
+  border-bottom: 1px solid var(--border);
+  background: var(--code-bg);
+  color: var(--text-h);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.tl-head span,
+.tl-cell {
+  min-width: 0;
+  padding: 0 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.tl-spacer {
+  position: relative;
+  min-width: 100%;
+}
+
+.tl-row {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 34px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.tl-row:hover {
+  background: var(--accent-bg);
+}
+
+.tl-row.current {
+  background: var(--accent-bg);
+  box-shadow: inset 3px 0 0 var(--accent);
+  color: var(--text-h);
+}
+
+.tl-row:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.tl-step-cell {
+  padding-left: 2px;
+}
+
+.tl-step {
+  min-width: 30px;
+  padding: 1px 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.tl-row.current .tl-step {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.tl-step:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.tl-line,
+.tl-code,
+.tl-vars,
+.tl-output {
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+
+.tl-line {
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-kind {
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.tl-kind-call {
+  border-color: var(--violet);
+  color: var(--violet);
+}
+
+.tl-kind-return {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.tl-kind-mutation,
+.tl-kind-output,
+.tl-kind-input {
+  border-color: var(--copper);
+  color: var(--copper);
+}
+
+.tl-kind-branch,
+.tl-kind-loop {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.tl-kind-error {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.cmp {
+  flex: none;
+  max-height: min(42vh, 360px);
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.cmp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cmp-head h4 {
+  margin: 0;
+  color: var(--text-h);
+  font-size: 13px;
+}
+
+.cmp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.cmp-actions button,
+.cmp-form button {
+  font-size: 11px;
+  padding: 2px 7px;
+}
+
+.cmp-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 8px 0;
+}
+
+.cmp-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-h);
+  font-size: 11.5px;
+}
+
+.cmp-field label {
+  font-weight: 600;
+}
+
+.cmp-field input {
+  width: 68px;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+}
+
+.cmp-endpoints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 16px;
+  margin: 0 0 4px;
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.cmp-warning {
+  margin: 6px 0 0;
+  padding: 7px 9px;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.cmp-report {
+  min-width: 0;
+}
+
+.cmp-block {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.cmp-block h5 {
+  margin: 0 0 3px;
+  color: var(--text-h);
+  font-size: 12px;
+}
+
+.cmp-block summary {
+  color: var(--text-h);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cmp-same {
+  margin: 2px 0;
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.cmp-table {
+  width: 100%;
+  margin-top: 5px;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.cmp-table th,
+.cmp-table td {
+  padding: 3px 5px;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+  text-align: left;
+  vertical-align: top;
+}
+
+.cmp-table thead th {
+  color: var(--text);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.cmp-table tr[data-status="changed"] {
+  background: var(--accent-bg);
+}
+
+.cmp-table tr[data-status="added"] .cmp-status {
+  color: var(--ok);
+}
+
+.cmp-table tr[data-status="removed"] .cmp-status,
+.cmp-table tr[data-status="only-baseline"] .cmp-status {
+  color: var(--warn);
+}
+
+.cmp-table tr[data-status="unavailable"] .cmp-status {
+  color: var(--text);
+  font-style: italic;
+}
+
+.cmp-value,
+.cmp-missing {
+  color: var(--text-h);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  overflow-wrap: anywhere;
+}
+
+.cmp-missing {
+  color: var(--text);
+  font-family: inherit;
+  font-style: italic;
+}
+
+.cmp-type {
+  display: block;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+
+.cmp-status {
+  font-weight: 600;
+}
+
+.cmp-note {
+  display: block;
+  color: var(--warn);
+  font-size: 9.5px;
+  font-weight: 400;
+}
+
+.cmp-stack-pair,
+.cmp-output-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.cmp-label {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--text);
+  font-size: 9.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.cmp-frames {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.cmp-frame {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  max-width: 100%;
+  padding: 1px 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-h);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+
+.cmp-frame-depth {
+  color: var(--text);
+  font-size: 9px;
+}
+
+.cmp-delta {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.cmp-output {
+  max-height: 130px;
+  margin: 3px 0 0;
+  padding: 6px 7px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--code-bg);
+  color: var(--text-h);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cmp-output.added {
+  border-color: var(--ok);
+}
+
+.cmp-output.removed {
+  border-color: var(--danger);
+}
+
+.cmp-events {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cmp-events li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.cmp-events code {
+  color: var(--text-h);
+}
+
+.cmp-outcome {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.cmp-outcome[data-outcome="handled"] {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.cmp-outcome[data-outcome="uncaught"] {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.cmp-outcome[data-outcome="raised"] {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+/* --- Output inspector: exact console, input log and errors --------------- */
+
+.output-console {
+  max-height: 260px;
+  padding: 9px 10px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--code-bg);
+  color: var(--text-h);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.output-console.later {
+  max-height: 180px;
+  border-style: dashed;
+}
+
+.output-chunk {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+
+.output-chunk:hover {
+  background: var(--accent-bg);
+}
+
+.output-chunk:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.output-chunk[data-future="true"] {
+  color: var(--text);
+}
+
+.output-later {
+  margin-top: 7px;
+  font-size: 12px;
+}
+
+.output-later > summary {
+  width: fit-content;
+  padding: 2px 0;
+  color: var(--text-h);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.output-section {
+  margin-top: 11px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.output-section h4 {
+  margin: 0 0 5px;
+  color: var(--text-h);
+  font-size: 12px;
+}
+
+.input-log,
+.error-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.input-log li,
+.error-log li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.input-log li:last-child,
+.error-log li:last-child {
+  border-bottom: 0;
+}
+
+.input-log button,
+.error-log button {
+  flex: none;
+  padding: 1px 5px;
+  font-size: 10.5px;
+}
+
+.input-prompt {
+  color: var(--text-h);
+  font-family: var(--mono);
+  white-space: pre-wrap;
+}
+
+.input-log code {
+  color: var(--text-h);
+  font-family: var(--mono);
+  white-space: pre-wrap;
+}
+
+.error-log strong {
+  color: var(--danger);
+}
+
+.error-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .tl-head,
+  .tl-row {
+    grid-template-columns: 42px 38px 80px minmax(0, 1fr);
+  }
+
+  .tl-vars,
+  .tl-output {
+    display: none;
+  }
+
+  /* On a phone the comparison is the focused task: let it fill the pane and
+     scroll, and bring the timeline table back when comparison closes. */
+  .tl-root[data-comparing="true"] .cmp {
+    flex: 1;
+    max-height: none;
+  }
+
+  .tl-root[data-comparing="true"] .tl-table {
+    display: none;
+  }
+
+  .cmp-stack-pair,
+  .cmp-output-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 430px) {
+  .tl-head,
+  .tl-row {
+    grid-template-columns: 42px 80px minmax(0, 1fr);
+  }
+
+  .tl-line {
+    display: none;
+  }
+
+  .tl-controls {
+    gap: 5px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .concept-card,
   .var-row.changed,
