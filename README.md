@@ -123,8 +123,9 @@ src/tracer/              reads the JSON in the browser
     ├── stepView.js       one tested view of step N: line, variables, changes, stack
     ├── explain.js        turns each step into a plain-English sentence
     ├── flow.js           builds the flowchart and loop counts
+    ├── history.js        numeric-series guard and SVG chart geometry
     ├── values.js         value formatting, and the honesty rules for it
-    └── objects.js        builds the object diagrams
+    └── objects.js        builds the object diagrams and reference edges
     │
     ▼
 src/flowchart/           draws the same trace three ways
@@ -172,10 +173,10 @@ Three suites, all of which should pass on every commit:
 
 ```bash
 npm run test:tracer   # 95 Python tests: the tracer, the flowchart model and the corpus
-npm run test:js       # 295 JS tests: the call tree and control flow model and layout, the
+npm run test:js       # 307 JS tests: the call tree and control flow model and layout, the
                       # graph, the teaching layer, the corpus, the router, the homepage
-                      # preview, the language picker, the workspace modules and the
-                      # design tokens' contrast
+                      # preview, the language picker, the workspace modules, variable
+                      # history and the design tokens' contrast
 npm run lint          # oxlint
 npm run build         # production build
 ```
@@ -235,7 +236,8 @@ codelens/
 │   │   ├── Inspector.jsx        # six tabbed sections, full ARIA tab pattern
 │   │   ├── PlaybackBar.jsx      # stepping, timeline, speed, Developer menu
 │   │   ├── panelBits.jsx        # shared panel pieces (components only)
-│   │   ├── labels.js            # step words + the variable list builder
+│   │   ├── labels.js            # step words, scope and the variable list builder
+│   │   ├── labels.test.mjs
 │   │   ├── playback.js          # ms per step and the saved speed (pure)
 │   │   ├── playback.test.mjs
 │   │   ├── learningMode.js      # what each learning mode may change (pure)
@@ -273,7 +275,9 @@ codelens/
 │       ├── stepView.js         # one view of a step, shared by every panel (pure)
 │       ├── explain.js          # step -> plain-English sentence (pure functions)
 │       ├── flow.js             # flowchart model and loop counts
-│       ├── objects.js          # object diagram model
+│       ├── history.js          # numeric-series guard and chart geometry (pure)
+│       ├── history.test.mjs
+│       ├── objects.js          # object diagram and reference-edge model
 │       ├── values.js           # value formatting, and its honesty rules
 │       └── __fixtures__/       # real traces the tests replay, kept gzipped
 ├── tracer-poc/

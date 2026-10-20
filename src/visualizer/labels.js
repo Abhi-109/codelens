@@ -38,3 +38,14 @@ export function variableRows(view, showAfter) {
   }
   return rows;
 }
+
+/**
+ * Which call a name belongs to, in the learner's words: "global" for the
+ * module, otherwise "local to fact(4)" from the frame's real argument values.
+ */
+export function scopeLabel(frame) {
+  if (!frame) return "—";
+  if (frame.function === "<module>") return "global";
+  const args = (frame.args ?? []).map((arg) => arg.text).join(", ");
+  return `local to ${frame.function}(${args})`;
+}

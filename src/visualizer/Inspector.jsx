@@ -16,14 +16,15 @@
 
 import { useRef, useState } from "react";
 import { INSPECTOR_TABS, INSPECTOR_TAB_IDS, initialInspectorTab, selectInspectorTab } from "./workspace.js";
-import { stepLabel, variableRows } from "./labels.js";
+import { scopeLabel, stepLabel, variableRows } from "./labels.js";
 import {
   CallList,
   ChangeList,
-  HeapObjects,
+  MemoryGraph,
   PanelError,
   PanelHead,
   VariableRow,
+  VariableTable,
   WatchHistory,
 } from "./panelBits.jsx";
 
@@ -199,6 +200,8 @@ function ExplainPanel({ ctx }) {
 export function VariablesPanel({ ctx }) {
   const {
     view,
+    trace,
+    index,
     showAfter,
     setShowAfter,
     changeByName,
@@ -208,9 +211,11 @@ export function VariablesPanel({ ctx }) {
     jumpTo,
     detail,
   } = ctx;
+  const [layout, setLayout] = useState("boxes");
   const rows = variableRows(view, showAfter);
   const previews = view.changes.filter((change) => change.kind === "new");
   const defined = view.frame?.defined ?? [];
+  const scope = scopeLabel(view.frame);
 
   return (
     <>
@@ -220,13 +225,33 @@ export function VariablesPanel({ ctx }) {
         help="Each name is a labelled box. The list shows the values just before the highlighted line runs. Click a name to see how it changed over time."
       />
 
-      <div className="state-toggle">
-        <button type="button" className={showAfter ? "" : "on"} onClick={() => setShowAfter(false)}>
-          Before this line
-        </button>
-        <button type="button" className={showAfter ? "on" : ""} onClick={() => setShowAfter(true)}>
-          After this line
-        </button>
+      <div className="vars-controls">
+        <div className="state-toggle" role="group" aria-label="Variable layout">
+          <button
+            type="button"
+            className={layout === "boxes" ? "on" : ""}
+            aria-pressed={layout === "boxes"}
+            onClick={() => setLayout("boxes")}
+          >
+            Boxes
+          </button>
+          <button
+            type="button"
+            className={layout === "table" ? "on" : ""}
+            aria-pressed={layout === "table"}
+            onClick={() => setLayout("table")}
+          >
+            Table
+          </button>
+        </div>
+        <div className="state-toggle" role="group" aria-label="State shown">
+          <button type="button" className={showAfter ? "" : "on"} onClick={() => setShowAfter(false)}>
+            Before this line
+          </button>
+          <button type="button" className={showAfter ? "on" : ""} onClick={() => setShowAfter(true)}>
+            After this line
+          </button>
+        </div>
       </div>
 
       {detail.showScope && view.frame ? (
@@ -239,8 +264,17 @@ export function VariablesPanel({ ctx }) {
 
       {rows.length === 0 ? (
         <p className="empty">No variables yet.</p>
+      ) : layout === "table" ? (
+        <VariableTable
+          rows={rows}
+          changeByName={changeByName}
+          watched={watched}
+          onWatch={(name) => setWatched((current) => (current === name ? null : name))}
+          showTypes={detail.showTypes}
+          scope={scope}
+        />
       ) : (
-        <ul className="vars">
+        <ul className="vars boxes">
           {rows.map((entry) => (
             <VariableRow
               key={entry.name}
@@ -268,7 +302,8 @@ export function VariablesPanel({ ctx }) {
         <WatchHistory
           name={watched}
           entries={history}
-          index={ctx.index}
+          index={index}
+          total={trace.length}
           onJump={jumpTo}
           onClose={() => setWatched(null)}
         />
@@ -312,21 +347,29 @@ export function StackPanel({ ctx }) {
 }
 
 function MemoryPanel({ ctx }) {
-  const { heap, heapNames, objectChanged } = ctx;
+  const { heap, heapNames, objectChanged, view, detail, jumpToCall } = ctx;
   const ids = Object.keys(heap ?? {});
   return (
     <>
       <PanelHead
         title="Memory"
-        hint="The lists, dicts and objects the program is holding."
-        help="A name can point at the same list as another name. These are the objects themselves, separate from the variables panel: the variables show names, this shows what the names are holding."
+        hint="The stack, and the lists and objects it points at."
+        help="A name can point at the same list as another name. Small values - numbers, short strings, True and False - stay in the stack boxes; lists, dictionaries and objects live in the heap. An arrow means 'this name is holding that object'. They are drawn from the trace, so a name never points at something the program did not create."
       />
-      {ids.length === 0 ? (
-        <p className="empty">No objects yet.</p>
+      {ids.length === 0 && view.callStack.length === 0 ? (
+        <p className="empty">Run your code to see the stack and the objects it holds.</p>
       ) : (
-        <div className="object-wrap">
-          <HeapObjects heap={heap} names={heapNames} changes={objectChanged} />
-        </div>
+        <MemoryGraph
+          frames={view.frames}
+          stack={view.callStack}
+          heap={heap}
+          names={heapNames}
+          changes={objectChanged}
+          showIds={detail.showTypes}
+          selectedId={view.frame?.frameId ?? null}
+          onSelectFrame={jumpToCall}
+          shared={view.shared}
+        />
       )}
     </>
   );

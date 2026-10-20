@@ -17,7 +17,7 @@ import { gunzipSync } from "node:zlib";
 
 import { explainStep } from "./explain.js";
 import { buildExecutionGraph } from "../flowchart/executionGraph.js";
-import { changeLog, errorStep, getStepView, paramsFor, stateAt, variableHistory } from "./stepView.js";
+import { changeLog, errorStep, getStepView, paramsFor, stateAt, variableHistory, variableSeries } from "./stepView.js";
 
 const FIXTURES = JSON.parse(
   gunzipSync(readFileSync(new URL("./__fixtures__/traces.json.gz", import.meta.url))),
@@ -156,6 +156,46 @@ test("variableHistory lists each value with the line that produced it", () => {
     { index: 2, line: 1, value: "5", function: "<module>" },
     { index: 3, line: 2, value: "10", function: "<module>" },
   ]);
+});
+
+test("variableSeries adds the real number for the chart, and null when there is none", () => {
+  assert.deepEqual(
+    variableSeries(ASSIGN_TRACE, "x").map((entry) => entry.number),
+    [5, 10],
+  );
+  const mixed = [
+    state(0, "call"),
+    state(1, "line", { variables: { x: int(1) } }),
+    state(2, "line", { variables: { x: { type: "int", value: "99999999999999999999", big: true } } }),
+  ];
+  assert.deepEqual(
+    variableSeries(mixed, "x").map((entry) => entry.number),
+    [1, null],
+  );
+  // The older function's shape is unchanged, so existing callers keep working.
+  assert.deepEqual(variableHistory(ASSIGN_TRACE, "x")[0], {
+    index: 2,
+    line: 1,
+    value: "5",
+    function: "<module>",
+  });
+});
+
+test("stack frames say running, waiting or returning, with the real line they are on", () => {
+  const { source, trace } = FIXTURES.fact;
+  const returnIndex = trace.findIndex((event) => event.event === "return" && event.function === "fact");
+  const returning = getStepView(trace, returnIndex, source);
+  const top = returning.callStack[0];
+  assert.equal(top.status, "returning");
+  assert.equal(top.lineText, top.line ? source.split("\n")[top.line - 1].trim() : null);
+
+  const lineIndex = trace.findIndex(
+    (event, i) => event.event === "line" && getStepView(trace, i, source).callStack.length > 1,
+  );
+  const running = getStepView(trace, lineIndex, source);
+  assert.equal(running.callStack[0].status, "running");
+  assert.equal(running.callStack[1].status, "waiting");
+  assert.equal(running.callStack[1].waitingFor.frameId, running.callStack[0].frameId);
 });
 
 test("changeLog is the story of every change, with the step to jump to", () => {

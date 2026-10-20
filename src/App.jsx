@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildFlowchart, buildFlowchartGraph, onEngineStatus, runTrace } from "./tracer/client";
 import { CONCEPTS, explainStep, isNewConcept } from "./tracer/explain";
 import { namesById, objectChanges } from "./tracer/objects";
-import { changeLog, errorStep, getStepView, variableHistory } from "./tracer/stepView";
+import { changeLog, errorStep, getStepView, variableSeries } from "./tracer/stepView";
 import { buildExecutionGraph } from "./flowchart/executionGraph.js";
 import ControlFlowChart from "./flowchart/ControlFlowChart.jsx";
 import CombinedView from "./visualizer/CombinedView.jsx";
@@ -263,7 +263,7 @@ export default function App() {
     return lines;
   }, [inputsText]);
   const history = useMemo(
-    () => (watched ? variableHistory(trace, watched) : []),
+    () => (watched ? variableSeries(trace, watched) : []),
     [trace, watched],
   );
 
@@ -273,7 +273,7 @@ export default function App() {
     [trace, index, source, view.explanation.concept],
   );
 
-  const heapNames = useMemo(() => namesById(view.frames, view.before?.heap), [view]);
+  const heapNames = useMemo(() => namesById(view.frames, view.heap), [view]);
   const objectChanged = useMemo(
     () => objectChanges(view.before?.heap, view.after?.heap),
     [view],
@@ -516,7 +516,7 @@ export default function App() {
     selectedCall,
     jumpToCall,
     clearSelectedCall: () => setSelectedCall(null),
-    heap: view.before?.heap,
+    heap: view.heap,
     heapNames,
     objectChanged,
     output,

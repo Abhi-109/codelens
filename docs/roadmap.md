@@ -164,11 +164,17 @@ written down in [ui-diagnosis.md](ui-diagnosis.md).
       Why this line runs now
 - [x] Dismissible concept cards naming the idea the first time it appears
 - [x] Variables panel: plain heading and hint, real values, a two-names-for-one-list
-      note, NEW/CHANGED badges, Before/After toggle, click a name to see its history
+      note, NEW/CHANGED badges, Before/After toggle, Boxes/Table layouts, the
+      frame's scope, and a clickable history chart for numeric names (a step:value
+      list for everything else)
 - [x] Changes panel: every change, newest first, each jumpable (folded into the
       Variables section behind a disclosure, nothing removed)
-- [x] Function calls panel: arguments, called-from line, each call's own variables
-      and return value, and where a finished call's result went
+- [x] Function calls panel: newest first on a connector, running / waiting /
+      returning states, arguments, called-from line, each call's own variables,
+      the active source line, and return values
+- [x] Memory panel: stack and heap in one picture, real reference arrows measured
+      from the rendered boxes, two arrows into one shared object, nested
+      references, and stable `list #1` labels only in Advanced
 - [x] Graph: every edge labelled with why it was taken, decision chips with real
       values, run badges, current/came-from/next tags, click-to-jump
 - [x] Code panel: wrapped long lines, `▶` on the next line, result hints inline,
@@ -230,8 +236,9 @@ The biggest win for a beginner. No tracer or trace-format changes.
 
 ## Tier 3: Better visuals
 
-- [ ] Reference arrows from variables to heap objects (SVG overlay; the objects
-      panel names every variable that points at each object instead)
+- [x] Reference arrows from variables to heap objects (SVG overlay that follows
+      resizing; two names pointing at one object show two arrows, and the object
+      cards also name every variable that points at them)
 - [x] Call stack cards with "called from line N", argument values, and return values
 - [ ] Recursion tree view
 - [ ] Strings as character slots; nested lists as grids
@@ -287,7 +294,8 @@ sits in a single bar under all three panes. The **Beginner / Advanced /
 Textbook** control that used to sit above the graph now lives in the top bar,
 so it reaches every pane; it changes explanation level and technical detail
 for the whole workspace, never the trace itself. This workspace is Phase A of
-an approved redesign — the later phases are waiting on review.
+an approved redesign, and the richer Variables, Call Stack and Memory views are
+Phase B; the later phases are waiting on review.
 
 Breadth is proven rather than claimed: `tracer-poc/corpus.py` holds ~45 programs
 across 32 categories of Python, `test_corpus.py` checks the tracer against them
@@ -302,7 +310,7 @@ visualizer uses, so every value on it comes from the engine, and the language
 grid marks Python as the only card that opens anything
 (`src/pages/preview.js`, `src/pages/languages.js`, both tested).
 
-All suites pass: 95 Python tests, 214 JS tests, plus lint and a production
+All suites pass: 95 Python tests, 307 JS tests, plus lint and a production
 build. Two opt-in checks need a local Pyodide install: `npm run test:pyodide`
 and `npm run check:explain`. What remains on A3 is debounced generation and the
 show-code toggle; see the roadmap above for the rest.

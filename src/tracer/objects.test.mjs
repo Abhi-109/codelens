@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { changedSlots, namesById, objectChanges, slotEntries } from "./objects.js";
+import { changedSlots, namesById, objectChanges, objectLabel, referenceEdges, slotEntries } from "./objects.js";
 
 const int = (value) => ({ type: "int", value });
 const str = (value) => ({ type: "str", value });
@@ -101,4 +101,32 @@ test("objectChanges reports only objects whose contents changed", () => {
   assert.deepEqual([...changes.keys()], ["o1"]);
   assert.deepEqual([...changes.get("o1")], [1]);
   assert.deepEqual(objectChanges(null, after).size, 2); // everything is new without a previous heap
+});
+
+test("referenceEdges draws two names into one object and follows nested refs", () => {
+  const heap = {
+    o1: { type: "list", items: [int(1)] },
+    o2: { type: "list", items: [ref("o1")] },
+  };
+  const edges = referenceEdges([frame({ a: ref("o1"), b: ref("o1"), c: ref("o2") })], heap);
+  assert.deepEqual(
+    edges.map((edge) => edge.key),
+    ["var:1:a", "var:1:b", "var:1:c", "slot:o2:0"],
+  );
+  // a, b and the slot inside o2 all point at the same real object.
+  assert.equal(edges.filter((edge) => edge.targetId === "o1").length, 3);
+  assert.equal(edges.find((edge) => edge.kind === "slot").objectId, "o2");
+});
+
+test("referenceEdges never draws an arrow to an object missing from the snapshot", () => {
+  const edges = referenceEdges([frame({ gone: ref("o9") })], {});
+  assert.deepEqual(edges, []);
+  assert.deepEqual(referenceEdges(null, null), []);
+});
+
+test("objectLabel uses the trace's stable number, never a memory address", () => {
+  assert.equal(objectLabel("o1", { type: "list" }), "list #1");
+  assert.equal(objectLabel("o12", { type: "dict" }), "dict #12");
+  assert.equal(objectLabel("o2", { type: "object", class: "Node" }), "Node #2");
+  assert.equal(objectLabel("weird", { type: "set" }), "set");
 });

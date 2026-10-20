@@ -82,7 +82,7 @@ export function paramsFor(source, functionName) {
 }
 
 /** One frame, ready to display: arguments, variables, defined names. */
-function frameView(frame, heap, params, { depth, isTop, callNumber, returnValue }) {
+function frameView(frame, heap, params, { depth, isTop, callNumber, returnValue, lineText }) {
   const variables = [];
   const args = [];
   const defined = [];
@@ -106,6 +106,7 @@ function frameView(frame, heap, params, { depth, isTop, callNumber, returnValue 
     function: frame.function,
     callLine: frame.call_line,
     line: frame.line,
+    lineText,
     depth,
     isTop: Boolean(isTop),
     callNumber,
@@ -286,9 +287,24 @@ export function getStepView(trace, index, source = "", options = {}) {
         isTop: i === frames.length - 1,
         callNumber: numbers[i],
         returnValue: i === frames.length - 1 ? returnValue : null,
+        lineText: sourceText(source, frame.line),
       }),
     )
     .reverse();
+  // The status belongs to the real stack, not to which frame the learner has
+  // selected: a waiting caller stays a waiting caller while you inspect it.
+  callStack.forEach((entry, i) => {
+    if (i > 0) {
+      entry.status = "waiting";
+      entry.waitingFor = callStack[i - 1];
+    } else if (kind === "return") {
+      entry.status = "returning";
+    } else if (kind === "exception") {
+      entry.status = "raising";
+    } else {
+      entry.status = "running";
+    }
+  });
   const selectedId = frameId ?? currentFrameId;
   const frame =
     callStack.find((entry) => entry.frameId === selectedId) ?? callStack[0] ?? null;
@@ -315,6 +331,7 @@ export function getStepView(trace, index, source = "", options = {}) {
     frame,
     callStack,
     frames,
+    heap: state?.heap ?? {},
     changes,
     shared: sharedNotes(state),
     returnValue,
@@ -332,6 +349,12 @@ function sourceLine(source, line) {
   if (line == null) return null;
   const raw = (source ?? "").split("\n")[line - 1] ?? "";
   return { line, text: raw.trim(), indent: raw.length - raw.trimStart().length };
+}
+
+/** The real source text on `line`, for a frame card; never a guess. */
+function sourceText(source, line) {
+  if (!line) return null;
+  return (source ?? "").split("\n")[line - 1]?.trim() ?? null;
 }
 
 /**
@@ -371,11 +394,18 @@ export function errorStep(trace) {
 }
 
 /**
- * How one variable changed over the whole run: the value it first held at each
- * step, and the line that put it there. Powers "watch this variable".
- * @returns {Array<{ index: number, line: number|null, value: string, function: string }>}
+ * The numeric value of a trace value, or null when it cannot honestly be put
+ * on a number line. Booleans, big integers and nan/inf deliberately return
+ * null: a chart that treats them as 0/1 or a gap would invent data.
  */
-export function variableHistory(trace, name) {
+function numericValue(value) {
+  if (!value || value.big || value.repr) return null;
+  if (value.type !== "int" && value.type !== "float") return null;
+  return typeof value.value === "number" && Number.isFinite(value.value) ? value.value : null;
+}
+
+/** One entry per value change, with the number when the value has one. */
+function collectHistory(trace, name) {
   const list = Array.isArray(trace) ? trace : [];
   const entries = [];
   let last = null;
@@ -393,7 +423,31 @@ export function variableHistory(trace, name) {
       line: producedByLine(list, i, frame.frame_id),
       value: showValue(value, event.heap),
       function: frame.function,
+      number: numericValue(value),
     });
   }
   return entries;
+}
+
+/**
+ * How one variable changed over the whole run: the value it first held at each
+ * step, and the line that put it there. Powers "watch this variable".
+ * @returns {Array<{ index: number, line: number|null, value: string, function: string }>}
+ */
+export function variableHistory(trace, name) {
+  return collectHistory(trace, name).map((entry) => ({
+    index: entry.index,
+    line: entry.line,
+    value: entry.value,
+    function: entry.function,
+  }));
+}
+
+/**
+ * The same history with `number` beside each value, for the Variables chart.
+ * `number` is null for anything that is not a finite int/float.
+ * @returns {Array<{ index: number, line: number|null, value: string, function: string, number: number|null }>}
+ */
+export function variableSeries(trace, name) {
+  return collectHistory(trace, name);
 }

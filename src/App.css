@@ -1209,6 +1209,21 @@ button.flow-line:disabled {
   font-weight: 600;
 }
 
+/* The two layout choices sit above the values and never hide the state
+   switch: a learner can change how the list is drawn without moving the step
+   or losing whether they are looking before or after the line. */
+.vars-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.vars-controls .state-toggle {
+  margin-bottom: 0;
+}
+
 .vars,
 .changes,
 .calls,
@@ -1231,6 +1246,69 @@ button.flow-line:disabled {
   border-radius: 8px;
   font-family: var(--mono);
   font-size: 13px;
+}
+
+/* Boxes: the same rows in a grid, so a handful of names reads as labelled
+   boxes rather than one long list. The row layout above stays for the table's
+   fallback and for any surface that still wants a line. */
+.vars.boxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  align-items: stretch;
+}
+
+.vars.boxes .var-row {
+  align-content: flex-start;
+}
+
+/* Table: the mockup's Name / Value / Type / Scope view, using the same data. */
+.vars-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 12px;
+  table-layout: fixed;
+}
+
+.vars-table th,
+.vars-table td {
+  padding: 4px 5px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.vars-table thead th {
+  font-family: var(--sans);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.vars-table tbody tr.changed {
+  background: var(--accent-bg);
+}
+
+.vars-table tbody th {
+  font-weight: 400;
+}
+
+.vars-table .tag {
+  margin-left: 3px;
+}
+
+.vars-table .var-delta,
+.vars-table .var-after {
+  display: block;
+  flex-basis: auto;
+}
+
+.vars-type,
+.vars-scope {
+  font-size: 11px;
+  color: var(--text);
 }
 
 .var-row.changed {
@@ -1381,6 +1459,72 @@ button.flow-line:disabled {
   color: var(--text);
 }
 
+.history-chart {
+  margin-top: 8px;
+}
+
+.history-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.hist-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.hist-zero {
+  stroke: var(--border);
+  stroke-dasharray: 3 3;
+}
+
+.hist-now {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.7;
+}
+
+.hist-point {
+  cursor: pointer;
+}
+
+.hist-point circle {
+  fill: var(--bg);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+
+.hist-point.on circle {
+  fill: var(--accent);
+}
+
+.hist-point:focus-visible circle {
+  stroke: var(--focus);
+  stroke-width: 3;
+}
+
+.history-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--text);
+}
+
+.history-axis span:nth-child(2) {
+  font-family: var(--mono);
+  color: var(--accent);
+}
+
 .change-name {
   font-family: var(--mono);
   color: var(--accent);
@@ -1447,9 +1591,314 @@ button.flow-line:disabled {
   color: var(--teal);
 }
 
+/* --- Call stack frames: one card per frame, joined by a real stack line --- */
+.calls.stack-frames {
+  position: relative;
+  gap: 0;
+}
+
+/* One connector for the whole stack, with a dot and a short arm for each
+   frame. It is decorative: the status is also written on every card. */
+.calls.stack-frames::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 12px;
+  bottom: 14px;
+  width: 2px;
+  background: var(--border);
+}
+
+.call-frame {
+  position: relative;
+  margin: 0 0 8px 26px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  animation: frame-in 0.16s ease-out;
+}
+
+.call-frame::before {
+  content: "";
+  position: absolute;
+  left: -18px;
+  top: 17px;
+  width: 12px;
+  height: 2px;
+  background: var(--border);
+}
+
+.call-frame::after {
+  content: "";
+  position: absolute;
+  left: -24px;
+  top: 13px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+.call-frame-running,
+.call-frame-returning {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.call-frame-running::after {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.call-frame-returning::after {
+  border-color: var(--teal);
+  background: var(--teal);
+}
+
+.call-frame-raising {
+  border-color: var(--warn);
+}
+
+.call-frame-raising::after {
+  border-color: var(--warn);
+  background: var(--warn);
+}
+
+.call-frame.on {
+  border-color: var(--accent);
+}
+
+.call-frame-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.call-status {
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: var(--sans);
+  font-size: 10px;
+  color: var(--text);
+}
+
+.call-status.status-running {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.call-status.status-returning {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.call-status.status-raising {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.call-locals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 6px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.call-locals-label {
+  font-family: var(--sans);
+}
+
+.call-local {
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--mono);
+  color: var(--text-h);
+}
+
+.call-line {
+  display: block;
+  max-width: 100%;
+  padding: 3px 5px;
+  border-radius: 5px;
+  background: var(--code-bg);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-h);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.stack-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+@keyframes frame-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --- Memory: stack and heap side by side, joined by measured arrows ------ */
+.memory-wrap {
+  position: relative;
+  margin-top: 6px;
+  container-type: inline-size;
+}
+
+.mem-arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.mem-arrows path {
+  fill: none;
+  stroke: var(--accent-border);
+  stroke-width: 1.5;
+}
+
+.mem-arrows marker path {
+  fill: var(--accent-border);
+}
+
+.memory-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+@container (min-width: 520px) {
+  .memory-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.memory-region {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+}
+
+.memory-region h4 {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text);
+}
+
+.memory-hint {
+  margin: 2px 0 6px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.memory-frame {
+  margin-top: 6px;
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--code-bg);
+}
+
+.memory-frame-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.memory-call {
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.mem-var {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  width: 100%;
+  padding: 2px 3px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mem-var:hover,
+.mem-var.on {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.mem-var-ref {
+  border-color: var(--border);
+}
+
+.mem-var-name {
+  flex: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.mem-var-value {
+  min-width: 0;
+  margin-left: auto;
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.mem-var .tag {
+  flex: none;
+}
+
+.shared-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.slot-ref {
+  border-color: var(--accent-border);
+}
+
 .object-wrap {
   margin-top: 10px;
 }
+
 
 h3 {
   font-size: 13px;

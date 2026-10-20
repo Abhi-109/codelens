@@ -105,6 +105,55 @@ export function changedSlots(before, after) {
 }
 
 /**
+ * A short, stable name for an object card. The number comes from the trace's
+ * own object id (`o1` -> `#1`), so it never changes during a run and is not a
+ * memory address. Beginner mode hides it; Advanced shows it.
+ */
+export function objectLabel(id, object) {
+  const type = object?.class ?? object?.type ?? "object";
+  const number = Number(String(id ?? "").replace(/\D/g, ""));
+  return Number.isFinite(number) && number > 0 ? `${type} #${number}` : type;
+}
+
+/**
+ * Every real reference the memory view draws: one per name pointing at an
+ * object, and one per slot inside an object that points at another object.
+ * Two names for one list produce two edges to the same target, which is what
+ * makes the shared-object picture honest.
+ * @returns {Array<{ key: string, kind: "variable"|"slot", frameId?: number, name?: string, objectId?: string, slotKey?: string|number, targetId: string }>}
+ */
+export function referenceEdges(frames, heap) {
+  const byId = heap ?? {};
+  const edges = [];
+  for (let i = (frames?.length ?? 0) - 1; i >= 0; i -= 1) {
+    const frame = frames[i];
+    for (const [name, value] of Object.entries(frame.variables ?? {})) {
+      if (value?.type !== "ref" || !byId[value.id]) continue;
+      edges.push({
+        key: `var:${frame.frame_id}:${name}`,
+        kind: "variable",
+        frameId: frame.frame_id,
+        name,
+        targetId: value.id,
+      });
+    }
+  }
+  for (const [id, object] of Object.entries(byId)) {
+    for (const entry of slotEntries(object)) {
+      if (entry.value?.type !== "ref" || !byId[entry.value.id]) continue;
+      edges.push({
+        key: `slot:${id}:${entry.key}`,
+        kind: "slot",
+        objectId: id,
+        slotKey: entry.key,
+        targetId: entry.value.id,
+      });
+    }
+  }
+  return edges;
+}
+
+/**
  * Which objects' contents changed between two heap snapshots.
  * @returns {Map<string, Set<string>>} object id → changed slot keys
  */
