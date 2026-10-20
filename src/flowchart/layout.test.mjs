@@ -15,6 +15,7 @@ import {
   CHANNEL_PAD,
   MARGIN,
   NODE_SEP,
+  VALUE_H,
   layoutChart,
   measureNode,
   pathOf,
@@ -173,6 +174,20 @@ test("layout is deterministic: the same chart always lands in the same place", (
   assert.deepEqual(layoutChart(branching), layoutChart(branching));
   // Rebuilding the chart object from scratch must not change a pixel.
   assert.deepEqual(layoutChart(JSON.parse(JSON.stringify(looping))), layoutChart(looping));
+});
+
+test("the values row reserves the same space on every box, never a step-dependent one", () => {
+  const plain = layoutChart(looping);
+  const valued = layoutChart(looping, { showValues: true });
+  assert.deepEqual(layoutChart(looping, { showValues: true }), valued, "still deterministic");
+  assertNoOverlaps(valued);
+  assert.ok(valued.height > plain.height, "the drawing makes room for the row");
+  for (const node of valued.nodes) {
+    const before = plain.nodes.find((entry) => entry.id === node.id);
+    assert.equal(node.height, before.height + VALUE_H, `${node.id} reserves exactly one row`);
+    assert.equal(node.x, before.x, `${node.id} keeps its column`);
+  }
+  assert.equal(measureNode(looping.nodes[0], false, true).height, measureNode(looping.nodes[0]).height + VALUE_H);
 });
 
 test("an empty or missing chart lays out to an empty drawing", () => {

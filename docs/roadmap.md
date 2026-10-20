@@ -95,7 +95,7 @@ every mode, inspector tab and learning mode.
       highlighted and kept centred; fold a subtree away and back
 - [x] Shared canvas shell (`src/visualizer/Canvas.jsx`): pan, zoom, fit, follow,
       expand, toolbar, legend, empty states
-- [x] 24 unit tests (`callTree.test.mjs`, `callTreeLayout.test.mjs`)
+- [x] 28 unit tests (`callTree.test.mjs`, `callTreeLayout.test.mjs`)
 
 ### Stage 2 — Control flow graph
 
@@ -111,7 +111,7 @@ every mode, inspector tab and learning mode.
 - [x] One tab per function the program defines, with the ones this run entered
       marked, plus "Follow run", "Show code" and the v1 card list behind
       **Simple view**
-- [x] 40 unit tests (`mapTrace.test.mjs`, `layout.test.mjs`, `controlFlow.test.mjs`)
+- [x] 44 unit tests (`mapTrace.test.mjs`, `layout.test.mjs`, `controlFlow.test.mjs`)
 
 ### Stage 3 — Combined view
 
@@ -150,6 +150,30 @@ every mode, inspector tab and learning mode.
 - [x] Responsive check at desktop, tablet and phone
 - [x] Empty / loading / input-required / success / exception states checked
       against real examples
+
+### Stage 6 — Phase C: large runs, values and keyboard navigation
+
+- [x] A call tree over 200 frames opens with a breadth-first visible set; the
+      caption gives the real shown/total counts and **Show all calls** draws the
+      rest. The cap respects manual folds, and **Show fewer** returns to 200.
+- [x] A run with no function calls draws the module frame, explains why there is
+      no tree, and offers **Show the flowchart**.
+- [x] With **Values** on, control-flow boxes show a real `×N` run count. The
+      current box also shows the evaluated condition (with its real operands) or
+      the old → new value its line is about to produce; a `for` header shows its
+      loop variable changing. A fixed bottom row is reserved in the layout, so
+      values never move a box while stepping.
+- [x] The shared canvas takes keyboard focus: Arrow keys pan, `+`/`-` zoom, `0`
+      resets and `F` fits, all with `stopPropagation` so the global step shortcuts
+      do not also fire. Tabbing to a graph node centres it without changing the
+      step.
+- [x] Function tabs use a roving tabindex with Arrow/Home/End, move focus with the
+      selection, and leave the execution step untouched.
+- [x] 8 regression tests cover the cap, counts, conditions, line values, loop
+      headers and reserved value geometry. The shared viewport maths (`panBy`,
+      `centreOn`, `clampPan`) stays covered by its existing tests.
+- [x] Desktop, tablet and phone checked in dark and light themes; focus, pan and
+      tab navigation exercised in the browser with no console errors.
 
 ## Teaching UI pass
 
@@ -294,8 +318,9 @@ sits in a single bar under all three panes. The **Beginner / Advanced /
 Textbook** control that used to sit above the graph now lives in the top bar,
 so it reaches every pane; it changes explanation level and technical detail
 for the whole workspace, never the trace itself. This workspace is Phase A of
-an approved redesign, and the richer Variables, Call Stack and Memory views are
-Phase B; the later phases are waiting on review.
+an approved redesign, the richer Variables, Call Stack and Memory views are
+Phase B, and the large-run, value and keyboard-navigation pass is Phase C; the
+later phases are waiting on review.
 
 Breadth is proven rather than claimed: `tracer-poc/corpus.py` holds ~45 programs
 across 32 categories of Python, `test_corpus.py` checks the tracer against them
@@ -310,7 +335,7 @@ visualizer uses, so every value on it comes from the engine, and the language
 grid marks Python as the only card that opens anything
 (`src/pages/preview.js`, `src/pages/languages.js`, both tested).
 
-All suites pass: 95 Python tests, 307 JS tests, plus lint and a production
+All suites pass: 95 Python tests, 315 JS tests, plus lint and a production
 build. Two opt-in checks need a local Pyodide install: `npm run test:pyodide`
-and `npm run check:explain`. What remains on A3 is debounced generation and the
-show-code toggle; see the roadmap above for the rest.
+and `npm run check:explain`. What remains on A3 is debounced generation; see the
+roadmap above for the rest.

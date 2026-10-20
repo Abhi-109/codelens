@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { clampPan, computeFit, frameCard, viewBoxOf, zoomAt } from "../flowchart/viewport.js";
+import {
+  centreOn,
+  clampPan,
+  computeFit,
+  frameCard,
+  panBy,
+  viewBoxOf,
+  zoomAt,
+} from "../flowchart/viewport.js";
 
 /**
  * The shared drawing surface every visualization mode sits on.
@@ -32,7 +40,7 @@ import { clampPan, computeFit, frameCard, viewBoxOf, zoomAt } from "../flowchart
  * @param {import("react").ReactNode} [props.caption] one line under the drawing
  * @param {import("react").ReactNode} [props.tools] extra toolbar controls
  * @param {import("react").ReactNode} [props.legend] "How to read this" content
- * @param {(ctx: {transform: Object, pane: Object}) => import("react").ReactNode} props.children
+ * @param {(ctx: {transform: Object, pane: Object, focusOn: (box: Object) => void}) => import("react").ReactNode} props.children
  */
 export default function Canvas({
   bounds,
@@ -160,6 +168,22 @@ export default function Canvas({
     animateTo(next, reduceMotion ? 0 : FOLLOW_MS);
   }, [follow, ready, subject, bounds, pane, reduceMotion, animateTo]);
 
+  /** Bring a keyboard-focused box to the middle without changing the step. */
+  const focusOn = useCallback(
+    (box) => {
+      if (!ready || !box) return;
+      cancelAnimationFrame(frame.current);
+      const point = {
+        x: Number.isFinite(box.cx) ? box.cx : (box.x ?? 0) + (box.width ?? 0) / 2,
+        y: Number.isFinite(box.cy) ? box.cy : (box.y ?? 0) + (box.height ?? 0) / 2,
+      };
+      const next = clampPan(centreOn(transformRef.current, point, pane), bounds, pane);
+      setFitWanted(false);
+      setManual({ key: layoutKey, size: boxRef.current, transform: next });
+    },
+    [ready, bounds, pane, layoutKey],
+  );
+
   // Wheel zoom needs a non-passive listener so the page never scrolls instead.
   useEffect(() => {
     const element = viewRef.current;
@@ -202,6 +226,45 @@ export default function Canvas({
     setFollow(true);
   }
 
+  function onKeyDown(event) {
+    if (!ready) return;
+    const nudge = event.shiftKey ? 160 : 48;
+    if (event.key === "0") {
+      event.preventDefault();
+      event.stopPropagation();
+      resetView();
+      return;
+    }
+    if (event.key.toLowerCase() === "f") {
+      event.preventDefault();
+      event.stopPropagation();
+      fitView();
+      return;
+    }
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      event.stopPropagation();
+      zoomBy(ZOOM_STEP);
+      return;
+    }
+    if (event.key === "-" || event.key === "_") {
+      event.preventDefault();
+      event.stopPropagation();
+      zoomBy(1 / ZOOM_STEP);
+      return;
+    }
+    let dx = 0;
+    let dy = 0;
+    if (event.key === "ArrowLeft") dx = nudge;
+    else if (event.key === "ArrowRight") dx = -nudge;
+    else if (event.key === "ArrowUp") dy = nudge;
+    else if (event.key === "ArrowDown") dy = -nudge;
+    else return;
+    event.preventDefault();
+    event.stopPropagation();
+    apply(clampPan(panBy(transformRef.current, dx, dy), bounds, pane));
+  }
+
   function onPointerDown(event) {
     if (!ready) return;
     cancelAnimationFrame(frame.current);
@@ -231,6 +294,10 @@ export default function Canvas({
       <div
         className="viz-view"
         ref={viewRef}
+        tabIndex={ready ? 0 : -1}
+        role="group"
+        aria-label={`${label}. Use arrow keys to pan and plus or minus to zoom.`}
+        onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -245,7 +312,10 @@ export default function Canvas({
             role="group"
             aria-label={label}
           >
-            {children({ transform, pane })}
+            {/* The render prop is called here, not a ref read; focusOn only touches
+                refs from the focus event it is passed to. */}
+            {/* oxlint-disable-next-line react/refs */}
+            {children({ transform, pane, focusOn })}
           </svg>
         ) : hasContent ? (
           // Sized but not yet painted; never show a "nothing here" message for

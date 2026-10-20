@@ -6,6 +6,9 @@ import Canvas from "./Canvas.jsx";
 /** Baseline of label line `i`, matched to the box height in the layout. */
 const baseline = (i) => PAD_Y + 12 + i * LINE_H;
 
+/** Above this many frames the drawing opens with a readable top slice. */
+const MAX_CALLS = 200;
+
 /** Shared empty set, so "nothing folded by hand" is a stable value. */
 const EMPTY_SET = new Set();
 
@@ -37,6 +40,7 @@ const STATUS_TEXT = {
  * @param {number} props.index which trace step is current
  * @param {number|null} props.currentFrameId the frame executing at that step
  * @param {(frameId: number) => void} props.onJumpCall called when a call is clicked
+ * @param {() => void} [props.onShowFlow] switch to the flowchart when there is no call tree
  * @param {string} [props.note] what to say when the code never ran
  */
 export default function CallTree({
@@ -45,6 +49,7 @@ export default function CallTree({
   index,
   currentFrameId = null,
   onJumpCall,
+  onShowFlow,
   note = null,
 }) {
   const tree = useMemo(() => buildCallTree(trace, source), [trace, source]);
@@ -61,7 +66,15 @@ export default function CallTree({
     });
   };
 
-  const laid = useMemo(() => layoutCallTree(tree, { collapsed: folded }), [tree, folded]);
+  // "Show all" belongs to one run, like the folds: a new trace starts capped.
+  const [showState, setShowState] = useState(() => ({ tree, all: false }));
+  const showAll = showState.tree === tree && showState.all;
+  const setShowAll = (all) => setShowState({ tree, all });
+
+  const laid = useMemo(
+    () => layoutCallTree(tree, { collapsed: folded, limit: showAll ? undefined : MAX_CALLS }),
+    [tree, folded, showAll],
+  );
   const boxesById = useMemo(() => new Map(laid.boxes.map((box) => [box.id, box])), [laid]);
 
   const statuses = useMemo(() => {
@@ -87,7 +100,8 @@ export default function CallTree({
     trace[index]?.event === "exception" ? (trace[index].frame_id ?? null) : null;
 
   // The frame running now, or the nearest drawn call above it when a learner
-  // has folded it — the view always has somewhere real to centre.
+  // has folded it or the cap has hidden it - the view always has somewhere real
+  // to centre, and never invents a call.
   const subject = useMemo(() => {
     let id = currentFrameId;
     const seen = new Set();
@@ -100,6 +114,7 @@ export default function CallTree({
     return null;
   }, [boxesById, tree, currentFrameId]);
   const onlyTop = onlyModule(tree);
+  const currentVisible = currentFrameId == null || boxesById.has(currentFrameId);
 
   const label = describe(trace, index, tree, currentFrameId);
 
@@ -123,24 +138,51 @@ export default function CallTree({
       caption={
         onlyTop && trace.length > 0 ? (
           <span className="viz-caption-note">
-            This run never left the top level, so the only call is the module itself.
+            This program has no function calls, so there is no call tree.
+            {onShowFlow ? (
+              <button type="button" className="viz-link" onClick={onShowFlow}>
+                Show the flowchart
+              </button>
+            ) : null}
+          </span>
+        ) : laid.capped ? (
+          <span className="viz-caption-note">
+            Showing {laid.shown} of {laid.total} frames.{" "}
+            {laid.total - laid.shown === 1
+              ? "1 frame is"
+              : `${laid.total - laid.shown} frames are`}{" "}
+            not drawn, to keep this drawing fast.
+            {!currentVisible ? " The running call is inside the hidden part." : ""}
           </span>
         ) : null
       }
       tools={
-        folded.size > 0 ? (
-          <button
-            type="button"
-            onClick={() => setFoldState({ tree, set: EMPTY_SET })}
-            title="Open every call again"
-          >
-            Expand<span className="viz-wide"> all</span>
-          </button>
-        ) : null
+        <>
+          {laid.capped ? (
+            <button type="button" onClick={() => setShowAll(true)} title="Draw every call in this run">
+              Show<span className="viz-wide"> all calls</span>
+              <span className="viz-narrow"> all</span>
+            </button>
+          ) : null}
+          {showAll && laid.total > MAX_CALLS ? (
+            <button type="button" onClick={() => setShowAll(false)} title="Return to the first 200 frames">
+              Show<span className="viz-wide"> fewer</span>
+            </button>
+          ) : null}
+          {folded.size > 0 ? (
+            <button
+              type="button"
+              onClick={() => setFoldState({ tree, set: EMPTY_SET })}
+              title="Open every call again"
+            >
+              Expand<span className="viz-wide"> all</span>
+            </button>
+          ) : null}
+        </>
       }
       legend={<Legend />}
     >
-      {() => (
+      {({ focusOn }) => (
         <>
           <g className="ct-links" aria-hidden="true">
             {laid.links.map((link) => {
@@ -193,6 +235,9 @@ export default function CallTree({
                   role="button"
                   tabIndex={0}
                   aria-label={`${readout}. Jump to the step this call started at.`}
+                  onFocus={(event) => {
+                    if (event.target.matches?.(":focus-visible")) focusOn(box);
+                  }}
                   onClick={(event) => {
                     event.stopPropagation();
                     onJumpCall?.(box.id);
@@ -200,6 +245,7 @@ export default function CallTree({
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
+                      event.stopPropagation();
                       onJumpCall?.(box.id);
                     }
                   }}
@@ -231,6 +277,9 @@ export default function CallTree({
                     role="button"
                     tabIndex={0}
                     aria-label={`Show the ${box.hidden} call${box.hidden === 1 ? "" : "s"} inside ${box.label}`}
+                    onFocus={(event) => {
+                      if (event.target.matches?.(":focus-visible")) focusOn(box);
+                    }}
                     onClick={(event) => {
                       event.stopPropagation();
                       toggleFold(box.id);
@@ -238,6 +287,7 @@ export default function CallTree({
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
+                        event.stopPropagation();
                         toggleFold(box.id);
                       }
                     }}

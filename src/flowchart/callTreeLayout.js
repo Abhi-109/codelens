@@ -86,25 +86,56 @@ export function visibleChildren(node, collapsed) {
  * Places the whole tree.
  *
  * @param {{ nodes: Array, roots: Array }} tree from buildCallTree
- * @param {{ collapsed?: Set<number> }} [options]
+ * @param {{ collapsed?: Set<number>, limit?: number }} [options]
  * @returns {{
  *   boxes: Array<{id: number, x: number, y: number, w: number, h: number,
  *                 cx: number, cy: number, lines: string[], value: string|null,
  *                 depth: number, hidden: number, hasChildren: boolean}>,
  *   links: Array<{id: string, fromId: number, toId: number, points: Array<{x:number,y:number}>}>,
- *   width: number, height: number, ready: boolean,
+ *   width: number, height: number, ready: boolean, capped: boolean,
+ *   shown: number, total: number,
  * }}
  */
 export function layoutCallTree(tree, options = {}) {
   const collapsed = options.collapsed ?? new Set();
   const roots = tree?.roots ?? [];
   const all = tree?.nodes ?? [];
+  const limit = Number.isFinite(options.limit)
+    ? Math.max(1, Math.floor(options.limit))
+    : Infinity;
 
   if (all.length === 0) {
-    return { boxes: [], links: [], width: 0, height: 0, ready: false };
+    return {
+      boxes: [],
+      links: [],
+      width: 0,
+      height: 0,
+      ready: false,
+      capped: false,
+      shown: 0,
+      total: 0,
+    };
   }
 
-  // 1. Measure every box once — this part depends only on labels and on
+  // 1. Which boxes are drawn. Breadth-first keeps a very large run readable:
+  //    the top of the tree and its shape appear rather than one long chain.
+  //    Folding is honoured first, so a learner can keep a big run under the cap
+  //    without the note claiming the cap did it.
+  const reachable = [];
+  const queue = [...roots];
+  for (let i = 0; i < queue.length; i += 1) {
+    const node = queue[i];
+    reachable.push(node);
+    for (const kid of visibleChildren(node, collapsed)) queue.push(kid);
+  }
+  const capped = reachable.length > limit;
+  const visible = capped
+    ? new Set(reachable.slice(0, limit).map((node) => node.frameId))
+    : null;
+  const shown = (node) => !visible || visible.has(node.frameId);
+  const kidsOf = (node) => visibleChildren(node, collapsed).filter(shown);
+
+  // 2. Measure every box once — this part depends only on labels and on
   //    whether the run ever returned a value.
   const measured = new Map();
   let maxH = 0;
@@ -115,12 +146,13 @@ export function layoutCallTree(tree, options = {}) {
   }
   const rowH = maxH + V_GAP;
 
-  // 2. Subtree widths, children before parents (reverse pre-order).
+  // 3. Subtree widths, children before parents (reverse pre-order).
   const subtreeW = new Map();
   const widthOf = (node) => measured.get(node.frameId).w;
   for (let i = all.length - 1; i >= 0; i -= 1) {
     const node = all[i];
-    const kids = visibleChildren(node, collapsed);
+    if (!shown(node)) continue;
+    const kids = kidsOf(node);
     let sum = 0;
     kids.forEach((kid, k) => {
       sum += subtreeW.get(kid.frameId) ?? widthOf(kid);
@@ -129,11 +161,14 @@ export function layoutCallTree(tree, options = {}) {
     subtreeW.set(node.frameId, kids.length === 0 ? widthOf(node) : Math.max(widthOf(node), sum));
   }
 
-  // 3. Place, roots first, an explicit stack so a 700-deep chain is fine.
+  // 4. Place, roots first, an explicit stack so a 700-deep chain is fine.
   const boxes = [];
   const links = [];
   const rowY = (depth) => BOUNDS_PAD + depth * rowH;
-  const pending = [...roots].reverse().map((node) => ({ node, left: BOUNDS_PAD, depth: 0 }));
+  const pending = roots
+    .filter(shown)
+    .reverse()
+    .map((node) => ({ node, left: BOUNDS_PAD, depth: 0 }));
 
   while (pending.length > 0) {
     const { node, left, depth } = pending.pop();
@@ -163,7 +198,7 @@ export function layoutCallTree(tree, options = {}) {
     };
     boxes.push(box);
 
-    const kids = visibleChildren(node, collapsed);
+    const kids = kidsOf(node);
     if (kids.length > 0) {
       let sum = 0;
       kids.forEach((kid, k) => {
@@ -205,6 +240,9 @@ export function layoutCallTree(tree, options = {}) {
     width: width + BOUNDS_PAD,
     height: height + BOUNDS_PAD,
     ready: true,
+    capped,
+    shown: boxes.length,
+    total: all.length,
   };
 }
 

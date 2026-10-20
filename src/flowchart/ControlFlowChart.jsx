@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { MODULE } from "./executionGraph.js";
 import {
   chartOrder,
+  currentValue as valueAtStep,
   executedNodes,
   jumpToNode,
   mapSteps,
+  nodeRunCounts,
   outgoingEdge,
   raisingNodeId,
   traversedEdges,
@@ -33,14 +35,16 @@ const EMPTY_SET = new Set();
  * @param {Object|null} props.flow the flowchart graph (format version 2)
  * @param {Object|null} props.flowTree the older tree summary, for the simple view
  * @param {Array} props.trace the trace from docs/trace-format.md
+ * @param {string} props.source the user's code, for the values in the current box
  * @param {number} props.index which trace step is current
  * @param {(index: number) => void} props.onJump called when a box is clicked
  * @param {string} [props.note] what to say when the code never ran
  */
-export default function ControlFlowChart({ flow, flowTree, trace, index, onJump, note }) {
+export default function ControlFlowChart({ flow, flowTree, trace, source = "", index, onJump, note }) {
   const [followRun, setFollowRun] = useState(true);
   const [pinned, setPinned] = useState(null);
   const [showCode, setShowCode] = useState(false);
+  const [showValues, setShowValues] = useState(true);
   const [simpleView, setSimpleView] = useState(false);
 
   const steps = useMemo(() => mapSteps(flow, trace), [flow, trace]);
@@ -54,7 +58,8 @@ export default function ControlFlowChart({ flow, flowTree, trace, index, onJump,
   const activeKey = runningKey ?? pinned ?? (ranKeys[0] ?? MAIN);
   const chart = flow?.functions?.[activeKey] ?? null;
 
-  const laid = useMemo(() => layoutChart(chart, { showCode }), [chart, showCode]);
+  const laid = useMemo(() => layoutChart(chart, { showCode, showValues }), [chart, showCode, showValues]);
+  const counts = useMemo(() => nodeRunCounts(steps, activeKey), [steps, activeKey]);
 
   const reached = useMemo(() => (ran ? executedNodes(steps, activeKey) : EMPTY_SET), [steps, activeKey, ran]);
   const walked = useMemo(
@@ -68,6 +73,17 @@ export default function ControlFlowChart({ flow, flowTree, trace, index, onJump,
   const raisingId = onThisChart ? raisingNodeId(steps, index) : null;
   const out = onThisChart ? outgoingEdge(chart, steps, index) : null;
   const outKey = out ? `${out.edge.from}>${out.edge.to}` : null;
+  const currentText =
+    onThisChart && currentNodeId
+      ? valueAtStep(
+          chart?.nodes?.find((node) => node.id === currentNodeId) ?? null,
+          chart,
+          steps,
+          trace,
+          source,
+          index,
+        )
+      : "";
 
   const currentBox = useMemo(() => {
     const box = laid.nodes.find((node) => node.id === currentNodeId);
@@ -153,6 +169,12 @@ export default function ControlFlowChart({ flow, flowTree, trace, index, onJump,
           <>
             <Toggle checked={showCode} onChange={setShowCode} label="Show code" />
             <Toggle
+              checked={showValues}
+              onChange={setShowValues}
+              label="Values"
+              title="Show the value line and run count in each box"
+            />
+            <Toggle
               checked={simpleView}
               onChange={setSimpleView}
               label="Simple view"
@@ -162,7 +184,7 @@ export default function ControlFlowChart({ flow, flowTree, trace, index, onJump,
         }
         legend={<Legend />}
       >
-        {() => (
+        {({ focusOn }) => (
           <>
             {laid.edges.map((edge) => {
               const key = `${edge.from}>${edge.to}`;
@@ -174,6 +196,8 @@ export default function ControlFlowChart({ flow, flowTree, trace, index, onJump,
               const reachedHere = reached.has(node.id);
               const isCurrent = node.id === currentNodeId;
               const isRaising = node.id === raisingId;
+              const count = counts.get(node.id) ?? 0;
+              const value = isCurrent ? currentText : "";
               const state = isRaising
                 ? "raising"
                 : isCurrent
@@ -188,8 +212,16 @@ export default function ControlFlowChart({ flow, flowTree, trace, index, onJump,
                   key={node.id}
                   node={node}
                   state={state}
-                  readout={readoutFor(node, { ran, reachedHere, isCurrent, isRaising })}
+                  readout={readoutFor(node, { ran, reachedHere, isCurrent, isRaising, count, value })}
+                  annotation={showValues && (count > 0 || value) ? { count, value } : null}
                   reachable={ran && reachedHere}
+                  onFocus={
+                    ran && reachedHere
+                      ? (event) => {
+                          if (event.target.matches?.(":focus-visible")) focusOn(node);
+                        }
+                      : undefined
+                  }
                   onActivate={
                     ran && reachedHere
                       ? () => {
@@ -227,17 +259,37 @@ function Toggle({ checked, onChange, label, title }) {
 
 /** Which chart to draw, with the ones the run entered marked. */
 function FunctionStrip({ keys, active, ranKeys, followRun, onFollow, onPick }) {
+  const refs = useRef([]);
   if (keys.length <= 1) return null;
   const ran = new Set(ranKeys);
+  const activeAt = Math.max(0, keys.indexOf(active));
+
+  const onKeyDown = (event) => {
+    let to = -1;
+    if (event.key === "ArrowRight") to = (activeAt + 1) % keys.length;
+    else if (event.key === "ArrowLeft") to = (activeAt - 1 + keys.length) % keys.length;
+    else if (event.key === "Home") to = 0;
+    else if (event.key === "End") to = keys.length - 1;
+    else return;
+    event.preventDefault();
+    event.stopPropagation();
+    onPick(keys[to]);
+    requestAnimationFrame(() => refs.current[to]?.focus());
+  };
+
   return (
     <div className="cfg-fns">
-      <div className="cfg-fn-tabs" role="tablist" aria-label="Function">
-        {keys.map((key) => (
+      <div className="cfg-fn-tabs" role="tablist" aria-label="Function" onKeyDown={onKeyDown}>
+        {keys.map((key, i) => (
           <button
             key={key}
             type="button"
             role="tab"
             aria-selected={key === active}
+            tabIndex={key === active ? 0 : -1}
+            ref={(node) => {
+              refs.current[i] = node;
+            }}
             className={`cfg-fn${key === active ? " on" : ""}${ran.has(key) ? " cfg-fn-ran" : ""}`}
             title={ran.has(key) ? `${key} — this run went through it` : `${key} — not called by this run`}
             onClick={() => onPick(key)}
@@ -255,7 +307,7 @@ function FunctionStrip({ keys, active, ranKeys, followRun, onFollow, onPick }) {
 }
 
 /** What one box says about itself, in one sentence. */
-function readoutFor(node, { ran, reachedHere, isCurrent, isRaising }) {
+function readoutFor(node, { ran, reachedHere, isCurrent, isRaising, count, value }) {
   const where = isRaising
     ? "the exception was raised here"
     : isCurrent
@@ -265,8 +317,10 @@ function readoutFor(node, { ran, reachedHere, isCurrent, isRaising }) {
         : reachedHere
           ? "this run went through it"
           : "this run never reached it";
+  const runs = count > 0 ? ` Ran ${count} time${count === 1 ? "" : "s"}.` : "";
+  const values = value ? ` Values: ${value}.` : "";
   const act = ran && reachedHere ? " Jump to the step it ran on." : "";
-  return `${node.label}. ${where}.${act}`;
+  return `${node.label}. ${where}.${runs}${values}${act}`;
 }
 
 /** The whole drawing's accessible name: which chart, and where the run is. */

@@ -2153,6 +2153,11 @@ h3 {
   cursor: grabbing;
 }
 
+.viz-view:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
 .viz-view svg {
   display: block;
 }
@@ -2188,6 +2193,25 @@ h3 {
   padding: 5px 2px 0;
   font-size: 11.5px;
   color: var(--text);
+}
+
+/* A quiet in-caption action, used when a view has a better alternative. */
+.viz-link {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  margin-left: 5px;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.viz-link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .viz-tools {
@@ -2653,6 +2677,28 @@ h3 {
   font-size: 12.5px;
   fill: var(--text-h);
   pointer-events: none;
+}
+
+/* The reserved bottom row: real trace values on the left, run count on the right. */
+.cfg-annotation {
+  pointer-events: none;
+}
+
+.cfg-value-text,
+.cfg-count {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  dominant-baseline: middle;
+  fill: var(--text);
+}
+
+.cfg-count {
+  fill: var(--text-h);
+  font-weight: 650;
+}
+
+.cfg-node.cfg-running .cfg-value-text {
+  fill: var(--text-h);
 }
 
 /* The group holds the state, the shape holds the colour - and only those move.

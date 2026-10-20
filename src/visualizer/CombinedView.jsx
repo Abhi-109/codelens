@@ -33,6 +33,7 @@ export default function CombinedView({
   index,
   currentFrameId,
   onJumpCall,
+  onShowFlow,
   note,
   ctx,
 }) {
@@ -67,6 +68,7 @@ export default function CombinedView({
           index={index}
           currentFrameId={currentFrameId}
           onJumpCall={onJumpCall}
+          onShowFlow={onShowFlow}
           note={note}
         />
       </div>

@@ -127,7 +127,16 @@ test("a module-only run draws one box, centred, with no connector", () => {
 
 test("an empty tree lays out to an empty, unready drawing", () => {
   const laid = layoutCallTree({ nodes: [], roots: [], byId: new Map() });
-  assert.deepEqual(laid, { boxes: [], links: [], width: 0, height: 0, ready: false });
+  assert.deepEqual(laid, {
+    boxes: [],
+    links: [],
+    width: 0,
+    height: 0,
+    ready: false,
+    capped: false,
+    shown: 0,
+    total: 0,
+  });
   assert.deepEqual(layoutCallTree(null).boxes, []);
   assert.deepEqual(layoutCallTree(undefined).boxes, []);
 });
@@ -192,6 +201,98 @@ test("a long label wraps instead of growing past the box", () => {
   assert.ok(wide.lines.length > 1, "it wrapped rather than overflowed");
   assert.ok(wide.w <= MAX_W, `width ${wide.w} stayed inside ${MAX_W}`);
   assert.ok(wide.lines.every((line) => line.length <= MAX_CHARS));
+});
+
+/** A synthetic pre-order tree, enough for the geometry without a trace. */
+function smallTree() {
+  let nextId = 1;
+  const nodes = [];
+  const byId = new Map();
+  const make = (label, parent = null) => {
+    const node = {
+      frameId: nextId,
+      label,
+      function: label,
+      parentId: parent?.frameId ?? null,
+      children: [],
+      returnIndex: null,
+      returnText: null,
+      raised: null,
+    };
+    nextId += 1;
+    nodes.push(node);
+    byId.set(node.frameId, node);
+    if (parent) parent.children.push(node);
+    return node;
+  };
+  const root = make("<module>");
+  const a = make("a()", root);
+  make("b()", root);
+  make("c()", root);
+  make("a1()", a);
+  make("a2()", a);
+  return { nodes, roots: [root], byId };
+}
+
+test("a huge tree is capped breadth-first, with a count and intact geometry", () => {
+  const tree = smallTree();
+  const laid = layoutCallTree(tree, { limit: 5 });
+
+  assert.equal(laid.capped, true);
+  assert.equal(laid.shown, 5);
+  assert.equal(laid.total, tree.nodes.length);
+  assert.deepEqual(laid.boxes.map((box) => box.label), ["<module>", "a()", "a1()", "b()", "c()"]);
+  assert.ok(laid.boxes.some((box) => box.label === "b()"), "breadth keeps the top shape");
+  assert.ok(laid.boxes.some((box) => box.label === "c()"));
+  assert.equal(laid.links.length, 4, "only the visible parent-child joins are drawn");
+  assertNoOverlaps(laid.boxes);
+  assert.equal(laid.boxes.find((box) => box.label === "a()").hidden, 0, "the cap is not a fold");
+});
+
+test("the cap respects folding, and a folded tree does not claim to be capped", () => {
+  const tree = smallTree();
+  const folded = layoutCallTree(tree, { collapsed: new Set([tree.roots[0].frameId]), limit: 5 });
+  assert.equal(folded.capped, false);
+  assert.equal(folded.boxes.length, 1);
+  assert.equal(folded.boxes[0].hidden, 3);
+
+  const open = layoutCallTree(tree, { limit: 5 });
+  assert.equal(open.capped, true);
+  const all = layoutCallTree(tree, { limit: tree.nodes.length });
+  assert.equal(all.capped, false);
+  assert.equal(all.shown, tree.nodes.length);
+  assert.deepEqual(
+    all.boxes.map((box) => box.label),
+    ["<module>", "a()", "a1()", "a2()", "b()", "c()"],
+  );
+});
+
+test("a deep capped chain keeps its top rows and stays deterministic", () => {
+  let nextId = 1;
+  const nodes = [];
+  let parent = null;
+  for (let i = 0; i < 40; i += 1) {
+    const node = {
+      frameId: nextId,
+      label: i === 0 ? "<module>" : `frame(${i})`,
+      function: i === 0 ? "<module>" : "frame",
+      parentId: parent?.frameId ?? null,
+      children: [],
+      returnIndex: null,
+      returnText: null,
+      raised: null,
+    };
+    nextId += 1;
+    nodes.push(node);
+    if (parent) parent.children.push(node);
+    parent = node;
+  }
+  const tree = { nodes, roots: [nodes[0]], byId: new Map(nodes.map((n) => [n.frameId, n])) };
+  const laid = layoutCallTree(tree, { limit: 12 });
+  assert.equal(laid.capped, true);
+  assert.equal(laid.shown, 12);
+  assert.equal(laid.boxes[11].depth, 11, "the cap keeps the first twelve rows of the chain");
+  assert.deepEqual(layoutCallTree(tree, { limit: 12 }), laid);
 });
 
 test("a failed call keeps its box and shows the exception, not a value", () => {

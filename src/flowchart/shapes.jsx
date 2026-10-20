@@ -13,14 +13,16 @@
 //
 // Colours come from CSS classes (App.css) so the chart follows the theme.
 
+import { VALUE_H } from "./layout.js";
+
 const LINE_H = 16;
 
 function poly(list) {
   return list.map(([x, y]) => `${x},${y}`).join(" ");
 }
 
-function NodeText({ lines }) {
-  const start = -((lines.length - 1) * LINE_H) / 2;
+function NodeText({ lines, offsetY = 0 }) {
+  const start = -((lines.length - 1) * LINE_H) / 2 + offsetY;
   return (
     <text className="cfg-text" textAnchor="middle" dominantBaseline="middle">
       {lines.map((line, i) => (
@@ -29,6 +31,27 @@ function NodeText({ lines }) {
         </tspan>
       ))}
     </text>
+  );
+}
+
+/** One line of values and a run count, kept inside the box's reserved row. */
+function NodeAnnotation({ width, height, count, value }) {
+  const room = Math.max(4, Math.floor((width - 48) / 6.1));
+  const shown = value && value.length > room ? `${value.slice(0, room - 1)}…` : value;
+  const y = height / 2 - VALUE_H / 2 - 1;
+  return (
+    <g className="cfg-annotation" aria-hidden="true">
+      {shown ? (
+        <text className="cfg-value-text" x={-width / 2 + 9} y={y} textAnchor="start">
+          {shown}
+        </text>
+      ) : null}
+      {count > 0 ? (
+        <text className="cfg-count" x={width / 2 - 9} y={y} textAnchor="end">
+          ×{count}
+        </text>
+      ) : null}
+    </g>
   );
 }
 
@@ -45,10 +68,20 @@ function NodeText({ lines }) {
  *   height, displayLines, and the graph's own kind/label fields
  * @param {string} [props.state] presentational state class suffix
  * @param {string} [props.readout] the accessible name, already written out
+ * @param {{count: number, value: string}} [props.annotation] bottom-row text
  * @param {boolean} [props.reachable] false when the box cannot be clicked
  * @param {() => void} [props.onActivate] called on click or Enter/Space
+ * @param {() => void} [props.onFocus] called when the box receives keyboard focus
  */
-export function NodeShape({ node, state = "", readout, reachable = true, onActivate }) {
+export function NodeShape({
+  node,
+  state = "",
+  readout,
+  annotation = null,
+  reachable = true,
+  onActivate,
+  onFocus,
+}) {
   const { kind, width, height, x, y } = node;
   const w = width / 2;
   const h = height / 2;
@@ -96,11 +129,13 @@ export function NodeShape({ node, state = "", readout, reachable = true, onActiv
       tabIndex={reachable && onActivate ? 0 : undefined}
       aria-label={reachable && onActivate ? readout : undefined}
       onClick={reachable && onActivate ? onActivate : undefined}
+      onFocus={onFocus}
       onKeyDown={
         reachable && onActivate
           ? (event) => {
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
+                event.stopPropagation();
                 onActivate();
               }
             }
@@ -109,7 +144,15 @@ export function NodeShape({ node, state = "", readout, reachable = true, onActiv
     >
       <title>{readout ?? node.label}</title>
       {shape}
-      <NodeText lines={node.displayLines ?? [node.label ?? ""]} />
+      <NodeText lines={node.displayLines ?? [node.label ?? ""]} offsetY={annotation ? -VALUE_H / 2 : 0} />
+      {annotation ? (
+        <NodeAnnotation
+          width={width}
+          height={height}
+          count={annotation.count}
+          value={annotation.value}
+        />
+      ) : null}
     </g>
   );
 }

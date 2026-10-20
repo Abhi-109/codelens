@@ -699,6 +699,7 @@ export default function App() {
                 flow={flowGraph}
                 flowTree={flow}
                 trace={trace}
+                source={source}
                 index={index}
                 onJump={jumpTo}
                 note={
@@ -714,6 +715,7 @@ export default function App() {
                 index={index}
                 currentFrameId={view.frameId ?? null}
                 onJumpCall={jumpToCall}
+                onShowFlow={() => setViz("flow")}
                 ctx={inspectorCtx}
                 note={
                   flow?.error
@@ -728,6 +730,7 @@ export default function App() {
                 index={index}
                 currentFrameId={view.frameId ?? null}
                 onJumpCall={jumpToCall}
+                onShowFlow={() => setViz("flow")}
                 note={
                   flow?.error
                     ? "There is nothing to draw: the code has a syntax error, so it never ran."

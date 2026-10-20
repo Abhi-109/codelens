@@ -62,15 +62,21 @@ CodeLens fixes both halves of that:
     it, so recursion reads as a tree rather than a tower. Each box shows the real
     arguments and what the call gave back (or the exception that stopped it), the
     call running now is highlighted and kept in view, and clicking any call jumps
-    to the step it started at. A subtree can be folded away.
+    to the step it started at. A subtree can be folded away. A very large run
+    opens with the first 200 frames chosen breadth-first, says how many are still
+    hidden, and puts the rest behind **Show all calls**; a run with no function
+    calls points to the flowchart instead of drawing an empty tree.
   - **Control flow graph** — the textbook flowchart of your code, laid out
     deterministically with no graph library: ovals, rectangles, diamonds, calls
     and read/show boxes. The path this run really took is lit up, a Yes or a No
     only ever shows the branch that was actually taken (per invocation, so a
     recursive call's own answer is its own), a box the run never reached is drawn
     subdued and cannot be clicked, and an exception lights the line it broke on
-    without inventing an edge. One tab per function, "Follow run", "Show code in
-    boxes", and the old block outline one click away under **Simple view**.
+    without inventing an edge. With **Values** on, each executed box carries its
+    real run count; the box under the token also shows the condition a diamond
+    evaluated, or the old → new values its line is about to produce. One tab per
+    function, "Follow run", "Show code in boxes", "Values", and the old block
+    outline one click away under **Simple view**.
   - **Combined** — the call tree beside the two halves of the step you most often
     reach for: which calls are waiting (their real arguments and returned values)
     or what the program is holding, with one click to follow a name through its
@@ -78,7 +84,10 @@ CodeLens fixes both halves of that:
     step view, so the two sides cannot disagree — and choosing between them, or
     switching canvas away and back, leaves the step where it was.
   - Fit, zoom, pan, follow, expand and a "How to read this" legend behave the same
-    on every canvas, on a laptop and on a phone, and honour reduced motion.
+    on every canvas, on a laptop and on a phone, and honour reduced motion. From
+    the keyboard, arrow keys pan, `+`/`-` zoom, `0` resets and `F` fits; tabbing
+    to a node centres it, and the function tabs use Arrow/Home/End with one tab
+    stop.
 - **A Beginner / Advanced / Textbook** switch in one control changes how much of
   the trace is exposed; Textbook opens the control flow canvas, and after that you
   can pick any canvas you like.
@@ -173,7 +182,7 @@ Three suites, all of which should pass on every commit:
 
 ```bash
 npm run test:tracer   # 95 Python tests: the tracer, the flowchart model and the corpus
-npm run test:js       # 307 JS tests: the call tree and control flow model and layout, the
+npm run test:js       # 315 JS tests: the call tree and control flow model and layout, the
                       # graph, the teaching layer, the corpus, the router, the homepage
                       # preview, the language picker, the workspace modules, variable
                       # history and the design tokens' contrast
@@ -318,7 +327,11 @@ in [docs/scope.md](docs/scope.md).
 Working end to end, and teaching: the tracer runs the bundled examples plus a
 45-program corpus covering 32 categories of Python, and the UI replays any of
 them on three canvases — call tree, control flow and combined — with a
-six-section inspector and plain-English explanations for every kind of step. The playground now sits
+six-section inspector and plain-English explanations for every kind of step. Runs
+with very large call trees open capped at 200 visible frames, with a counted
+**Show all calls** escape hatch. Both graph canvases support keyboard
+pan/zoom/fit and focus-centring, and control flow adds roving function tabs. The
+playground now sits
 inside a real site — landing page, language picker, learn, docs and about —
 behind one shared shell with a remembered dark/light theme. Built with React
 19, Vite, and Pyodide.

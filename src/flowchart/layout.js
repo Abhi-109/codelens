@@ -32,6 +32,8 @@ export const PAD_Y = 12;
 export const NODE_SEP = 36;
 /** Vertical room between two rows, for the arrow that joins them. */
 export const RANK_SEP = 56;
+/** Extra height reserved under every box when values and run counts are on. */
+export const VALUE_H = 18;
 export const MARGIN = 20;
 /** How far apart the routed channels for loop-back arrows are. */
 export const CHANNEL_GAP = 15;
@@ -55,14 +57,16 @@ const METRICS = {
  * The box size and wrapped display lines for one node.
  * @param {Object} node a graph node
  * @param {boolean} [showCode] measure the raw code instead of the label
+ * @param {boolean} [showValues] reserve the bottom row for values and run counts
  * @returns {{ width: number, height: number, displayLines: string[] }}
  */
-export function measureNode(node, showCode = false) {
+export function measureNode(node, showCode = false, showValues = false) {
   const metric = METRICS[node?.kind] ?? METRICS.process;
   const lines = wrapText(showCode ? node.code : node.label, metric.maxChars);
   const longest = lines.reduce((n, l) => Math.max(n, l.length), 1);
   let width = Math.max(longest * CHAR_W + PAD_X * 2, metric.width);
-  const height = Math.max(lines.length * LINE_H + PAD_Y * 2, metric.height);
+  const height =
+    Math.max(lines.length * LINE_H + PAD_Y * 2, metric.height) + (showValues ? VALUE_H : 0);
   if (metric.diamond) width = Math.max(width * 1.5, metric.width * 1.5);
   return { width: Math.round(width), height: Math.round(height), displayLines: lines };
 }
@@ -161,7 +165,7 @@ export function pathOf(points) {
  *   positioned nodes (x, y, width, height, displayLines) and edges with a
  *   `points` polyline plus labelX/labelY for edges that carry a label
  */
-export function layoutChart(chart, { showCode = false } = {}) {
+export function layoutChart(chart, { showCode = false, showValues = false } = {}) {
   const chartNodes = chart?.nodes;
   if (!Array.isArray(chartNodes) || chartNodes.length === 0) {
     return { nodes: [], edges: [], width: 0, height: 0 };
@@ -178,7 +182,7 @@ export function layoutChart(chart, { showCode = false } = {}) {
 
   // Measure once — the size of a box depends on its label and never on the step.
   const measured = new Map();
-  for (const node of chartNodes) measured.set(node.id, measureNode(node, showCode));
+  for (const node of chartNodes) measured.set(node.id, measureNode(node, showCode, showValues));
 
   // Row sizes first, so every row can then be centred on the widest one.
   const rowWidth = rows.map((ids) =>

@@ -15,7 +15,10 @@
 //   jumpToNode   the first step at which a box was reached, so clicking a box
 //                can go there. Returns null for a box this run never entered.
 
+import { getStepView, stateAt } from "../tracer/stepView.js";
+import { substituteVars } from "../tracer/explain.js";
 import { MAIN, chartFor, nodeForLine } from "./mapTrace.js";
+import { valueLine } from "./nodeBody.js";
 
 const MODULE = "<module>";
 
@@ -182,6 +185,61 @@ export function jumpToNode(steps, chartKey, nodeId) {
 export function raisingNodeId(steps, index) {
   const step = steps?.[index];
   return step && step.event === "exception" ? (step.nodeId ?? null) : null;
+}
+
+/**
+ * How many times each box's line actually ran in this chart. Only a `line`
+ * event that arrives from a different box counts: after a call returns, the
+ * tracer reports the calling line again, but that line did not run twice.
+ * @returns {Map<string, number>}
+ */
+export function nodeRunCounts(steps, chartKey) {
+  const counts = new Map();
+  const previous = new Map();
+  for (const step of steps ?? []) {
+    if (step.chartKey !== chartKey || step.nodeId == null) continue;
+    const before = previous.get(step.frameId);
+    previous.set(step.frameId, step.nodeId);
+    if (step.event !== "line" || before === step.nodeId) continue;
+    counts.set(step.nodeId, (counts.get(step.nodeId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * The one-line value for the box the token is on at `index`: the real branch a
+ * diamond took, or the old → new values the line is about to produce.
+ *
+ * Empty when the step is not on this box, the trace does not carry the line's
+ * state, or the box has nothing honest to say. It only reads this frame and
+ * this run; it never borrows a value from another call.
+ */
+export function currentValue(node, chart, steps, trace, source, index) {
+  const here = steps?.[index];
+  if (!node || !here || here.chartKey == null || here.nodeId !== node.id) return "";
+  if (here.event !== "line") return "";
+
+  if (node.kind === "decision" || node.kind === "loop") {
+    const code = String(node.code ?? "").trim();
+    if (/^(?:(?:el)?if|while)\s/.test(code)) {
+      const out = outgoingEdge(chart, steps, index);
+      const answer = out?.edge?.label;
+      if (answer !== "Yes" && answer !== "No") return "";
+      const state = stateAt(trace, index);
+      const frame = state?.frames?.[state.frames.length - 1];
+      const question = code.replace(/^(?:(?:el)?if|while)\s+/, "").replace(/:\s*$/, "");
+      const condition = substituteVars(question, frame?.variables ?? {}, state?.heap);
+      return `${condition} is ${answer === "Yes" ? "True" : "False"}`;
+    }
+    // A `for` header has no Yes/No question, but the line changes its loop
+    // variable. Fall through to the same old → new line used by other boxes.
+  }
+
+  try {
+    return valueLine(getStepView(trace, index, source), { text: node.code ?? node.label ?? "" });
+  } catch {
+    return "";
+  }
 }
 
 export { chartFor };

@@ -11,14 +11,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   chartOrder,
+  currentValue,
   executedNodes,
   jumpToNode,
   mapSteps,
+  nodeRunCounts,
   outgoingEdge,
   raisingNodeId,
   traversedEdges,
 } from "./controlFlow.js";
-import { buildTrace } from "./__fixtures__/miniTrace.mjs";
+import { buildTrace, FACT_SOURCE } from "./__fixtures__/miniTrace.mjs";
 
 // FACT_SOURCE, as a format-2 graph:
 //   def fact(n):                line 1
@@ -308,4 +310,99 @@ test("jumping to a box lands on the first step that reached it", () => {
   assert.equal(jumpToNode(steps, "fact", "nonsense"), null);
   assert.equal(jumpToNode(steps, "nope", "n3"), null);
   assert.equal(jumpToNode(null, "fact", "n3"), null);
+});
+
+test("run counts follow line events, not the call and return bookkeeping", () => {
+  const steps = mapSteps(factFlow, factTrace());
+  const fact = nodeRunCounts(steps, "fact");
+  const main = nodeRunCounts(steps, "<main>");
+
+  assert.equal(fact.get("n3"), 2, "the condition ran for fact(2) and fact(1)");
+  assert.equal(fact.get("n4"), 1);
+  assert.equal(fact.get("n5"), 1);
+  assert.equal(fact.get("n1"), undefined, "entering the chart is not running Start");
+  assert.equal(main.get("n3"), 1);
+  assert.equal(main.get("n4"), 1, "returning to a call site is not a second run");
+  assert.equal(nodeRunCounts([], "fact").size, 0);
+});
+
+test("the current box shows the condition a diamond really evaluated", () => {
+  const trace = buildTrace([
+    ["call", "<module>", 1, { id: 1 }],
+    ["line", "<module>", 1, {}],
+    ["line", "<module>", 6, {}],
+    ["call", "fact", 6, { id: 2, vars: { n: { type: "int", value: "2" } } }],
+    ["line", "fact", 2, { vars: { n: { type: "int", value: "2" } } }],
+    ["line", "fact", 4, { vars: { n: { type: "int", value: "2" } } }],
+    ["call", "fact", 4, { id: 3, vars: { n: { type: "int", value: "1" } } }],
+    ["line", "fact", 2, { vars: { n: { type: "int", value: "1" } } }],
+    ["line", "fact", 3, { vars: { n: { type: "int", value: "1" } } }],
+    ["return", "fact", 3, { value: 1 }],
+    ["return", "fact", 4, { value: 2 }],
+    ["line", "<module>", 6, {}],
+    ["return", "<module>", 6, {}],
+  ]);
+  const steps = mapSteps(factFlow, trace);
+  const fact = factFlow.functions.fact;
+  const diamond = fact.nodes.find((node) => node.id === "n3");
+
+  assert.equal(currentValue(diamond, fact, steps, trace, FACT_SOURCE, 4), "2 <= 1 is False");
+  assert.equal(currentValue(diamond, fact, steps, trace, FACT_SOURCE, 7), "1 <= 1 is True");
+  assert.equal(currentValue(diamond, fact, steps, trace, FACT_SOURCE, 5), "", "not this box");
+  assert.equal(currentValue(diamond, fact, steps, trace, FACT_SOURCE, 0), "");
+});
+
+test("the current line shows the old → new values it is about to produce", () => {
+  const chart = {
+    name: "<main>",
+    entry: "s",
+    exit: "e",
+    nodes: [
+      { id: "s", kind: "start", label: "Start", code: "", lines: null },
+      { id: "p", kind: "process", label: "Add one", code: "total = total + 1", lines: [1, 1] },
+      { id: "e", kind: "end", label: "End", code: "", lines: null },
+    ],
+    edges: [
+      { from: "s", to: "p", label: null, back: false },
+      { from: "p", to: "e", label: null, back: false },
+    ],
+  };
+  const trace = buildTrace([
+    ["call", "<module>", 1, { id: 1 }],
+    ["line", "<module>", 1, { vars: { total: { type: "int", value: "0" } } }],
+    ["line", "<module>", 2, { vars: { total: { type: "int", value: "1" } } }],
+  ]);
+  const steps = mapSteps({ functions: { "<main>": chart } }, trace);
+  const node = chart.nodes.find((entry) => entry.id === "p");
+
+  assert.equal(
+    currentValue(node, chart, steps, trace, "total = 0\ntotal = total + 1", 1),
+    "total: 0 → 1",
+  );
+  assert.equal(currentValue(node, chart, steps, trace, "", 0), "", "Start has no line value");
+});
+
+test("a for header shows its loop variable changing instead of a fake Yes/No", () => {
+  const chart = {
+    name: "<main>",
+    entry: "s",
+    exit: "e",
+    nodes: [
+      { id: "s", kind: "start", label: "Start", code: "", lines: null },
+      { id: "l", kind: "loop", label: "For each n", code: "for n in range(1, 3):", lines: [1, 1] },
+      { id: "e", kind: "end", label: "End", code: "", lines: null },
+    ],
+    edges: [
+      { from: "s", to: "l", label: null, back: false },
+      { from: "l", to: "e", label: "No", back: false },
+    ],
+  };
+  const trace = buildTrace([
+    ["call", "<module>", 1, { id: 1 }],
+    ["line", "<module>", 1, {}],
+    ["line", "<module>", 2, { vars: { n: { type: "int", value: "1" } } }],
+  ]);
+  const steps = mapSteps({ functions: { "<main>": chart } }, trace);
+  const loop = chart.nodes.find((entry) => entry.id === "l");
+  assert.equal(currentValue(loop, chart, steps, trace, "for n in range(1, 3):", 1), "n = 1");
 });
