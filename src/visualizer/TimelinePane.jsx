@@ -16,6 +16,7 @@ import { compareSteps } from "./compare.js";
 import {
   TIMELINE_ROW_HEIGHT,
   filterTimelineRows,
+  scrollTarget,
   timelineRows,
   visibleRange,
 } from "./timeline.js";
@@ -64,27 +65,38 @@ export default function TimelinePane({
   useLayoutEffect(() => {
     const element = scroller.current;
     if (!element) return undefined;
-    const measure = () => setHeight(element.clientHeight || INITIAL_HEIGHT);
+    // The pane can be display:none on narrow screens. A ResizeObserver reports
+    // the real height when it comes back; a window resize alone would never
+    // fire when only the tab changed.
+    const measure = () => {
+      const next = element.clientHeight;
+      if (next > 0) setHeight(next);
+    };
     measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
   }, [trace, compareState.open]);
 
-  // Keep the highlighted row in view without moving the page around it.
+  // Keep the highlighted row in view without moving the page around it. While
+  // the pane is hidden there is no viewport to keep it in, so do not scroll or
+  // report a position: the virtual window would then disagree with the DOM.
   useEffect(() => {
     const element = scroller.current;
-    if (!element) return;
+    if (!element || element.clientHeight === 0) return;
     const position = shown.findIndex((row) => row.index === index);
     if (position < 0) return;
-    const top = position * TIMELINE_ROW_HEIGHT;
-    const bottom = top + TIMELINE_ROW_HEIGHT;
-    let next = element.scrollTop;
-    if (top < next) next = top;
-    else if (bottom > next + element.clientHeight) next = bottom - element.clientHeight;
-    if (next !== element.scrollTop) {
-      element.scrollTop = next;
-      setScroll({ trace, top: next });
-    }
+    const next = scrollTarget(position, element.scrollTop, element.clientHeight);
+    if (next == null) return;
+    if (next !== element.scrollTop) element.scrollTop = next;
+    // The browser clamps scrollTop, and a pane may have kept its old offset.
+    // Report what the DOM really has so the virtual window uses the same value.
+    const actual = element.scrollTop;
+    setScroll((current) =>
+      current.trace === trace && current.top === actual
+        ? current
+        : { trace, top: actual },
+    );
   }, [index, shown, trace, height]);
 
   const range = visibleRange(shown.length, scrollTop, height);
@@ -109,11 +121,22 @@ export default function TimelinePane({
         <button
           type="button"
           className="tl-compare"
+          aria-label={compareState.open ? "Close comparison" : "Compare steps"}
           aria-pressed={Boolean(compareState.open)}
           onClick={compareState.open ? onCloseCompare : onOpenCompare}
           disabled={trace.length === 0}
         >
-          {compareState.open ? "Close comparison" : "Compare steps"}
+          {compareState.open ? (
+            <>
+              <span className="viz-wide">Close comparison</span>
+              <span className="viz-narrow">Close</span>
+            </>
+          ) : (
+            <>
+              <span className="viz-wide">Compare steps</span>
+              <span className="viz-narrow">Compare</span>
+            </>
+          )}
         </button>
       </div>
 
@@ -140,7 +163,9 @@ export default function TimelinePane({
         <div className="tl-table" role="table" aria-label="Execution timeline" aria-rowcount={shown.length + 1}>
           <div className="tl-head" role="row">
             <span role="columnheader">Step</span>
-            <span role="columnheader">Line</span>
+            <span role="columnheader" className="tl-line">
+              Line
+            </span>
             <span role="columnheader">Event</span>
             <span role="columnheader">Code</span>
             <span role="columnheader" className="tl-vars">
@@ -189,7 +214,7 @@ export default function TimelinePane({
                     <span role="cell" className="tl-cell tl-line">
                       {row.line ?? "—"}
                     </span>
-                    <span role="cell" className="tl-cell">
+                    <span role="cell" className="tl-cell" title={row.label}>
                       <span className={`tl-kind tl-kind-${row.kind}`}>{row.label}</span>
                     </span>
                     <span role="cell" className="tl-cell tl-code" title={row.codeTitle}>

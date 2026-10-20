@@ -794,6 +794,7 @@
 .controls input[type="range"] {
   flex: 1;
   min-width: 80px;
+  height: 24px;
   accent-color: var(--accent);
 }
 
@@ -861,24 +862,25 @@
   min-height: 0;
 }
 
-/* The strip works like the mode toggles in the top bar: segments that wrap
-   rather than scroll. Six labels will not fit across the quarter of a 1280px
-   window the inspector gets, and a tab hidden behind a scrollbar is a tab
-   nobody can find - so the second row is designed for, not tolerated. */
+/* Six labels fit one row at the inspector's normal width with tighter side
+   padding; below that the strip scrolls rather than pushing a lone History
+   tab onto a second row. */
 .inspector .inspector-tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   flex: none;
-  padding-bottom: 8px;
+  padding: 2px 2px 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .inspector .inspector-tab {
   flex: none;
   font: inherit;
   font-size: 12px;
-  padding: 3px 9px;
+  padding: 3px 5px;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--bg);
@@ -899,7 +901,7 @@
 
 .inspector .inspector-tab:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 /* The card under the strip. It scrolls alone, so a long variable list or a
@@ -944,6 +946,7 @@
 }
 
 .panel-head-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1151,11 +1154,11 @@ button.flow-line:disabled {
 }
 
 .help {
-  position: relative;
   display: inline-flex;
 }
 
 .help-dot {
+  position: relative;
   width: 18px;
   height: 18px;
   padding: 0;
@@ -1168,6 +1171,14 @@ button.flow-line:disabled {
   cursor: pointer;
 }
 
+/* Keep the drawn circle small but make the touch target 24px. */
+.help-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+}
+
 .help-backdrop {
   position: fixed;
   inset: 0;
@@ -1178,9 +1189,11 @@ button.flow-line:disabled {
   position: absolute;
   z-index: 31;
   top: calc(100% + 4px);
+  right: 0;
   left: 0;
-  width: min(280px, 70vw);
+  box-sizing: border-box;
   padding: 8px 10px;
+  overflow-wrap: anywhere;
   border: 1px solid var(--accent-border);
   border-radius: 8px;
   background: var(--bg);
@@ -3011,7 +3024,9 @@ h3 {
     flex-wrap: nowrap;
   }
 
-  [data-pane="graph"] .viz-canvas {
+  /* Drawings cap at half the viewport so their tools stay reachable; the
+     timeline is a table and uses the rest of the pane instead. */
+  [data-pane="graph"] .viz-canvas:not(.tl-root) {
     max-height: 50vh;
   }
 
@@ -3093,11 +3108,12 @@ h3 {
   color: var(--text-h);
 }
 
-.tl-filter,
-.tl-compare {
+.tl-controls .tl-filter,
+.tl-controls .tl-compare {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  min-height: 24px;
   padding: 3px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -3180,6 +3196,7 @@ h3 {
   top: 0;
   right: 0;
   left: 0;
+  box-sizing: border-box;
   height: 34px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
@@ -3208,6 +3225,7 @@ h3 {
 
 .tl-step {
   min-width: 30px;
+  min-height: 24px;
   padding: 1px 4px;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -3317,6 +3335,7 @@ h3 {
 
 .cmp-actions button,
 .cmp-form button {
+  min-height: 24px;
   font-size: 11px;
   padding: 2px 7px;
 }
@@ -3716,6 +3735,39 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+/* Phones: the heading gets its own row and the tab strip scrolls instead of
+   squeezing every label into a two-line pill. */
+@media (max-width: 600px) {
+  .viz-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .viz-tabs {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .viz-tabs .viz-tab {
+    flex: none;
+    padding: 3px 6px;
+    white-space: nowrap;
+  }
+
+  /* The base range rule comes after the narrow-screen block, so repeat the
+     full-width rule here where it wins. A 100px scrubber cannot cover a long
+     trace; the transport buttons then sit on their own centered row. */
+  .controls input[type="range"] {
+    flex: 1 0 100%;
+    order: -1;
+  }
+}
+
 @media (max-width: 760px) {
   .tl-head,
   .tl-row {
@@ -3745,15 +3797,8 @@ h3 {
 }
 
 @media (max-width: 430px) {
-  .tl-head,
-  .tl-row {
-    grid-template-columns: 42px 80px minmax(0, 1fr);
-  }
-
-  .tl-line {
-    display: none;
-  }
-
+  /* Keep the line column: it is the row's place in the program, and the code
+     column still has room at this width. */
   .tl-controls {
     gap: 5px;
   }

@@ -151,6 +151,24 @@ export function visibleRange(count, scrollTop, height) {
 }
 
 /**
+ * The scroll offset that keeps one row inside a measured viewport. A hidden
+ * pane has no height, so it has no target: scrolling it would move the list
+ * behind the learner's back and leave the virtual window out of step with the
+ * DOM. The component only calls this when the scroller is visible.
+ */
+export function scrollTarget(position, scrollTop, height) {
+  const row = Math.max(Number(position) || 0, 0);
+  const top = Math.max(Number(scrollTop) || 0, 0);
+  const view = Number(height) || 0;
+  if (!(view > 0)) return null;
+  const first = row * TIMELINE_ROW_HEIGHT;
+  const last = first + TIMELINE_ROW_HEIGHT;
+  if (first < top) return first;
+  if (last > top + view) return last - view;
+  return top;
+}
+
+/**
  * Apply the "only changes" filter without ever hiding the step being played:
  * a filtered timeline with no current row would contradict the rest of the
  * workspace.

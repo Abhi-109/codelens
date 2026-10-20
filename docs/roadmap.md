@@ -335,6 +335,16 @@ is labelled "Only baseline", not destroyed. The Output inspector now keeps
 exact output text, folds later output separately, and lists real prompts,
 submitted values and handled/uncaught errors with jump targets.
 
+Phase E is the measured pass over that surface. The timeline keeps its line
+column on phones, its rows match the virtual row height exactly, auto-scroll
+follows a resized pane and ignores hidden panes, and the scrubber spans the
+phone width above the transport row. Inspector and visualization tabs stay on
+one line at 1440, 1366, 820 and 375 pixels, scrolling only when they cannot
+fit. The help popover is anchored inside the inspector, has a 24 px target and
+closes on Escape; focus rings and playback targets meet the same size rules.
+Both themes, keyboard use, reduced motion, a 1,866-step trace and shared
+playback were checked in the browser.
+
 Deliberately deferred: collapsing repeated loop rounds ("rounds 2 to 9 are
 similar"), a live "waiting for input" state (inputs are still supplied before
 the run), and reconstructing state between recorded steps. A trace only exposes
@@ -354,7 +364,7 @@ visualizer uses, so every value on it comes from the engine, and the language
 grid marks Python as the only card that opens anything
 (`src/pages/preview.js`, `src/pages/languages.js`, both tested).
 
-All suites pass: 95 Python tests, 338 JS tests, plus lint and a production
+All suites pass: 95 Python tests, 339 JS tests, plus lint and a production
 build. Two opt-in checks need a local Pyodide install: `npm run test:pyodide`
 and `npm run check:explain`. What remains on A3 is debounced generation; see the
 roadmap above for the rest.

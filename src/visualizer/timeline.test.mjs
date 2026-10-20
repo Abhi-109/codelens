@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   TIMELINE_ROW_HEIGHT,
   filterTimelineRows,
+  scrollTarget,
   timelineRows,
   visibleRange,
 } from "./timeline.js";
@@ -123,6 +124,22 @@ test("the virtual window covers the viewport and both overscan edges", () => {
     bottomPad: 0,
   });
   assert.equal(visibleRange(4, 0, 300).end, 4, "a short trace draws every row");
+});
+
+test("auto-scroll only moves a row that is outside the measured viewport", () => {
+  assert.equal(scrollTarget(2, 0, TIMELINE_ROW_HEIGHT * 10), 0, "visible row stays put");
+  assert.equal(
+    scrollTarget(10, 0, TIMELINE_ROW_HEIGHT * 10),
+    TIMELINE_ROW_HEIGHT,
+    "row below the fold moves to the bottom edge",
+  );
+  assert.equal(
+    scrollTarget(2, TIMELINE_ROW_HEIGHT * 5, TIMELINE_ROW_HEIGHT * 10),
+    TIMELINE_ROW_HEIGHT * 2,
+    "row above the fold moves to the top edge",
+  );
+  assert.equal(scrollTarget(2, 40, 0), null, "a hidden pane has no target");
+  assert.equal(scrollTarget(2, 40, -20), null, "a negative height is not a viewport");
 });
 
 test("an empty trace has no rows and a single-step trace has exactly one", () => {

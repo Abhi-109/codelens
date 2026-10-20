@@ -11,6 +11,7 @@ import {
   Component,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -25,13 +26,23 @@ const MODULE_NAME = "<module>";
 /** A small "?" that opens a one-paragraph beginner explanation, and never takes space. */
 export function SectionHelp({ title, children }) {
   const [open, setOpen] = useState(false);
+  const id = useId();
   return (
-    <span className="help">
+    <span
+      className="help"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && open) {
+          event.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
       <button
         type="button"
         className="help-dot"
         aria-label={`What is ${title}?`}
         aria-expanded={open}
+        aria-controls={open ? id : undefined}
         onClick={() => setOpen((value) => !value)}
       >
         ?
@@ -39,7 +50,7 @@ export function SectionHelp({ title, children }) {
       {open ? (
         <>
           <span className="help-backdrop" onClick={() => setOpen(false)} />
-          <span className="help-pop" role="note">
+          <span className="help-pop" id={id} role="note">
             {children}
           </span>
         </>

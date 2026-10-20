@@ -87,6 +87,7 @@ export default function PlaybackBar({
           onChange={(event) => onJump(Number(event.target.value))}
           disabled={!hasTrace}
           aria-label="Step"
+          aria-valuetext={hasTrace ? `Step ${index + 1} of ${trace.length}` : "No steps recorded"}
         />
         <select
           value={speed}
