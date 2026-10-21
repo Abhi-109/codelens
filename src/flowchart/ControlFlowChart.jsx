@@ -225,7 +225,12 @@ export default function ControlFlowChart({ flow, flowTree, trace, source = "", i
                   onActivate={
                     ran && reachedHere
                       ? () => {
-                          const at = jumpToNode(steps, activeKey, node.id);
+                          const at = jumpToNode(
+                            steps,
+                            activeKey,
+                            node.id,
+                            onThisChart ? here?.frameId ?? null : null,
+                          );
                           if (at != null) onJump?.(at);
                         }
                       : undefined

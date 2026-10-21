@@ -49,8 +49,10 @@ Notes and known limits
 
 import ast
 import builtins
+import dis
 import io
 import json
+import re
 import sys
 import time
 import types
@@ -221,17 +223,38 @@ class _Output(io.StringIO):
         return len(text)
 
 
+def _finally_source_lines(source):
+    """Line numbers inside a finally suite, where an exception may still unwind."""
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return set()
+    try_nodes = (ast.Try,) + ((ast.TryStar,) if hasattr(ast, "TryStar") else ())
+    lines = set()
+    for node in ast.walk(tree):
+        if isinstance(node, try_nodes):
+            for statement in node.finalbody:
+                start = getattr(statement, "lineno", None)
+                end = getattr(statement, "end_lineno", start)
+                if start is not None and end is not None:
+                    lines.update(range(start, end + 1))
+    return lines
+
+
 class _Tracer:
     """The function Python calls on every call / line / return / exception event."""
 
-    def __init__(self, max_steps, max_seconds, inputs):
+    def __init__(self, max_steps, max_seconds, inputs, source=""):
         self.max_steps = max_steps
         self.deadline = time.perf_counter() + max_seconds
         self.max_seconds = max_seconds
         self.inputs = list(inputs or [])
+        self.source_lines = source.splitlines()
+        self.finally_lines = _finally_source_lines(source)
         self.trace = []
         self.stack = []
-        self.pending = set()  # frames an exception is currently travelling through
+        self.pending = {}  # frame key -> the exception currently escaping that frame
+        self.last_exception = {}  # frame key -> its most recent exception, for a bare raise
         self.line_steps = 0
         self.frame_counter = 0
         self.values = _Values()
@@ -287,28 +310,49 @@ class _Tracer:
                 )
             self.line_steps += 1
             entry["line"] = frame.f_lineno
-            self.pending.discard(key)  # running again means the exception was handled
+            # A bare raise keeps the exception travelling; a finally suite must
+            # not hide it either. Any other resumed line means it was handled.
+            if frame.f_lineno not in self.finally_lines:
+                self.pending.pop(key, None)
+            if self._is_bare_raise(frame.f_lineno):
+                self.pending.setdefault(key, self.last_exception.get(key))
             self._record("line", frame)
 
         elif event == "exception":
             exc_type, exc_value, _ = arg
-            self.pending.add(key)
+            exception = {"type": exc_type.__name__, "message": _safe_str(exc_value)}
+            self.pending[key] = exception
+            self.last_exception[key] = exception
             entry["line"] = frame.f_lineno
-            self._record(
-                "exception", frame,
-                exception={"type": exc_type.__name__, "message": _safe_str(exc_value)},
-            )
+            self._record("exception", frame, exception=exception)
 
         elif event == "return":
-            if key in self.pending:
-                self.pending.discard(key)
-                self._record("unwind", frame, exit_kind="exception")
+            last_op = self._last_opcode(frame)
+            # A normal return or a yield suspends normally. Everything else
+            # while pending is the frame exiting because an exception escaped.
+            if key in self.pending and not last_op.startswith("RETURN_") and last_op != "YIELD_VALUE":
+                exception = self.pending.pop(key)
+                self.last_exception.pop(key, None)
+                self._record("unwind", frame, exception=exception, exit_kind="exception")
             else:
+                if last_op.startswith("RETURN_"):
+                    self.pending.pop(key, None)
+                    self.last_exception.pop(key, None)
                 self._record("return", frame, exit_kind="normal", has_value=True, value=arg)
             for index in range(len(self.stack) - 1, -1, -1):  # pop this exact frame
                 if self.stack[index] is entry:
                     del self.stack[index]
                     break
+
+    def _is_bare_raise(self, lineno):
+        if not (1 <= lineno <= len(self.source_lines)):
+            return False
+        return re.fullmatch(r"raise\s*(?:#.*)?", self.source_lines[lineno - 1].strip()) is not None
+
+    @staticmethod
+    def _last_opcode(frame):
+        code = frame.f_code.co_code
+        return dis.opname[code[frame.f_lasti]] if 0 <= frame.f_lasti < len(code) else ""
 
     # --- helpers ----------------------------------------------------------
     def _entry(self, key):
@@ -387,7 +431,7 @@ def _error_line(tb):
 
 
 def run_trace(source, max_steps=1500, max_seconds=5.0, inputs=None):
-    tracer = _Tracer(max_steps, max_seconds, inputs)
+    tracer = _Tracer(max_steps, max_seconds, inputs, source)
     output = _Output(tracer)
     status = "completed"
     error = None

@@ -129,6 +129,49 @@ test("a caught exception is only called handled when the frame runs again", () =
   );
 });
 
+test("an exception that reaches its caller is not called uncaught", () => {
+  const inner = {
+    step: 1,
+    event: "exception",
+    line: 2,
+    frame_id: 2,
+    function: "f",
+    frames: [frame(1), frame(2, "f")],
+    heap: {},
+    exception: { type: "ValueError", message: "bad" },
+  };
+  const unwindInner = { step: 2, event: "unwind", line: 2, frame_id: 2, function: "f" };
+  const outer = { ...inner, step: 3, line: 5, frame_id: 1, function: "<module>" };
+  const handled = [
+    state(0),
+    inner,
+    unwindInner,
+    outer,
+    state(4),
+  ];
+  assert.equal(exceptionOutcome(handled, 1), "propagated");
+  assert.equal(exceptionOutcome(handled, 3), "handled");
+
+  const crashed = [
+    state(0),
+    inner,
+    unwindInner,
+    outer,
+    { step: 4, event: "unwind", line: 5, frame_id: 1, function: "<module>" },
+    { step: 5, event: "error", type: "ValueError", message: "bad" },
+  ];
+  assert.equal(exceptionOutcome(crashed, 1), "propagated");
+  assert.equal(exceptionOutcome(crashed, 3), "uncaught");
+  assert.deepEqual(
+    exceptionEntries(crashed).map((entry) => [entry.event, entry.outcome]),
+    [
+      ["exception", "propagated"],
+      ["exception", "uncaught"],
+      ["error", "uncaught"],
+    ],
+  );
+});
+
 test("errors are split by the current step and the final error is still available", () => {
   const trace = [
     state(0),

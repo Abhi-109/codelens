@@ -1,9 +1,11 @@
 // Talks to the Pyodide worker. The Python tracer has one source of truth in
 // tracer-poc/tracer.py; it is imported here as text and handed to the worker.
-// flowchart.py (the format-2 graph builder) loads the same way.
+// flowchart.py (the format-2 graph builder) and analyze.py (the read-only
+// profile) load the same way.
 
 import tracerSource from "../../tracer-poc/tracer.py?raw";
 import flowchartSource from "../../tracer-poc/flowchart.py?raw";
+import analyzeSource from "../../tracer-poc/analyze.py?raw";
 
 // Pinned to the version in package.json so the CDN matches the npm package
 // that scripts/pyodide-check.mjs tests against.
@@ -40,7 +42,13 @@ function ensureWorker() {
     if (message.type === "result") entry.resolve(message.result);
     else entry.reject(new Error(message.error));
   };
-  worker.postMessage({ type: "init", tracerSource, flowchartSource, indexURL: INDEX_URL });
+  worker.postMessage({
+    type: "init",
+    tracerSource,
+    flowchartSource,
+    analyzeSource,
+    indexURL: INDEX_URL,
+  });
   return worker;
 }
 
@@ -117,6 +125,28 @@ export function buildFlowchartGraph(source) {
       reject,
     });
     w.postMessage({ type: "flowchart_graph", id, source });
+  });
+}
+
+/**
+ * Builds the static program profile (tracer-poc/analyze.py) without running the
+ * source. Cached per source, like the flowchart builders; the profile is
+ * analysis metadata, not part of the execution trace.
+ */
+const profileCache = new Map();
+export function buildProgramProfile(source) {
+  if (profileCache.has(source)) return Promise.resolve(profileCache.get(source));
+  const w = ensureWorker();
+  const id = nextId++;
+  return new Promise((resolve, reject) => {
+    pending.set(id, {
+      resolve: (value) => {
+        profileCache.set(source, value);
+        resolve(value);
+      },
+      reject,
+    });
+    w.postMessage({ type: "analyze", id, source });
   });
 }
 

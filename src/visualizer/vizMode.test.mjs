@@ -37,22 +37,29 @@ function storeWith(values = {}, { throws = false } = {}) {
 test("every offered canvas has a name and a plain-English blurb", () => {
   assert.deepEqual(
     VIZ_MODES,
-    ["tree", "flow", "combined", "timeline"],
-    "Call tree is the canvas a fresh run opens on",
+    ["scene", "tree", "flow", "combined", "timeline"],
+    "Adaptive is the canvas a fresh run opens on",
   );
-  assert.equal(DEFAULT_VIZ, "tree");
+  assert.equal(DEFAULT_VIZ, "scene");
   for (const id of VIZ_MODES) {
     assert.equal(isVizMode(id), true);
     assert.equal(typeof VIZ_LABELS[id], "string");
     assert.ok(VIZ_LABELS[id].length > 0);
+    assert.ok(VIZ_LABELS[id].length <= 12, `${id} fits the compact mobile strip`);
     assert.ok(VIZ_BLURBS[id].length > 0);
   }
+  assert.deepEqual(Object.keys(VIZ_LABELS).sort(), [...VIZ_MODES].sort());
+  assert.equal(
+    new Set(VIZ_MODES.map((id) => VIZ_LABELS[id])).size,
+    VIZ_MODES.length,
+    "every mode is distinguishable by its visible label",
+  );
   assert.equal(isVizMode("graph"), false);
   assert.equal(isVizMode(null), false);
   assert.equal(isVizMode(undefined), false);
 });
 
-test("an unusable choice falls back to Call tree rather than blanking the pane", () => {
+test("an unusable choice falls back to Adaptive rather than blanking the pane", () => {
   assert.equal(normalizeViz("tree"), "tree");
   assert.equal(normalizeViz("nonsense"), DEFAULT_VIZ);
   assert.equal(normalizeViz(""), DEFAULT_VIZ);
@@ -89,7 +96,7 @@ test("an unknown canvas keeps the current one instead of blanking the pane", () 
     { viz: DEFAULT_VIZ },
     "no state to update falls back exactly the way the inspector tab does",
   );
-  assert.equal(initialViz().viz, DEFAULT_VIZ, "with nothing saved, a fresh session opens on Call tree");
+  assert.equal(initialViz().viz, DEFAULT_VIZ, "with nothing saved, a fresh session opens on Adaptive");
 });
 
 test("picking the canvas already showing changes nothing at all", () => {
@@ -120,7 +127,7 @@ test("stepping along the canvas strip wraps at both ends", () => {
     assert.equal(stepViz(first, 1), VIZ_MODES[1], "one step on walks to the next canvas");
     assert.equal(stepViz(last, -1), VIZ_MODES[VIZ_MODES.length - 2]);
   }
-  assert.equal(stepViz(undefined, 1), oneOn, "nothing chosen: start at Call tree, step on");
+  assert.equal(stepViz(undefined, 1), oneOn, "nothing chosen: start at Adaptive, step on");
   assert.equal(stepViz("nonsense", 1), oneOn, "unusable choice: the same");
   assert.equal(stepViz(first, Number.NaN), first, "not a step at all: stay put");
 });

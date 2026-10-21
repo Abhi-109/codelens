@@ -8,7 +8,7 @@ Python visualizer. Written from a repository audit (Phase 0) done on
 
 | Area | State |
 |---|---|
-| Python tracer (`tracer-poc/tracer.py`, 544 lines) | Records every step as JSON (trace format v2). 45-program corpus over 32 categories. |
+| Python tracer (`tracer-poc/tracer.py`, 544 lines) | Records every step as JSON (trace format v2). 55-program corpus over 32 categories. |
 | Browser execution | Pyodide in a Web Worker (`src/tracer/pyodide.worker.js`), `input()` supported through the values box. |
 | Teaching layer | `stepView.js` (one view per step), `explain.js` (plain English for every event kind), `values.js`, `objects.js` — all pure and tested. |
 | Execution graph | `src/flowchart/`: automatic layout (no dagre), per-card values, fold finished calls, zoom/fit/pan/follow. |

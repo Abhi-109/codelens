@@ -43,6 +43,15 @@ CORPUS = [
         ),
     },
     {
+        "name": "assign-only",
+        "category": "basic variables",
+        "title": "Two assignments with no output",
+        "source": (
+            "x = 1\n"
+            "y = 2\n"
+        ),
+    },
+    {
         "name": "strings",
         "category": "strings",
         "title": "F-strings, methods and slicing",
@@ -178,6 +187,16 @@ CORPUS = [
         ),
     },
     {
+        "name": "list-print-element",
+        "category": "lists",
+        "title": "Append, then print one element",
+        "source": (
+            "fruits = ['apple', 'banana']\n"
+            "fruits.append('cherry')\n"
+            "print(fruits[2])\n"
+        ),
+    },
+    {
         "name": "tuple-unpack",
         "category": "tuples and unpacking",
         "title": "Unpacking a pair and swapping",
@@ -248,6 +267,40 @@ CORPUS = [
             "\n"
             "result = greet('Asha')\n"
             "print(result)\n"
+        ),
+    },
+    {
+        "name": "function-return-none",
+        "category": "functions",
+        "title": "An explicit return None",
+        "source": (
+            "def label():\n"
+            "    return None\n"
+            "\n"
+            "print(label())\n"
+        ),
+    },
+    {
+        "name": "function-implicit-none",
+        "category": "functions",
+        "title": "A function that ends without return",
+        "source": (
+            "def quiet():\n"
+            "    x = 1\n"
+            "\n"
+            "print(quiet())\n"
+        ),
+    },
+    {
+        "name": "function-print-return",
+        "category": "functions",
+        "title": "A function that prints one value and returns another",
+        "source": (
+            "def report():\n"
+            "    print('inside')\n"
+            "    return 42\n"
+            "\n"
+            "print(report())\n"
         ),
     },
     {
@@ -425,6 +478,24 @@ CORPUS = [
         ),
     },
     {
+        "name": "exception-reraise",
+        "category": "exceptions",
+        "title": "Re-raising after cleanup",
+        "source": (
+            "def risky(value):\n"
+            "    try:\n"
+            "        return 10 // value\n"
+            "    except ZeroDivisionError:\n"
+            "        print('rethrowing')\n"
+            "        raise\n"
+            "\n"
+            "try:\n"
+            "    risky(0)\n"
+            "except ZeroDivisionError:\n"
+            "    print('caught at top')\n"
+        ),
+    },
+    {
         "name": "combo-exception-loop",
         "category": "exceptions",
         "title": "One bad value in a loop",
@@ -595,6 +666,15 @@ CORPUS = [
             "print('one', 'two', sep=' | ')\n"
             "print('no newline', end='...')\n"
             "print('continues')\n"
+        ),
+    },
+    {
+        "name": "io-empty-print",
+        "category": "input and output",
+        "title": "print('') writes a blank line",
+        "source": (
+            "print('')\n"
+            "print('done')\n"
         ),
     },
     # --- generators and async -----------------------------------------------

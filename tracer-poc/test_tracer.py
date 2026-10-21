@@ -20,6 +20,24 @@ class TracerTests(unittest.TestCase):
         self.assertEqual(lines[1]["frames"][-1]["variables"]["x"], {"type": "int", "value": 1})
         self.assertEqual(lines[2]["frames"][-1]["variables"]["y"], {"type": "int", "value": 3})
 
+    def test_output_is_write_chunks_and_a_print_newline_is_its_own_chunk(self):
+        r = run_trace('print("hello")\nprint("")\n')
+        chunks = [e["text"] for e in events(r, "output")]
+        self.assertEqual(chunks, ["hello", "\n", "\n"])
+        self.assertEqual(r["output"], "hello\n\n")
+        # print("") is one newline chunk; print("hello") is text plus its own
+        # newline chunk. The second chunk belongs to the first printed line.
+        self.assertEqual(events(r, "output")[1]["line"], 1)
+        self.assertEqual(events(r, "output")[2]["line"], 2)
+
+    def test_a_completed_program_closes_the_module_with_a_none_return(self):
+        r = run_trace("x = 1\ny = 2\n")
+        last = r["trace"][-1]
+        self.assertEqual(last["event"], "return")
+        self.assertEqual(last["function"], "<module>")
+        self.assertEqual(last["exit_kind"], "normal")
+        self.assertEqual(last["return_value"], {"type": "none"})
+
     def test_recursion_has_distinct_frames(self):
         src = "def f(n):\n    if n <= 1:\n        return 1\n    return n * f(n - 1)\nf(3)\n"
         r = run_trace(src)
@@ -65,6 +83,53 @@ class TracerTests(unittest.TestCase):
         r = run_trace(src)
         self.assertEqual(r["status"], "completed")
         self.assertEqual(len(events(r, "exception")), 1)
+        self.assertEqual(events(r, "unwind"), [])
+
+    def test_a_bare_reraise_unwinds_instead_of_returning_none(self):
+        src = (
+            "def risky(value):\n"
+            "    try:\n"
+            "        return 10 // value\n"
+            "    except ZeroDivisionError:\n"
+            "        print('rethrowing')\n"
+            "        raise\n"
+            "try:\n"
+            "    risky(0)\n"
+            "except ZeroDivisionError:\n"
+            "    print('caught at top')\n"
+        )
+        r = run_trace(src)
+        self.assertEqual(r["status"], "completed")
+        self.assertEqual(r["output"], "rethrowing\ncaught at top\n")
+        self.assertEqual([e["function"] for e in events(r, "unwind")], ["risky"])
+        self.assertFalse([e for e in events(r, "return") if e["function"] == "risky"])
+        unwind = events(r, "unwind")[0]
+        self.assertEqual(unwind["exception"]["type"], "ZeroDivisionError")
+
+    def test_an_exception_through_finally_unwinds_instead_of_returning(self):
+        src = (
+            "def f():\n"
+            "    try:\n"
+            "        1 / 0\n"
+            "    finally:\n"
+            "        print('cleanup')\n"
+            "f()\n"
+        )
+        r = run_trace(src)
+        self.assertEqual(r["status"], "error")
+        self.assertEqual(r["output"], "cleanup\n")
+        self.assertEqual([e["function"] for e in events(r, "unwind")], ["f", "<module>"])
+        self.assertFalse([e for e in events(r, "return") if e["function"] == "f"])
+        self.assertEqual(events(r, "unwind")[0]["exception"]["type"], "ZeroDivisionError")
+
+    def test_a_return_in_finally_suppresses_the_exception(self):
+        src = "def f():\n    try:\n        1 / 0\n    finally:\n        return 5\nprint(f())\n"
+        r = run_trace(src)
+        self.assertEqual(r["status"], "completed")
+        self.assertEqual(r["output"], "5\n")
+        returns = [e for e in events(r, "return") if e["function"] == "f"]
+        self.assertEqual(len(returns), 1)
+        self.assertEqual(returns[0]["return_value"], {"type": "int", "value": 5})
         self.assertEqual(events(r, "unwind"), [])
 
     def test_syntax_error_reports_line(self):

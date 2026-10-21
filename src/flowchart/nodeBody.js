@@ -51,12 +51,14 @@ export function valueLine(view, node) {
   for (const change of view?.changes ?? []) {
     if (seen.has(change.name)) continue;
     seen.add(change.name);
+    const removed = change.kind === "removed" || change.kind === "removed-slot";
     entries.push({
       name: change.name,
       rank: 0,
       // A slot or name that did not exist before reads "= value", not "? → value".
-      text:
-        change.kind === "new" || change.kind === "new-slot" || change.from === null
+      text: removed
+        ? `${change.name} removed (was ${change.from})`
+        : change.kind === "new" || change.kind === "new-slot" || change.from === null
           ? `${change.name} = ${change.to}`
           : `${change.name}: ${change.from} → ${change.to}`,
     });
@@ -106,6 +108,11 @@ export function nextStep(sample, node, graph, trace, options = {}) {
   const to = nextId ? find(nextId) : null;
 
   const next = trace?.[sample + 1] ?? null;
+  // The module frame also records a return of None when Python finishes. That
+  // is not a function result, so the last line ends the program instead.
+  if (next?.event === "return" && next.function === "<module>") {
+    return { reason: "return", line: null, step: i < steps.length ? i : null, text: "the program ends" };
+  }
   const returns = next?.event === "return" && next.frame_id === node.frameId;
   if (returns) {
     const value = next.return_value ? showValue(next.return_value, next.heap) : null;

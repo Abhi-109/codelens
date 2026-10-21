@@ -1,17 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { buildFlowchart, buildFlowchartGraph, onEngineStatus, runTrace } from "./tracer/client";
+import {
+  buildFlowchart,
+  buildFlowchartGraph,
+  buildProgramProfile,
+  onEngineStatus,
+  runTrace,
+} from "./tracer/client";
 import { CONCEPTS, explainStep, isNewConcept } from "./tracer/explain";
 import { namesById, objectChanges } from "./tracer/objects";
-import { changeLog, errorStep, getStepView, variableSeries } from "./tracer/stepView";
+import { recognizeProgram } from "./tracer/recognition";
+import { changeLog, variableSeries } from "./tracer/stepView";
 import { buildExecutionGraph } from "./flowchart/executionGraph.js";
 import ControlFlowChart from "./flowchart/ControlFlowChart.jsx";
+import AdaptiveView from "./visualizer/AdaptiveView.jsx";
+import { AUTO_ADAPTER, adapterLabel, resolveAdaptiveView } from "./visualizer/adaptive.js";
 import CombinedView from "./visualizer/CombinedView.jsx";
 import Inspector from "./visualizer/Inspector.jsx";
 import PlaybackBar from "./visualizer/PlaybackBar.jsx";
 import CallTree from "./visualizer/CallTree.jsx";
 import TimelinePane from "./visualizer/TimelinePane.jsx";
 import VisualizationPane from "./visualizer/VisualizationPane.jsx";
-import { outputView } from "./visualizer/output.js";
 import {
   closeComparison,
   initialComparison,
@@ -19,7 +27,7 @@ import {
   setComparisonEndpoint,
   swapComparison,
 } from "./visualizer/compare.js";
-import { DEFAULT_SPEED, isSpeed, loadSpeed, playbackIntervalMs, saveSpeed } from "./visualizer/playback.js";
+import { loadSpeed, playbackIntervalMs, saveSpeed } from "./visualizer/playback.js";
 import {
   LEARNING_MODES,
   MODE_BLURBS,
@@ -30,13 +38,23 @@ import {
   modeDetail,
   saveMode,
 } from "./visualizer/learningMode.js";
-import {
-  isVizMode,
-  initialViz,
-  saveViz,
-  selectViz,
-} from "./visualizer/vizMode.js";
+import { createRunGate } from "./visualizer/runGate.js";
+import { VIZ_LABELS, loadViz, saveViz } from "./visualizer/vizMode.js";
 import { clampStep } from "./visualizer/workspace.js";
+import { ExecutionSessionProvider } from "./visualizer/session/ExecutionSessionProvider.jsx";
+import { useExecutionSession } from "./visualizer/session/useExecutionSession.js";
+import { createInitialSession, sessionActions } from "./visualizer/session/session.js";
+import {
+  selectAdapter,
+  selectOutput,
+  selectProfile,
+  selectRecognition,
+  selectRunSource,
+  selectSourceDirty,
+  selectStepView,
+  selectTrace,
+  selectTraceIndex,
+} from "./visualizer/session/selectors.js";
 import "./App.css";
 
 const MODULE = "<module>";
@@ -78,7 +96,7 @@ const START_EXAMPLE = 3; // Recursion — the best demo of the execution graph.
 
 // Column widths are percentages; each side keeps a minimum so nothing collapses.
 const COLS_KEY = "codelens.columns";
-const DEFAULT_COLUMNS = { left: 30, mid: 44 };
+const DEFAULT_COLUMNS = { left: 28, mid: 49 };
 const MIN_LEFT = 18;
 const MIN_MID = 26;
 const MIN_RIGHT = 18;
@@ -94,6 +112,42 @@ const PANES = [
 ];
 
 const clamp = (value, lo, hi) => Math.min(Math.max(value, lo), hi);
+
+const STATUS_LABELS = {
+  timeout: "Timeout",
+  step_limit: "Step limit",
+  output_limit: "Output limit",
+  internal_error: "Internal error",
+};
+
+/** One honest execution state for the header, derived only from the run. */
+function runStateOf({ running, engine, result, trace, sourceDirty }) {
+  if (running) return { id: "running", label: "Running" };
+  if (engine === "loading" && !result) return { id: "loading", label: "Loading Python" };
+  if (engine === "failed") return { id: "error", label: "Engine failed" };
+  if (sourceDirty) {
+    return {
+      id: "edited",
+      label: "Source edited",
+      title: "The source changed after this run. Run it again to update the canvas.",
+    };
+  }
+  if (!result) return { id: "ready", label: "Ready" };
+  if (result.error) {
+    return {
+      id: "error",
+      label: result.error.type === "SyntaxError" ? "Syntax error" : "Runtime error",
+    };
+  }
+  if (result.status && result.status !== "ok") {
+    return {
+      id: result.status,
+      label: STATUS_LABELS[result.status] ?? result.status,
+    };
+  }
+  if (trace.length === 0) return { id: "empty", label: "No steps" };
+  return { id: "completed", label: "Completed" };
+}
 
 function loadColumns() {
   try {
@@ -179,34 +233,43 @@ function Splitter({ name, onGrab, onMove, onRelease }) {
 }
 
 export default function App() {
-  const [source, setSource] = useState(EXAMPLES[START_EXAMPLE].code);
-  const [result, setResult] = useState(null);
-  const [flow, setFlow] = useState(null);
-  // The format-2 flowchart graph, built from the same code as the run. The
-  // Control Flow Graph canvas draws this; the older tree above still feeds the
-  // simple outline and the explanations.
-  const [flowGraph, setFlowGraph] = useState(null);
+  return (
+    <ExecutionSessionProvider
+      initialState={createInitialSession({
+        source: EXAMPLES[START_EXAMPLE].code,
+        speed: loadSpeed(),
+        viz: loadViz(),
+      })}
+    >
+      <Workspace />
+    </ExecutionSessionProvider>
+  );
+}
+
+function Workspace() {
+  const { state: session, dispatch } = useExecutionSession();
+  const {
+    source,
+    result,
+    flow,
+    flowGraph,
+    index,
+    playing,
+    speed,
+    running,
+    editing,
+    viz,
+    selectedFrameId: selectedCall,
+  } = session;
   // The learning mode is workspace-wide: it decides how much technical
   // detail every surface uses, and it is remembered between visits.
   const [mode, setModeState] = useState(() => loadMode());
-  // Which drawing the canvas pane shows. It is held beside the step as its own
-  // piece of state and changed only through `selectViz`, which carries every
-  // other field through untouched — so changing canvas can never move the run.
-  const [vizState, setVizState] = useState(initialViz);
-  const [index, setIndex] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  // A fresh session gets the slowed-down default. A saved speed only wins if
-  // it is still one of the speeds the picker offers; anything else falls back.
-  const [speed, setSpeedState] = useState(() => loadSpeed());
   const [showTraceDetails, setShowTraceDetails] = useState(false);
   const [engine, setEngine] = useState("idle");
-  const [running, setRunning] = useState(false);
-  const [editing, setEditing] = useState(true);
   const [showJson, setShowJson] = useState(false);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [columns, setColumns] = useState(loadColumns);
   const [resizing, setResizing] = useState(false);
-  const [selectedCall, setSelectedCall] = useState(null);
   const [watched, setWatched] = useState(null);
   // Comparison mode owns only its two endpoints and whether it is open. The
   // playback step stays in `index`, so opening or changing a comparison can
@@ -219,6 +282,11 @@ export default function App() {
   const [pane, setPane] = useState(() => (window.innerWidth < 900 ? "code" : "graph"));
 
   const timer = useRef(null);
+  // The gate rejects a run whose source was edited or whose successor started
+  // while it was still waiting on the worker. The ref mirrors `source` so an
+  // edit made during a run is visible to the async handler immediately.
+  const runGate = useRef(createRunGate());
+  const sourceRef = useRef(source);
   // Mirrors `index` for the playback timer, which must not be rebuilt on
   // every step just to see where the program has reached.
   const indexRef = useRef(0);
@@ -245,24 +313,32 @@ export default function App() {
     // never while already in it.
     if (chosen === "textbook" && mode !== "textbook") setViz("flow");
   };
+  const setSource = (next) => {
+    sourceRef.current = next;
+    dispatch(sessionActions.setSource(next));
+  };
+  const setEditing = (next) => dispatch(sessionActions.setEditing(next));
   const setSpeed = (next) => {
-    setSpeedState(isSpeed(next) ? next : DEFAULT_SPEED);
+    dispatch(sessionActions.setSpeed(next));
     saveSpeed(next);
   };
   // Choosing a canvas touches the canvas and nothing else — never the step,
   // never the playing state, never the speed.
   const setViz = (next) => {
-    if (!isVizMode(next)) return;
-    setVizState((state) => selectViz(state, next));
+    dispatch(sessionActions.selectViz(next));
     saveViz(next);
   };
-  const viz = vizState.viz;
+  // The adapter choice is presentation too: it changes which validated scene
+  // is drawn, never the cursor, playback or selected call.
+  const setAdapter = (next) => dispatch(sessionActions.selectAdapter(next));
 
-  const trace = useMemo(() => result?.trace ?? [], [result]);
-  const graph = useMemo(() => buildExecutionGraph(trace, source), [trace, source]);
+  const trace = selectTrace(session);
+  const traceIndex = selectTraceIndex(session);
+  const shownSource = selectRunSource(session);
+  const graph = useMemo(() => buildExecutionGraph(trace, shownSource), [trace, shownSource]);
   const view = useMemo(
-    () => getStepView(trace, index, source, { frameId: selectedCall, steps: graph.steps }),
-    [trace, index, source, selectedCall, graph],
+    () => selectStepView(session, { steps: graph.steps }),
+    [session, graph],
   );
   const detail = useMemo(() => modeDetail(mode), [mode]);
   const log = useMemo(() => changeLog(trace), [trace]);
@@ -282,8 +358,8 @@ export default function App() {
 
   const concept = view.explanation.concept ? CONCEPTS[view.explanation.concept] : null;
   const showConcept = useMemo(
-    () => isNewConcept(trace, index, source, view.explanation.concept),
-    [trace, index, source, view.explanation.concept],
+    () => isNewConcept(trace, index, shownSource, view.explanation.concept),
+    [trace, index, shownSource, view.explanation.concept],
   );
 
   const heapNames = useMemo(() => namesById(view.frames, view.heap), [view]);
@@ -292,8 +368,35 @@ export default function App() {
     [view],
   );
 
-  const output = useMemo(() => outputView(trace, index, result), [trace, index, result]);
+  const output = useMemo(() => selectOutput(session), [session]);
   const outputText = output.pastText;
+  const storedProfile = selectProfile(session);
+  const storedRecognition = selectRecognition(session);
+  const selectedAdapter = selectAdapter(session);
+  const sourceDirty = selectSourceDirty(session);
+  const adaptiveContext = useMemo(
+    () => ({
+      stepView: view,
+      trace,
+      traceIndex,
+      source: shownSource,
+      profile: storedProfile,
+      recognition: storedRecognition,
+      result,
+    }),
+    [view, trace, traceIndex, shownSource, storedProfile, storedRecognition, result],
+  );
+  // One build feeds both the header label and the canvas, so a Generic
+  // fallback can never be announced as Sorting in the header.
+  const adaptive = useMemo(
+    () =>
+      viz === "scene" && result
+        ? resolveAdaptiveView(adaptiveContext, selectedAdapter)
+        : null,
+    [viz, result, adaptiveContext, selectedAdapter],
+  );
+  const example = EXAMPLES.find((entry) => entry.code === source) ?? null;
+  const fileName = example ? `${example.name}.py` : "untitled.py";
 
   // The raw coordinates of this step, offered only through the Developer menu.
   // They come from the same view every panel reads, so they can never describe
@@ -321,11 +424,15 @@ export default function App() {
   const stepping = !editing && result !== null;
   // The line the program broke on, so the code pane can point at it.
   const errorLine = result?.error?.line ?? null;
+  // The current step's call title always names the frame that is actually
+  // running. Selecting an older call changes whose variables are shown, not
+  // which call the explanation or canvas header is describing.
+  const activeFrame = view.callStack.find((entry) => entry.frameId === view.frameId) ?? view.frame;
   const callTitle =
-    view.frame && view.frame.function !== MODULE
-      ? `${view.frame.function} call #${view.frame.callNumber}${
-          view.frame.args.length > 0
-            ? `, ${view.frame.args.map((arg) => `${arg.name} = ${arg.text}`).join(", ")}`
+    activeFrame && activeFrame.function !== MODULE
+      ? `${activeFrame.function} call #${activeFrame.callNumber}${
+          activeFrame.args.length > 0
+            ? `, ${activeFrame.args.map((arg) => `${arg.name} = ${arg.text}`).join(", ")}`
             : ""
         }`
       : "the top level";
@@ -335,8 +442,28 @@ export default function App() {
   const currentNode = graph.nodes.find((node) => node.id === view.nodeId) ?? null;
   const previousEvent = index > 0 ? trace[index - 1] : null;
   const nextEvent = trace[index + 1] ?? null;
-  const nextReason = nextEvent ? explainStep(trace, index + 1, source).text : null;
+  const nextReason = nextEvent ? explainStep(trace, index + 1, shownSource).text : null;
   const olderCalls = Math.max(view.callStack.length - 1, 0);
+  const runState = runStateOf({ running, engine, result, trace, sourceDirty });
+  const canvasLabel = VIZ_LABELS[viz] ?? viz;
+  const effectiveAdapter = adaptive?.built?.adapterId ?? "generic";
+  const recognizedAdapter =
+    adaptive?.options?.recognitionId ?? storedRecognition?.adapterId ?? "generic";
+  const fallbackReason = adaptive?.built?.fallbackReason ?? null;
+  const viewIndicator =
+    result && viz === "scene"
+      ? `${canvasLabel} · ${
+          selectedAdapter === AUTO_ADAPTER ? "Auto" : "Manual"
+        } → ${adapterLabel(effectiveAdapter)}`
+      : `${canvasLabel}${viz === "scene" ? " · Auto" : ""}`;
+  const viewTitle =
+    viz === "scene" && result
+      ? fallbackReason
+        ? `Showing ${adapterLabel(effectiveAdapter)} because ${adapterLabel(
+            recognizedAdapter,
+          )} could not be used at this step: ${fallbackReason}`
+        : `Showing ${adapterLabel(effectiveAdapter)} at this step`
+      : "The canvas currently in use";
 
   // Keep the lit-up line in view without ever scrolling the page.
   useEffect(() => {
@@ -350,8 +477,8 @@ export default function App() {
   }, [stepping, line]);
 
   const jumpTo = (i) => {
-    setPlaying(false);
-    setIndex(clampStep(i, trace.length));
+    dispatch(sessionActions.setPlaying(false));
+    dispatch(sessionActions.setStep(clampStep(i, trace.length)));
   };
 
   // Comparison handlers touch only the comparison state. None of them calls
@@ -363,57 +490,77 @@ export default function App() {
   const swapEndpoints = () => setComparison((state) => swapComparison(state));
   const useCurrentAsEndpoint = (which) => changeEndpoint(which, index);
 
-  // Clicking a call selects its own variables and jumps to where it started.
-  const jumpToCall = (frameId) => {
-    setSelectedCall(frameId);
-    const at = trace.findIndex(
-      (event) => event.frames?.[event.frames.length - 1]?.frame_id === frameId,
-    );
+  // Selecting a call only chooses whose variables to show. It never moves the
+  // step: the stack panel is a lens on the current moment, not a time machine.
+  const selectFrame = (frameId) => dispatch(sessionActions.selectFrame(frameId));
+
+  // A call-tree box explicitly offers "go to where this call started", so this
+  // one both selects the call and jumps. The two intents stay separate. Scene
+  // items can pass the recorded start index directly.
+  const jumpToCall = (frameId, firstIndex) => {
+    dispatch(sessionActions.selectFrame(frameId));
+    const at = Number.isInteger(firstIndex) ? firstIndex : traceIndex.firstCallIndex(frameId);
     if (at >= 0) jumpTo(at);
   };
 
   // Clicking a line of code jumps to the next step (at or after here) that runs it.
   const jumpToLine = (number) => {
-    let at = -1;
-    for (let i = index; i < trace.length; i += 1) {
-      if (trace[i].event === "line" && trace[i].line === number) {
-        at = i;
-        break;
-      }
-    }
-    if (at < 0) at = trace.findIndex((e) => e.event === "line" && e.line === number);
+    let at = traceIndex.firstLineIndex(number, index);
+    if (at < 0) at = traceIndex.firstLineIndex(number);
     if (at >= 0) jumpTo(at);
   };
 
   async function handleRun() {
-    setPlaying(false);
-    setRunning(true);
+    const gate = runGate.current;
+    const runSource = sourceRef.current;
+    const run = gate.begin(runSource);
+    dispatch(sessionActions.startRun());
+
+    const cancelStale = () => dispatch(sessionActions.cancelRun());
+
     try {
-      const [r, f, fg] = await Promise.all([
-        runTrace(source, { inputs }),
-        buildFlowchart(source),
-        buildFlowchartGraph(source),
+      const [r, f, fg, p] = await Promise.all([
+        runTrace(runSource, { inputs }),
+        buildFlowchart(runSource),
+        buildFlowchartGraph(runSource),
+        // A profile failure must not discard a perfectly good trace: the
+        // recognition step falls back to generic with an explicit reason.
+        buildProgramProfile(runSource).catch(() => null),
       ]);
-      setResult(r);
-      setFlow(f);
-      setFlowGraph(fg);
+      if (!gate.isLatest(run)) return;
+      if (!gate.isCurrent(run, sourceRef.current)) {
+        cancelStale();
+        return;
+      }
+      const recognized = recognizeProgram({ profile: p, trace: r?.trace, result: r });
       // A run that crashed opens on the step that failed, so the line that
       // broke is already lit up when the error message appears.
-      setIndex(r?.error ? errorStep(r.trace) : 0);
-      setEditing(false);
-      setSelectedCall(null);
+      dispatch(
+        sessionActions.finishRun({
+          result: r,
+          flow: f,
+          flowGraph: fg,
+          profile: p,
+          recognition: recognized,
+        }),
+      );
       setWatched(null);
       setComparison(initialComparison());
       setDismissed(new Set());
     } catch (error) {
-      setResult({
-        status: "engine_error",
-        trace: [],
-        output: "",
-        error: { type: "EngineError", message: error.message },
-      });
-    } finally {
-      setRunning(false);
+      if (!gate.isLatest(run)) return;
+      if (!gate.isCurrent(run, sourceRef.current)) {
+        cancelStale();
+        return;
+      }
+      dispatch(
+        sessionActions.failRun({
+          status: "engine_error",
+          trace: [],
+          output: "",
+          error: { type: "EngineError", message: error?.message ?? String(error) },
+        }),
+      );
     }
   }
 
@@ -435,13 +582,13 @@ export default function App() {
       // keeps one steady cadence rather than being rebuilt on every step.
       const current = indexRef.current;
       if (current >= trace.length - 1) {
-        setPlaying(false);
+        dispatch(sessionActions.setPlaying(false));
         return;
       }
-      setIndex(current + 1);
+      dispatch(sessionActions.setStep(current + 1));
     }, playbackIntervalMs(speed));
     return () => clearInterval(timer.current);
-  }, [playing, speed, trace.length]);
+  }, [playing, speed, trace.length, dispatch]);
 
   useEffect(() => {
     function onKeyDown(event) {
@@ -459,17 +606,17 @@ export default function App() {
       // this workspace must never do.
       if (event.target?.closest?.('[role="tablist"]')) return;
       if (event.key === "ArrowRight") {
-        setIndex((i) => Math.min(i + 1, trace.length - 1));
+        dispatch(sessionActions.stepBy(1));
       } else if (event.key === "ArrowLeft") {
-        setIndex((i) => Math.max(i - 1, 0));
+        dispatch(sessionActions.stepBy(-1));
       } else if (event.key === " ") {
         event.preventDefault();
-        setPlaying((p) => !p);
+        dispatch(sessionActions.togglePlaying());
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [trace.length]);
+  }, [trace.length, dispatch]);
 
   function grabSplitter(which) {
     return (event) => {
@@ -533,8 +680,8 @@ export default function App() {
     history,
     olderCalls,
     selectedCall,
-    jumpToCall,
-    clearSelectedCall: () => setSelectedCall(null),
+    selectFrame,
+    clearSelectedCall: () => dispatch(sessionActions.clearFrame()),
     heap: view.heap,
     heapNames,
     objectChanged,
@@ -561,10 +708,41 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <h1>CodeLens</h1>
+        <div className="brand">
+          <div className="brand-line">
+            <h1>CodeLens</h1>
+            <span className="brand-badge">Python</span>
+          </div>
+          <span className="file-name" title={fileName}>
+            {fileName}
+          </span>
+        </div>
         <span className={`engine engine-${engine}`}>
-          Python engine: {engine === "ready" ? "ready" : engine}
+          Runtime · {engine === "ready" ? "ready" : engine}
         </span>
+        <span
+          className={`run-status status-${runState.id}`}
+          title={runState.title ?? undefined}
+        >
+          {runState.label}
+        </span>
+        <span className="view-indicator" title={viewTitle}>
+          {viewIndicator}
+        </span>
+        <div className="top-actions">
+          <button type="button" className="run" onClick={handleRun} disabled={running}>
+            {running ? "Starting…" : "▶ Run"}
+          </button>
+          <button
+            type="button"
+            className="ghost"
+            onClick={handleRun}
+            disabled={running || !result}
+            title="Run the current source again from the first step"
+          >
+            ↻ Restart
+          </button>
+        </div>
         {/* The learning mode belongs to the whole workspace, not to one pane,
             so it lives in the bar that is on screen whichever pane you are in. */}
         <div className="state-toggle mode-switch" role="group" aria-label="Learning mode">
@@ -582,7 +760,9 @@ export default function App() {
           ))}
         </div>
         <span className="step-count">
-          {trace.length > 0 ? `Step ${index + 1} of ${trace.length}` : "Not run yet"}
+          {trace.length > 0
+            ? `${sourceDirty ? "Previous run · " : ""}Step ${index + 1} of ${trace.length}`
+            : "Not run yet"}
         </span>
       </header>
 
@@ -706,14 +886,20 @@ export default function App() {
           <VisualizationPane
             viz={viz}
             onVizChange={setViz}
-            heading={
-              <h3>
-                Visualize
-                {result && <span className="flow-of"> — {callTitle}</span>}
-              </h3>
-            }
+            heading={<h3>Visualize</h3>}
           >
-            {viz === "flow" ? (
+            {viz === "scene" ? (
+              <AdaptiveView
+                adaptive={adaptive}
+                trace={trace}
+                result={result}
+                adapter={selectedAdapter}
+                onAdapterChange={setAdapter}
+                onJumpLine={jumpToLine}
+                onJumpCall={jumpToCall}
+                onSelectFrame={selectFrame}
+              />
+            ) : viz === "flow" ? (
               <ControlFlowChart
                 flow={flowGraph}
                 flowTree={flow}
@@ -791,7 +977,7 @@ export default function App() {
         playing={playing}
         speed={speed}
         onJump={jumpTo}
-        onTogglePlay={() => setPlaying((p) => !p)}
+        onTogglePlay={() => dispatch(sessionActions.togglePlaying())}
         onSpeedChange={setSpeed}
         onOpenGlossary={() => setGlossaryOpen(true)}
         showJson={showJson}

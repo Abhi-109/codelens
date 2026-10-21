@@ -22,6 +22,7 @@ function getPyodide() {
       const pyodide = await loadPyodide({ indexURL: init.indexURL });
       pyodide.FS.writeFile("/tracer.py", init.tracerSource);
       pyodide.FS.writeFile("/flowchart.py", init.flowchartSource);
+      pyodide.FS.writeFile("/analyze.py", init.analyzeSource);
       await pyodide.runPythonAsync(`
 import importlib.util
 import json
@@ -36,6 +37,11 @@ flow_spec = importlib.util.spec_from_file_location("flowchart", "/flowchart.py")
 flowchart = importlib.util.module_from_spec(flow_spec)
 flow_spec.loader.exec_module(flowchart)
 
+# analyze.py is also a standalone ast-only sibling; it never runs user code.
+analyze_spec = importlib.util.spec_from_file_location("analyze", "/analyze.py")
+analyze = importlib.util.module_from_spec(analyze_spec)
+analyze_spec.loader.exec_module(analyze)
+
 def run_trace_json(source, max_steps=1500, max_seconds=5.0, inputs=None):
     return json.dumps(tracer.run_trace(source, max_steps=max_steps,
                                        max_seconds=max_seconds, inputs=inputs))
@@ -45,6 +51,9 @@ def build_flowchart_json(source):
 
 def build_flowchart_graph_json(source):
     return json.dumps(flowchart.build_flowchart(source))
+
+def analyze_json(source):
+    return analyze.analyze_json(source)
 `);
       post({ type: "status", status: "ready" });
       return pyodide;
@@ -67,24 +76,25 @@ self.onmessage = async (event) => {
     return;
   }
 
-  if (message.type === "run" || message.type === "flowchart" || message.type === "flowchart_graph") {
+  const handlers = {
+    run: "run_trace_json",
+    flowchart: "build_flowchart_json",
+    flowchart_graph: "build_flowchart_graph_json",
+    analyze: "analyze_json",
+  };
+  if (message.type in handlers) {
     if (bootError) {
       post({ type: "error", id: message.id, error: String(bootError?.message ?? bootError) });
       return;
     }
     try {
       const pyodide = await getPyodide();
-      const name =
-        message.type === "run"
-          ? "run_trace_json"
-          : message.type === "flowchart"
-            ? "build_flowchart_json"
-            : "build_flowchart_graph_json";
-      const call = pyodide.globals.get(name);
+      const call = pyodide.globals.get(handlers[message.type]);
       try {
-        const json = message.type === "run"
-          ? call(message.source, message.maxSteps, message.maxSeconds, message.inputs)
-          : call(message.source);
+        const json =
+          message.type === "run"
+            ? call(message.source, message.maxSteps, message.maxSeconds, message.inputs)
+            : call(message.source);
         post({ type: "result", id: message.id, result: JSON.parse(json) });
       } finally {
         call.destroy();

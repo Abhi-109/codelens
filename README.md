@@ -53,8 +53,8 @@ CodeLens fixes both halves of that:
 - **Changes** — every value the program changed, newest first, each with a button
   that jumps to the step that changed it.
 - **Function calls** — each call on the stack with its arguments and the line that
-  called it; click one to see that call's own variables and jump to where it
-  started, and a finished call shows what it returned and to which line.
+  called it; click one to see that call's own variables without moving the
+  current step, and a finished call shows what it returned and to which line.
 - **Four canvases, one run** — the Visualize pane offers a strip of drawings,
   and every one of them is a window onto the *same* execution: switching canvas
   carries the step, the playing state and the speed through untouched.
@@ -134,21 +134,29 @@ CodeLens fixes both halves of that:
 ```
 Python code
     │
-    ▼
-tracer-poc/tracer.py      records every step as JSON  ──►  docs/trace-format.md
-    │                                                      (a documented, versioned
-    ▼                                                       language-neutral contract)
-tracer-poc/corpus.py      ~45 programs, one per construct  ──►  docs/supported-python.md
+    ├──► tracer-poc/tracer.py   records every step as JSON  ──►  docs/trace-format.md
+    │                                                           (a documented, versioned
+    │                                                            language-neutral contract)
+    └──► tracer-poc/analyze.py  static AST profile, never runs ──► docs/program-profile.md
+                                                                (versioned, deterministic)
+tracer-poc/corpus.py      55 programs, one per construct    ──►  docs/supported-python.md
     │                                                      (what the tracer really supports,
     ▼                                                       kept in sync by the tests)
 src/tracer/              reads the JSON in the browser
     ├── client.js         runs the tracer in a Web Worker (Pyodide)
+    ├── traceIndex.js     per-trace lookup tables, cached by the trace array
     ├── stepView.js       one tested view of step N: line, variables, changes, stack
     ├── explain.js        turns each step into a plain-English sentence
     ├── flow.js           builds the flowchart and loop counts
     ├── history.js        numeric-series guard and SVG chart geometry
     ├── values.js         value formatting, and the honesty rules for it
-    └── objects.js        builds the object diagrams and reference edges
+    ├── objects.js        builds the object diagrams and reference edges
+    ├── programProfile.js static AST profile (never runs the program)
+    ├── recognition.js    picks a search/sort/recursion capability from that profile
+    ├── adapters.js, scene.js the validated adapter registry and scene contract
+    ├── genericAdapter.js, statementStage.js the default scene and its step model
+    ├── searchingAdapter.js, sortingAdapter.js, recursionAdapter.js
+    └── sequenceScene.js  shared sequence panels for the specialist scenes
     │
     ▼
 src/flowchart/           draws the same trace as a call tree or a flowchart
@@ -160,6 +168,8 @@ src/flowchart/           draws the same trace as a call tree or a flowchart
     ▼
 src/visualizer/          the workspace beside the canvas
     ├── Inspector.jsx     six tabbed sections (Explain…History), real ARIA tabs
+    ├── AdaptiveView.jsx, SceneView.jsx the canvas and its validated scenes
+    ├── adaptive.js       Auto/manual adapter choice and the header label
     ├── PlaybackBar.jsx   stepping, timeline, speed, and the Developer menu
     ├── TimelinePane.jsx, timeline.js the virtualised step table and its pure rows
     ├── StepComparison.jsx, compare.js the two-step diff and its endpoint state
@@ -198,17 +208,23 @@ after that.
 Three suites, all of which should pass on every commit:
 
 ```bash
-npm run test:tracer   # 95 Python tests: the tracer, the flowchart model and the corpus
-npm run test:js       # 339 JS tests: the call tree and control flow model and layout, the
-                      # graph, the teaching layer, the corpus, the router, the homepage
-                      # preview, the language picker, the workspace modules, variable
-                      # history, the timeline and comparison helpers, output/input/error
-                      # entries, and the design tokens' contrast
+npm run test:tracer   # 110 Python tests: the tracer, the flowchart model, the static
+                      # program profile and the corpus
+npm run test:js       # 502 JS tests: the call tree and control flow model and layout, the
+                      # graph, the teaching layer, the corpus, the trace index, the program
+                      # profile parser and recognition engine, the adapter registry,
+                      # recursion, searching and sorting scenes, the statement stage and
+                      # the scene validator, Auto/manual adapter choice, composite
+                      # capabilities, fallback and stale-run rejection, early-step evidence
+                      # wording, source-dirty status, exception chains, the router, the
+                      # homepage preview, the language picker, the workspace modules,
+                      # variable history, the timeline and comparison helpers,
+                      # output/input/error entries, and the design tokens' contrast
 npm run lint          # oxlint
 npm run build         # production build
 ```
 
-The corpus is the breadth behind those numbers: ~45 programs across 32 categories
+The corpus is the breadth behind those numbers: 55 programs across 32 categories
 of Python, each traced for real (`tracer-poc/corpus.py`) and checked on both
 sides — `test_corpus.py` against the claims it makes, and `src/tracer/corpus.test.mjs`
 step by step through the UI's own functions. `docs/supported-python.md` is kept in
@@ -232,6 +248,9 @@ codelens/
 │   ├── graph-diagnosis.md  # why the old graph did not teach, and the rebuild plan
 │   ├── ui-diagnosis.md     # per-panel purpose, and the "line about to run" convention
 │   ├── flowchart-format.md # the textbook flowchart's node/edge contract
+│   ├── program-profile.md  # the static AST profile contract (version 1)
+│   ├── recognition.md      # evidence rules and confidence for algorithm recognition
+│   ├── visualization-adapters.md # adapter contract, scene schema, validation rules
 │   ├── implementation-plan.md # the site build: audit, phases, and status
 │   └── roadmap.md          # what is built, what is next
 ├── src/
@@ -260,6 +279,7 @@ codelens/
 │   ├── App.jsx             # the Python visualizer: orchestrator + tracer wiring
 │   ├── App.css
 │   ├── visualizer/
+│   │   ├── session/             # one execution session: run, cursor, playback, selected call
 │   │   ├── Inspector.jsx        # six tabbed sections, full ARIA tab pattern
 │   │   ├── PlaybackBar.jsx      # stepping, timeline, speed, Developer menu
 │   │   ├── panelBits.jsx        # shared panel pieces (components only)
@@ -273,6 +293,16 @@ codelens/
 │   │   ├── workspace.test.mjs
 │   │   ├── vizMode.js           # which canvas draws the run (pure)
 │   │   ├── vizMode.test.mjs
+│   │   ├── adaptive.js          # Auto/manual adapter choice and validated scene build (pure)
+│   │   ├── adaptive.test.mjs    # composite capabilities, fallback, empty and determinism
+│   │   ├── runGate.js           # rejects stale run/profile/recognition results (pure)
+│   │   ├── runGate.test.mjs
+│   │   ├── AdaptiveView.jsx     # Adaptive canvas: chooser, fallback reason, empty states
+│   │   ├── SceneView.jsx        # renders one validated scene
+│   │   ├── sceneKeys.js         # matches scene highlights to their slots (pure)
+│   │   ├── sceneKeys.test.mjs
+│   │   ├── stageLayout.js       # result-above-inputs layout for algorithm regions (pure)
+│   │   ├── stageLayout.test.mjs
 │   │   ├── Canvas.jsx           # the shared surface: pan, zoom, fit, follow, expand
 │   │   ├── CallTree.jsx         # canvas 1: the calls this run made, nested
 │   │   ├── CombinedView.jsx     # canvas 3: the tree beside the stack or variables
@@ -299,6 +329,17 @@ codelens/
 │   └── tracer/
 │       ├── client.js           # talks to the Web Worker
 │       ├── pyodide.worker.js   # loads Pyodide, runs the tracer
+│       ├── traceIndex.js       # per-trace state/frame/output lookups (pure, cached)
+│       ├── programProfile.js   # validate/normalise the static AST profile (pure)
+│       ├── recognition.js      # profile + trace evidence -> adapter decision (pure)
+│       ├── adapters.js         # immutable adapter registry + validated fallback (pure)
+│       ├── genericAdapter.js   # always-available StepView scene (pure)
+│       ├── statementStage.js   # validated assignment/condition/loop stage (pure)
+│       ├── recursionAdapter.js # invocation-tree scene from real frames (pure)
+│       ├── sequenceScene.js    # shared sequence/highlight scene pieces (pure)
+│       ├── searchingAdapter.js # linear/binary search scenes from real traces (pure)
+│       ├── sortingAdapter.js   # four list-sort families from real traces (pure)
+│       ├── scene.js            # scene contract and validator (pure)
 │       ├── stepView.js         # one view of a step, shared by every panel (pure)
 │       ├── explain.js          # step -> plain-English sentence (pure functions)
 │       ├── flow.js             # flowchart model and loop counts
@@ -309,8 +350,10 @@ codelens/
 │       └── __fixtures__/       # real traces the tests replay, kept gzipped
 ├── tracer-poc/
 │   ├── tracer.py           # THE TRACER — single source of truth
-│   ├── corpus.py           # ~45 programs, one per construct category
+│   ├── analyze.py          # read-only AST program profile, never executes source
+│   ├── corpus.py           # 55 programs, one per construct category
 │   ├── dump_corpus.py      # runs them for real; writes the golden and the fixture
+│   ├── dump_recognition.py # records search/sort/recursion fixtures and corpus profiles
 │   ├── corpus-golden.json  # recorded status, stdout and counts per program
 │   ├── examples/           # the first 10 example programs (each doubles as a test)
 │   └── test_*.py           # tracer, flowchart and corpus tests
@@ -338,12 +381,15 @@ in [docs/scope.md](docs/scope.md).
 | [docs/graph-diagnosis.md](docs/graph-diagnosis.md) | Why the old graph did not teach, and the rebuild plan |
 | [docs/ui-diagnosis.md](docs/ui-diagnosis.md) | Why each panel exists, and the one-step convention the UI follows |
 | [docs/flowchart-format.md](docs/flowchart-format.md) | The textbook flowchart's node and edge contract |
+| [docs/program-profile.md](docs/program-profile.md) | The static AST program profile the adaptive engine will read |
+| [docs/recognition.md](docs/recognition.md) | Evidence rules and confidence for algorithm recognition |
+| [docs/visualization-adapters.md](docs/visualization-adapters.md) | Adapter contract, scene schema and validation rules |
 | [docs/roadmap.md](docs/roadmap.md) | Build order and current status |
 
 ## Status
 
 Working end to end, and teaching: the tracer runs the bundled examples plus a
-45-program corpus covering 32 categories of Python, and the UI replays any of
+55-program corpus covering 32 categories of Python, and the UI replays any of
 them on three canvases — call tree, control flow and combined — with a
 six-section inspector and plain-English explanations for every kind of step. Runs
 with very large call trees open capped at 200 visible frames, with a counted

@@ -29,6 +29,36 @@ test("formatValue covers every value kind the tracer emits", () => {
   assert.equal(formatValue({ type: "other", class: "Dog", repr: "<Dog>" }), "<Dog>");
 });
 
+test("nan and infinity come from the tracer's repr, never undefined", () => {
+  // The trace stores nan/inf as their Python repr because JSON has no number
+  // for them; dropping it would render "undefined".
+  assert.equal(formatValue({ type: "float", value: null, repr: "nan" }), "nan");
+  assert.equal(formatValue({ type: "float", value: null, repr: "inf" }), "inf");
+  assert.equal(formatValue({ type: "float", value: null, repr: "-inf" }), "-inf");
+});
+
+test("tuples and sets keep their Python punctuation", () => {
+  assert.equal(showValue(ref("o1"), { o1: { type: "tuple", items: [int(1)] } }), "(1,)");
+  assert.equal(showValue(ref("o1"), { o1: { type: "tuple", items: [int(1), int(2)] } }), "(1, 2)");
+  assert.equal(showValue(ref("o1"), { o1: { type: "set", items: [] } }), "set()");
+  assert.equal(showValue(ref("o1"), { o1: { type: "set", items: [int(1), int(2)] } }), "{1, 2}");
+  assert.equal(
+    showValue(ref("o1"), { o1: { type: "set", class: "frozenset", items: [int(1)] } }),
+    "frozenset({1})",
+  );
+});
+
+test("a self-referential container is marked instead of overflowing the stack", () => {
+  const heap = { o1: { type: "list", items: [int(1), ref("o1")] } };
+  assert.equal(showValue(ref("o1"), heap), "[1, […]]");
+  const dict = { o1: { type: "dict", entries: [{ key: str("self"), value: ref("o1") }] } };
+  assert.equal(showValue(ref("o1"), dict), '{"self": {…}}');
+  const dog = {
+    o1: { type: "object", class: "Dog", attrs: [{ name: "friend", value: ref("o1") }] },
+  };
+  assert.equal(showValue(ref("o1"), dog), "Dog(friend=Dog(…))");
+});
+
 test("a container the tracer stopped listing says how much it left out", () => {
   const items = [int(1), int(2), int(3)];
   assert.equal(showValue(ref("o1"), { o1: list(items) }), "[1, 2, 3]");

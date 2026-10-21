@@ -230,7 +230,7 @@ zoom clamp that hid the current node. The rebuild fixed the root causes:
 
 ## Supported-Python corpus
 
-- [x] `tracer-poc/corpus.py`: ~45 programs across 32 categories, each with the
+- [x] `tracer-poc/corpus.py`: 55 programs across 32 categories, each with the
       claim the tracer must honour about it
 - [x] `dump_corpus.py` records exact stdout and counts (`corpus-golden.json`) and
       vendors the traces for the JS tests (`src/tracer/__fixtures__/corpus.json.gz`)
@@ -345,13 +345,150 @@ closes on Escape; focus rings and playback targets meet the same size rules.
 Both themes, keyboard use, reduced motion, a 1,866-step trace and shared
 playback were checked in the browser.
 
+The execution session is now one reducer: the source/result/flow lifecycle,
+cursor, playback, speed, selected call and chosen canvas all live together, and
+every panel reads the step through the same selectors. Selecting a stack or
+memory frame only changes whose variables are shown; it cannot move the cursor.
+The call tree keeps its explicit "jump to where this call started" action.
+
+A per-trace index now answers the repeated questions behind that view — nearest
+state, source lines, frame lifetimes, top-frame lookups, output prefixes/segments
+and exception outcomes. It is cached by the trace array in a WeakMap, so advance
+or rewind reuses the same tables; a new run's array builds a new index. The
+corpus-wide test compares every step against the old linear scans, and a 2,008-event
+synthetic run measured 0.42 ms to build the index and 0.024 ms p95 per selector
+lookup (JavaScript only; React render and browser paint are not included).
+
+A read-only AST profile now describes the source without running it: functions,
+parameters, decorators, calls and candidate call edges, direct and mutual
+recursion candidates, loops with syntactic depth, conditions, comparisons,
+statically identifiable list/dict/index/slice/attribute mutations, returns and
+container operations. `tracer-poc/analyze.py` uses only the standard library and
+returns a versioned, deterministic profile; syntax and analysis failures are
+structured diagnostics. The Pyodide worker exposes it as a normal `analyze`
+request, cached per source, and `src/tracer/programProfile.js` validates and
+normalises the response without inventing missing data. The profile is metadata:
+it does not execute source, supply runtime values, or recognise algorithms. The
+visualizer will combine it with trace evidence in a later adaptive phase.
+
+The evidence layer now does that combination without switching the UI:
+`src/tracer/recognition.js` returns `generic`, `recursion`, `searching` or
+`sorting` from the profile plus the real trace. Sorting needs element
+comparisons and visible changes to the same list; searching needs indexed or
+iterated container evidence, with binary-like bounds narrowing only when the
+trace records it; recursion needs a static self-call or candidate cycle and
+actually nested frames. Built-in sorting is never presented as traced
+comparisons, already-sorted runs stay generic, and malformed or truncated input
+returns generic with a reason. Rules and fixed confidence values are in
+[recognition.md](recognition.md); the corpus-wide and positive/negative tests
+are in `src/tracer/recognition.test.mjs`.
+
+The adapter layer is now in place without changing the workspace.
+`src/tracer/adapters.js` keeps an immutable registry and validates every scene
+before returning it; an unknown, unavailable or malformed adapter falls back to
+the always-available generic adapter with a reason. `src/tracer/scene.js`
+defines a serializable scene of source lines, regions, frame/object/slot
+references, changes, output, focus, accessibility text and evidence, then
+re-derives displayed values from the StepView, heap and trace index. Malformed
+scenes, invented changes, missing frames/objects, invalid indices and truncated
+state fail validation instead of reaching a renderer. Capabilities are sets, so
+a composite adapter can represent recursion and sorting structure together. The
+generic adapter exposes the information the existing views already support.
+
+The recursion adapter now builds an invocation tree from the trace. It uses the
+profile's direct/mutual recursion families, requires an actual nested call edge
+that closes a function cycle, and creates one node per real frame with captured
+arguments, the parent edge the stack recorded, return values from return events,
+exception and unwind outcomes, runtime base-case leaves, and the active path from the selected
+step. Ordinary call chains and helper calls are not turned into recursion. Merge
+sort builds a recursion scene even while recognition reports sorting. The tree
+is capped breadth-first at 200 invocations, and omitted nodes are reported as a
+partial scene with exact counts.
+
+The searching adapter now turns a real list or tuple, target, index and recorded
+return/membership result into linear and binary search scenes. It shows a binary
+range and midpoint only where the trace records them, never invents an index for
+item iteration, and marks duplicate-item, mixed-type and truncated data partial.
+Linear first/middle/last/missing hits, empty and tuple containers, aliases,
+while-loop control flow and recursive binary search are covered by real
+fixtures. Break/flag/helper/enumerate shapes that have no in-loop return or
+indexed comparison stay generic with an explicit reason.
+
+The sorting adapter now builds list scenes for exchange, selection, insertion
+and divide-and-conquer sorts. It follows the runtime list object rather than a
+name, uses StepView changes for swaps/shifts/writes, and shows a proven prefix or
+suffix without claiming the whole list is sorted. It covers sorted, reverse,
+negative, duplicate, empty, single, aliased and truncated inputs; mixed types are
+partial, and built-in `sorted()`/`list.sort()` internals fall back to generic.
+Searching/sorting and recursion capabilities overlap, so merge sort and
+recursive binary search can be requested either way. Both adapters are
+registered and every scene is validated. Rules are in
+[visualization-adapters.md](visualization-adapters.md).
+
+The workspace now opens on an **Adaptive** canvas that uses the recognition
+result instead of a second classifier. Auto asks the registry for the adapter
+recognition named and labels the result; every other adapter is offered when
+its own availability check passes at the selected step, so merge sort exposes
+Sorting and Recursion together and recursive binary search exposes Recursion
+and Searching. Choosing an adapter is presentation-only: the step, selected
+frame, playback and speed stay put. Every scene still goes through the
+registry and the validator, and an unavailable manual choice falls back to the
+generic scene with the adapter's own reason. A run/profile/recognition change
+is guarded so stale async results cannot replace the current run. The existing
+Call tree, Control flow, Combined and Timeline canvases remain available. A
+follow-up hardening pass separates "recognized but this step lacks evidence"
+from "unsupported program" and adapter errors, reports the adapter actually
+drawn in the header, keeps the previous valid run when an edit cancels a
+pending one (marked **Edited**, not replaced by an error), opens failing runs on
+the frame that raised the uncaught exception, and distinguishes a caught
+exception from one that stopped the program.
+
+The Adaptive canvas is now a visual stage rather than a stack of diagnostic
+cards. The generic scene carries an optional statement stage rebuilt and
+validated from the selected step: assignments show the real value change,
+conditions show the observed outcome, the skipped or taken body and the next
+condition the trace actually reached, loops show the round, the next recorded
+item and the exit, and calls, returns, output, program completion and errors get their own stage.
+Searching and sorting keep their adapter scenes as the primary stage, including
+every sequence region the trace proves (a merge shows its result beside both
+inputs), and recursion keeps its call tree as the primary stage. Variables, stack, memory, output and execution context move behind one
+collapsed **Step details** disclosure. The explanation panel leads with what
+happened, what is next and what changed; its control-flow reasoning and glossary
+card are expandable. A changed scene still cannot invent a branch, value or
+destination: `src/tracer/statementStage.js` re-derives the stage and
+`src/tracer/scene.js` rejects a scene whose stage does not match the step.
+
+Phase 9.1 fits a merge combine on the desktop canvas by putting the result
+across the top and both inputs side by side, and makes the five canvas modes
+wrap on narrow screens instead of clipping Timeline. The arrangement is a pure
+choice from the region count (`src/visualizer/stageLayout.js`); values, indices,
+highlights and the selected step are unchanged.
+
+The selected step now keeps one execution story across the highlighted line,
+trace event, StepView, stage, values, stack, output and explanation. A print()
+newline is the end of the line it closes, so it shows that line's text; only a
+line with no text before its newline (`print("")`) is blank. A completed program
+ends on a distinct **Program finished** stage with no return value and a
+`completed` module frame, while a real function return — including an explicit
+or implicit `None` — keeps its ordinary **Return** stage and value. Caught
+exceptions continue the run; an uncaught one still ends it on the error stage.
+Six corpus programs pin the output, return, completion and exception shapes,
+and `src/tracer/executionSemantics.test.mjs` walks each one through the scene
+validator and the generic adapter. A bare `raise` and an exception passing
+through `finally` now record an unwind with the real exception type instead of
+a normal return of `None`; a `return` in `finally` still suppresses the
+exception. Empty, whitespace-only and comment-only sources get an honest
+**Empty program** stage, and fallback steps name the operation they observed
+(definition, class, import, try, handler, break, continue, yield) instead of a
+generic "Step".
+
 Deliberately deferred: collapsing repeated loop rounds ("rounds 2 to 9 are
 similar"), a live "waiting for input" state (inputs are still supplied before
 the run), and reconstructing state between recorded steps. A trace only exposes
 the state its recorded steps carry, so the comparison says "Not comparable"
 rather than inventing more.
 
-Breadth is proven rather than claimed: `tracer-poc/corpus.py` holds ~45 programs
+Breadth is proven rather than claimed: `tracer-poc/corpus.py` holds 55 programs
 across 32 categories of Python, `test_corpus.py` checks the tracer against them
 and keeps [supported-python.md](supported-python.md) in sync, and
 `src/tracer/corpus.test.mjs` walks every step of every program through the UI's
@@ -364,7 +501,7 @@ visualizer uses, so every value on it comes from the engine, and the language
 grid marks Python as the only card that opens anything
 (`src/pages/preview.js`, `src/pages/languages.js`, both tested).
 
-All suites pass: 95 Python tests, 339 JS tests, plus lint and a production
+All suites pass: 110 Python tests, 502 JS tests, plus lint and a production
 build. Two opt-in checks need a local Pyodide install: `npm run test:pyodide`
 and `npm run check:explain`. What remains on A3 is debounced generation; see the
 roadmap above for the rest.

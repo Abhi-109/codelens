@@ -25,7 +25,7 @@ inside Pyodide in the browser.
 
 | Category | What it covers | Programs | Status |
 | --- | --- | --- | --- |
-| basic variables | int, float, str, bool, None in one assignment each | `variables` | traced |
+| basic variables | int, float, str, bool, None in one assignment each | `variables`, `assign-only` | traced |
 | strings | f-strings, concatenation, methods, slicing | `strings` | traced |
 | numbers | integer and float arithmetic, large integers, 0.3000…004 | `numbers` | traced |
 | booleans | and, or, not, chained comparisons | `booleans` | traced |
@@ -34,14 +34,14 @@ inside Pyodide in the browser.
 | while loop | counting down, `while`/`else` | `while-loop` | traced |
 | break and continue | leaving a loop early, skipping one pass | `break-continue` | traced |
 | nested loops | a loop inside a loop | `nested-loops` | traced |
-| lists | index, slice, append, len | `list-basics` | traced |
+| lists | index, slice, append, len | `list-basics`, `list-print-element` | traced |
 | mutating a list | sort, reverse, replace a slot, delete a slot | `list-mutation` | traced |
 | tuples and unpacking | unpacking a pair and swapping two names | `tuple-unpack` | traced |
 | dictionaries | add, update, look up, iterate the items | `dict-basics` | traced |
 | dictionaries | a dictionary holding lists (the group-by pattern) | `dict-nested` | traced |
 | sets | membership, intersection, difference | `set-basics` | traced |
 | comprehensions | list and dict comprehensions, with a filter | `comprehension` | traced |
-| functions | a call, a parameter, a return value | `function-basic` | traced |
+| functions | a call, a parameter, a return value | `function-basic`, `function-return-none`, `function-implicit-none`, `function-print-return` | traced |
 | function arguments | default values, keyword arguments | `function-args` | traced |
 | function arguments | `*args` and `**kwargs` | `function-star-args` | traced |
 | scope | a function changing a global | `scope-global` | traced |
@@ -54,6 +54,7 @@ inside Pyodide in the browser.
 | nested loops calling functions | a helper called from inside two loops | `combo-nested-loop-call` | traced |
 | exceptions | try, except, else, finally | `exception-caught` | traced |
 | exceptions | raising and catching your own error class | `exception-custom` | traced |
+| exceptions | a bare raise re-raises after cleanup | `exception-reraise` | traced |
 | exceptions | one bad value inside a loop, caught there | `combo-exception-loop` | traced |
 | runtime errors | ZeroDivisionError, IndexError, NameError end the run on the failing line | `error-division`, `error-index`, `error-name` | error |
 | syntax errors | the program never started, so there is nothing to trace | `error-syntax` | error |
@@ -63,7 +64,7 @@ inside Pyodide in the browser.
 | classes | objects kept in a dictionary, built in a loop | `combo-class-loop-dict` | traced |
 | imports | `import math` and `from math import sqrt` | `import-module` | traced |
 | input and output | `input()` with the values the app supplies, and `print` | `io-input` | traced |
-| input and output | `print` with `sep` and `end` | `io-print-options` | traced |
+| input and output | `print` with `sep` and `end` | `io-print-options`, `io-empty-print` | traced |
 | generators | a function that yields, driven by a for loop | `generator` | traced |
 | generators | `yield from` passing values through | `generator-delegates` | traced |
 | async and await | an async function run with `asyncio.run` | `async-await` | traced |

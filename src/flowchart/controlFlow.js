@@ -12,8 +12,9 @@
 //   nextEdge     which arrow the token actually took out of the node it is on,
 //                by looking at where the token next landed *in this chart*.
 //                That is what makes a Yes/No label real instead of decorative.
-//   jumpToNode   the first step at which a box was reached, so clicking a box
-//                can go there. Returns null for a box this run never entered.
+//   jumpToNode   the step at which a box was reached (in this call when the
+//                current frame is known), so clicking a box can go there.
+//                Returns null for a box this run never entered.
 
 import { getStepView, stateAt } from "../tracer/stepView.js";
 import { substituteVars } from "../tracer/explain.js";
@@ -171,14 +172,20 @@ export function outgoingEdge(chart, steps, index) {
 }
 
 /**
- * The first step at which `chartKey`'s run was on `nodeId`, so clicking a box
- * can go there. Null for a box the run never reached.
+ * The step at which `chartKey`'s run was on `nodeId`, so clicking a box can go
+ * there. When `frameId` names the invocation on screen, prefer that
+ * invocation's step; otherwise the first one. Null for an unreached box.
  */
-export function jumpToNode(steps, chartKey, nodeId) {
+export function jumpToNode(steps, chartKey, nodeId, frameId = null) {
   const at = (steps ?? []).findIndex(
     (step) => step.chartKey === chartKey && step.nodeId === nodeId,
   );
-  return at >= 0 ? at : null;
+  if (frameId == null) return at >= 0 ? at : null;
+  const sameCall = (steps ?? []).findIndex(
+    (step) =>
+      step.chartKey === chartKey && step.nodeId === nodeId && step.frameId === frameId,
+  );
+  return sameCall >= 0 ? sameCall : at >= 0 ? at : null;
 }
 
 /** The node the exception was raised on, when the step really is an exception. */

@@ -305,6 +305,11 @@ test("jumping to a box lands on the first step that reached it", () => {
   assert.equal(jumpToNode(steps, "fact", "n4"), 8);
   assert.equal(jumpToNode(steps, "fact", "n1"), 3);
   assert.equal(jumpToNode(steps, "<main>", "n4"), 2);
+  // Recursion: with the current invocation known, a box goes to that call's
+  // own run, not the first time the same source line ran.
+  assert.equal(jumpToNode(steps, "fact", "n4", 3), 8);
+  assert.equal(jumpToNode(steps, "fact", "n3", 3), 7);
+  assert.equal(jumpToNode(steps, "fact", "n3", 2), 4);
   // A box the run never reached has no step to jump to, and says so.
   assert.equal(jumpToNode(steps, "fact", "n2"), null);
   assert.equal(jumpToNode(steps, "fact", "nonsense"), null);

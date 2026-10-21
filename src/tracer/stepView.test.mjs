@@ -132,6 +132,30 @@ test("a return step carries the returned value in words", () => {
   assert.match(view.explanation.why, /result goes back/);
 });
 
+test("a selected call that has returned hands the panel back to the live frame", () => {
+  const { source, trace } = FIXTURES.fact;
+  // fact(1) is frame 4; the step after its return belongs to its caller.
+  const afterReturn = trace.findIndex((event) => event.event === "return" && event.frame_id === 4) + 1;
+  const live = trace[afterReturn].frames[trace[afterReturn].frames.length - 1];
+  const view = getStepView(trace, afterReturn, source, { frameId: 4 });
+
+  assert.equal(view.selectionLost, true);
+  assert.equal(view.frame.frameId, live.frame_id);
+  assert.ok(!view.callStack.some((frame) => frame.frameId === 4), "the returned call is gone");
+  // The panel must show the caller's variables, not the finished call's n = 1.
+  assert.deepEqual(view.frame.variables.map((entry) => [entry.name, entry.text]), [["n", "2"]]);
+});
+
+test("a selected call still on the stack stays selected and is not reported lost", () => {
+  const { source, trace } = FIXTURES.fact;
+  const deep = trace.findIndex((event) => (event.frames?.length ?? 0) === 4);
+  const view = getStepView(trace, deep, source, { frameId: 2 });
+
+  assert.equal(view.selectionLost, false);
+  assert.equal(view.frame.frameId, 2);
+  assert.ok(view.frame.frameId !== view.frameId, "an older call is still deliberately shown");
+});
+
 test("a for loop reports the accumulating total, with the reason for the jump back", () => {
   const { source, trace } = FIXTURES.loop;
   const index = trace.findIndex((event, i) =>
@@ -148,7 +172,7 @@ test("a for loop reports the accumulating total, with the reason for the jump ba
   const backIndex = index + 1;
   const back = getStepView(trace, backIndex, source);
   assert.equal(back.code.text, "for n in range(1, 6):");
-  assert.equal(back.explanation.why, "The loop body finished, so Python jumped back up to line 2 for the next round.");
+  assert.equal(back.explanation.why, "The loop body finished, so Python returned to line 2 to look for the next item.");
 });
 
 test("variableHistory lists each value with the line that produced it", () => {
@@ -227,18 +251,103 @@ const LIST_TRACE = [
 test("a replaced list slot shows its old value; an appended one is new, not '?'", () => {
   const replaced = getStepView(LIST_TRACE, 2, LIST_SOURCE).changes;
   assert.deepEqual(replaced, [
-    { kind: "slot", name: 'xs[0]', from: "1", to: "9", line: null },
+    { kind: "slot", name: 'xs[0]', from: "1", to: "9", line: 2 },
   ]);
   const appended = getStepView(LIST_TRACE, 3, LIST_SOURCE).changes;
   assert.deepEqual(appended, [
     // Appending to a two-item list makes slot 2 — the next index, not index 1.
-    { kind: "new-slot", name: 'xs[2]', from: null, to: "3", line: null },
+    { kind: "new-slot", name: 'xs[2]', from: null, to: "3", line: 3 },
   ]);
   // Nothing a learner sees may say "undefined" or a bare "?".
   for (const change of [...replaced, ...appended]) {
     assert.ok(!String(change.to).includes("undefined"));
     assert.notEqual(change.to, "?");
   }
+});
+
+test("a dict slot is named by its key's value, on the line that changed it", () => {
+  const source = 'd = {"a": 1, "b": 2}\nd["a"] = 5\nprint(d)\n';
+  const dict = (a, b) => ({
+    type: "dict",
+    entries: [
+      { key: { type: "str", value: "a" }, value: int(a) },
+      { key: { type: "str", value: "b" }, value: int(b) },
+    ],
+  });
+  const trace = [
+    state(0, "call", { line: 0 }),
+    state(1, "line", { line: 1 }),
+    state(2, "line", { line: 2, variables: { d: ref("o1") }, heap: { o1: dict(1, 2) } }),
+    state(3, "line", { line: 3, variables: { d: ref("o1") }, heap: { o1: dict(5, 2) } }),
+  ];
+  assert.deepEqual(getStepView(trace, 2, source).changes, [
+    { kind: "slot", name: 'd["a"]', from: "1", to: "5", line: 2 },
+  ]);
+  const slot = changeLog(trace).find((entry) => entry.kind === "slot");
+  assert.equal(slot.name, 'd["a"]');
+  assert.equal(slot.line, 2);
+});
+
+test("del removes a name from the variables and from the change log", () => {
+  const source = 'x = 1\ndel x\nprint("done")\n';
+  const trace = [
+    state(0, "call", { line: 0 }),
+    state(1, "line", { line: 1 }),
+    state(2, "line", { line: 2, variables: { x: int(1) } }),
+    state(3, "line", { line: 3 }),
+  ];
+  const view = getStepView(trace, 2, source);
+  assert.deepEqual(view.changes, [
+    { kind: "removed", name: "x", from: "1", to: null, line: 2 },
+  ]);
+  assert.equal(view.hint, "x removed");
+  assert.deepEqual(
+    changeLog(trace).map((entry) => [entry.kind, entry.name, entry.from, entry.to]),
+    [
+      ["new", "x", null, "1"],
+      ["removed", "x", "1", null],
+    ],
+  );
+});
+
+test("deleting a list item reports the vanished slot, not only the shifted one", () => {
+  const source = "xs = [1, 2, 3]\ndel xs[1]\nprint(xs)\n";
+  const trace = [
+    state(0, "call", { line: 0 }),
+    state(1, "line", { line: 1 }),
+    state(2, "line", {
+      line: 2,
+      variables: { xs: ref("o1") },
+      heap: { o1: { type: "list", items: [int(1), int(2), int(3)] } },
+    }),
+    state(3, "line", {
+      line: 3,
+      variables: { xs: ref("o1") },
+      heap: { o1: { type: "list", items: [int(1), int(3)] } },
+    }),
+  ];
+  const changes = getStepView(trace, 2, source).changes;
+  assert.deepEqual(changes, [
+    { kind: "slot", name: "xs[1]", from: "2", to: "3", line: 2 },
+    { kind: "removed-slot", name: "xs[2]", from: "3", to: null, line: 2 },
+  ]);
+});
+
+test("three names for one object are counted correctly", () => {
+  const list = { type: "list", items: [int(1)] };
+  const view = getStepView(
+    [
+      state(0, "line", {
+        line: 1,
+        variables: { a: ref("o1"), b: ref("o1"), c: ref("o1") },
+        heap: { o1: list },
+      }),
+    ],
+    0,
+  );
+  const note = view.shared.find((entry) => entry.names.length === 3);
+  assert.ok(note);
+  assert.equal(note.text, "`a`, `b`, `c` are 3 names for the same list. Changing one changes the other.");
 });
 
 test("paramsFor reads parameter names, leaving self out", () => {
@@ -270,6 +379,52 @@ test("a failed run opens on the step that failed, not the top", () => {
   assert.equal(errorStep(FIXTURES.syntaxError.trace), 0);
   assert.equal(errorStep([]), 0);
   assert.equal(errorStep(null), 0);
+});
+
+test("a failed run opens on the uncaught exception, not an earlier caught one", () => {
+  const caught = {
+    ...state(3, "exception", { line: 2 }),
+    exception: { type: "ZeroDivisionError", message: "division by zero" },
+  };
+  const uncaught = {
+    ...state(5, "exception", { line: 6 }),
+    exception: { type: "IndexError", message: "list index out of range" },
+  };
+  const trace = [
+    state(0, "call", { line: 0 }),
+    state(1, "line", { line: 1 }),
+    state(2, "line", { line: 2 }),
+    caught,
+    state(4, "line", { line: 4 }),
+    uncaught,
+    { step: 6, event: "error", type: "IndexError", message: "list index out of range", line: 6 },
+  ];
+
+  assert.equal(errorStep(trace), 5);
+  assert.equal(trace[errorStep(trace)].line, 6);
+});
+
+test("an escaping exception opens on the frame that raised it, not the caller's re-raise", () => {
+  const trace = [
+    state(0, "call", { line: 0 }),
+    state(1, "line", { line: 5 }),
+    state(2, "call", { line: 6, id: 2 }),
+    state(3, "line", { line: 2, id: 2 }),
+    {
+      ...state(4, "exception", { line: 2, id: 2 }),
+      exception: { type: "ZeroDivisionError", message: "division by zero" },
+    },
+    state(5, "unwind", { line: 2, id: 2 }),
+    {
+      ...state(6, "exception", { line: 6 }),
+      exception: { type: "ZeroDivisionError", message: "division by zero" },
+    },
+    state(7, "unwind", { line: 6 }),
+    { step: 8, event: "error", type: "ZeroDivisionError", message: "division by zero", line: 2 },
+  ];
+
+  assert.equal(errorStep(trace), 4);
+  assert.equal(trace[errorStep(trace)].line, 2);
 });
 
 // --- the anti-contradiction sweep over the real merge sort -----------------
@@ -332,14 +487,19 @@ test("every step of the merge-sort trace agrees across all panels", () => {
       const beforeVars = topFrame(view.before)?.variables ?? {};
       const afterVars = topFrame(view.after)?.variables ?? {};
       for (const change of view.changes) {
-        if (change.kind === "slot" || change.kind === "new-slot") {
+        if (change.kind === "slot" || change.kind === "new-slot" || change.kind === "removed-slot") {
           slotChanges += 1;
+          assert.equal(change.line, view.line, `${where}: slot change line`);
           continue;
         }
         assert.equal(change.line, view.line, `${where}: change line`);
         if (change.kind === "new") {
           assert.ok(!(change.name in beforeVars), `${where}: '${change.name}' was not new`);
           assert.ok(change.name in afterVars, `${where}: '${change.name}' missing after`);
+        } else if (change.kind === "removed") {
+          assert.ok(change.name in beforeVars, `${where}: '${change.name}' was not there before`);
+          assert.ok(!(change.name in afterVars), `${where}: '${change.name}' still there after`);
+          assert.equal(change.to, null, `${where}: a removal has no new value`);
         } else if (change.kind === "changed") {
           assert.ok(change.name in beforeVars, `${where}: '${change.name}' was not there before`);
           assert.ok(change.from !== change.to, `${where}: '${change.name}' did not change`);

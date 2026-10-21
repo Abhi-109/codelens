@@ -142,7 +142,7 @@ test("for-loop first round, next round, and end", () => {
   ];
   assert.equal(explainStep(trace, 1, source).text, "The loop starts: n is now 1.");
   assert.equal(explainStep(trace, 3, source).text, "Next round of the loop: n becomes 2.");
-  assert.equal(explainStep(trace, 5, source).text, "The loop found no more items, so it stops here.");
+  assert.equal(explainStep(trace, 5, source).text, "The loop has no more items, so it stops here.");
 });
 
 test("while loop reports the condition each check", () => {
@@ -346,7 +346,7 @@ test("why-now explains a loop coming round again", () => {
   ];
   assert.equal(
     explainTransition(trace, 3, source),
-    "The loop body finished, so Python jumped back up to line 2 for the next round.",
+    "The loop body finished, so Python returned to line 2 to look for the next item.",
   );
 });
 
@@ -433,4 +433,78 @@ test("just happened reports the value a finished call handed back", () => {
   const view = explainStepView(trace, 2, source);
   assert.equal(view.justHappened, "line 3 handed back 1 from fact().");
   assert.match(view.why, /reached a return/);
+});
+
+test("the last for event says the loop ends, not that another round starts", () => {
+  const source = "total = 0\nfor n in [1, 2]:\n    total = total + n\nprint(total)\n";
+  const trace = [
+    state(0, "call", { line: 0 }),
+    state(1, "line", { line: 2, variables: { total: int(0) } }),
+    state(2, "line", { line: 3, variables: { total: int(0), n: int(1) } }),
+    state(3, "line", { line: 2, variables: { total: int(1), n: int(1) } }),
+    state(4, "line", { line: 3, variables: { total: int(1), n: int(2) } }),
+    state(5, "line", { line: 2, variables: { total: int(3), n: int(2) } }),
+    state(6, "line", { line: 4, variables: { total: int(3), n: int(2) } }),
+  ];
+
+  assert.equal(
+    explainStep(trace, 3, source).text,
+    "Next round of the loop: n becomes 2.",
+  );
+  assert.equal(
+    explainStep(trace, 5, source).text,
+    "The loop has no more items, so it stops here.",
+  );
+});
+
+test("a false if inside a loop is not described as True when control returns to the header", () => {
+  const source = "for n in [1, 2]:\n    if n == 9:\n        print(n)\n    print(n)\n";
+  const trace = [
+    state(0, "call", { line: 0 }),
+    state(1, "line", { line: 1, variables: {} }),
+    state(2, "line", { line: 2, variables: { n: int(1) } }),
+    state(3, "line", { line: 4, variables: { n: int(1) } }),
+    state(4, "line", { line: 1, variables: { n: int(1) } }),
+  ];
+
+  assert.equal(
+    explainStep(trace, 2, source).text,
+    "1 == 9 is False, so this branch is skipped.",
+  );
+});
+
+test("a caught exception says it was handled, while an uncaught one stops the run", () => {
+  const source = "try:\n    x = 1 / 0\nexcept ZeroDivisionError:\n    x = 0\n";
+  const caught = {
+    ...state(3, "exception", { line: 2 }),
+    exception: { type: "ZeroDivisionError", message: "division by zero" },
+  };
+  const trace = [
+    state(0, "call", { line: 0 }),
+    state(1, "line", { line: 1 }),
+    state(2, "line", { line: 2 }),
+    caught,
+    state(4, "line", { line: 3 }),
+    state(5, "line", { line: 4 }),
+  ];
+
+  assert.match(explainStep(trace, 3, source).text, /A matching except block catches it/);
+  assert.match(
+    explainStepView(trace, 3, source).justHappened,
+    /line 2 raised ZeroDivisionError, and a matching except block caught it/,
+  );
+  assert.match(explainStep(trace, 1, source).text, /Starts a protected block/);
+  assert.match(explainStep(trace, 4, source).text, /Catches ZeroDivisionError/);
+
+  const uncaught = {
+    ...state(2, "exception", { line: 2 }),
+    exception: { type: "IndexError", message: "list index out of range" },
+  };
+  const ended = [
+    state(0, "call", { line: 0 }),
+    state(1, "line", { line: 1 }),
+    uncaught,
+    { step: 3, event: "error", type: "IndexError", message: "list index out of range", line: 2 },
+  ];
+  assert.match(explainStep(ended, 2, source).text, /Python stops with IndexError/);
 });

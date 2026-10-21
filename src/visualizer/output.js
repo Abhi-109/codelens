@@ -7,19 +7,15 @@
 // exception is called "handled" only when the same frame really ran another
 // line afterwards.
 
+import { getTraceIndex } from "../tracer/traceIndex.js";
+
 function listOf(trace) {
   return Array.isArray(trace) ? trace : [];
 }
 
 /** Everything printed at or before `index`, exactly as recorded. */
 export function outputAt(trace, index) {
-  const list = listOf(trace);
-  let out = "";
-  const last = Math.min(Math.max(Number(index) || 0, 0), list.length - 1);
-  for (let i = 0; i <= last; i += 1) {
-    if (list[i]?.event === "output") out += list[i].text ?? "";
-  }
-  return out;
+  return getTraceIndex(listOf(trace)).outputAt(index);
 }
 
 /**
@@ -29,26 +25,7 @@ export function outputAt(trace, index) {
  * the same console line.
  */
 export function outputSegments(trace, from, to) {
-  const list = listOf(trace);
-  const start = Math.max(Number(from) || 0, 0);
-  const end = Math.min(Number.isFinite(Number(to)) ? Number(to) : list.length - 1, list.length - 1);
-  const segments = [];
-  let open = null;
-  for (let i = start; i <= end; i += 1) {
-    const event = list[i];
-    if (event?.event === "output") {
-      if (!open) open = { at: i, line: event.line ?? null, text: "", events: [] };
-      open.text += event.text ?? "";
-      open.events.push(i);
-    } else if (event?.event !== "input") {
-      if (open) {
-        segments.push(open);
-        open = null;
-      }
-    }
-  }
-  if (open) segments.push(open);
-  return segments;
+  return getTraceIndex(listOf(trace)).outputSegments(from, to);
 }
 
 /** The last unfinished line of a console, which is the prompt an input asked. */
@@ -60,20 +37,12 @@ export function promptOf(text) {
 
 /**
  * What happened to one `exception` event: `handled` when the same frame ran a
- * later line, `uncaught` when the frame unwound or the run ended with an error,
- * and `raised` when the trace ends before either can be seen.
+ * later line, `propagated` when the frame unwound and a caller then reported
+ * the same exception, `uncaught` when the frame unwound and the run ended with
+ * an error, and `raised` when the trace ends before either can be seen.
  */
 export function exceptionOutcome(trace, index) {
-  const list = listOf(trace);
-  const event = list[index];
-  if (!event || event.event !== "exception") return "raised";
-  for (let i = index + 1; i < list.length; i += 1) {
-    const next = list[i];
-    if (next.event === "line" && next.frame_id === event.frame_id) return "handled";
-    if (next.event === "unwind" && next.frame_id === event.frame_id) return "uncaught";
-    if (next.event === "error") return "uncaught";
-  }
-  return "raised";
+  return getTraceIndex(listOf(trace)).exceptionOutcome(index);
 }
 
 /**
@@ -81,49 +50,16 @@ export function exceptionOutcome(trace, index) {
  * a jumpable index. No exception path is invented for a step that has none.
  */
 export function exceptionEntries(trace) {
-  const list = listOf(trace);
-  const entries = [];
-  for (let i = 0; i < list.length; i += 1) {
-    const event = list[i];
-    if (event?.event === "exception") {
-      entries.push({
-        index: i,
-        event: "exception",
-        type: event.exception?.type ?? "Exception",
-        message: event.exception?.message ?? "",
-        line: event.line ?? null,
-        function: event.function ?? null,
-        outcome: exceptionOutcome(list, i),
-      });
-    } else if (event?.event === "error") {
-      entries.push({
-        index: i,
-        event: "error",
-        type: event.type ?? "Error",
-        message: event.message ?? "",
-        line: event.line ?? null,
-        function: null,
-        outcome: "uncaught",
-      });
-    }
-  }
-  return entries;
+  return getTraceIndex(listOf(trace))
+    .exceptions()
+    .map((entry) => ({ ...entry }));
 }
 
 /** Every input the trace records, with the actual prompt and submitted value. */
 export function inputEntries(trace) {
-  const list = listOf(trace);
-  const entries = [];
-  for (let i = 0; i < list.length; i += 1) {
-    if (list[i]?.event !== "input") continue;
-    entries.push({
-      index: i,
-      value: list[i].text ?? "",
-      prompt: promptOf(outputAt(list, i)),
-      line: list[i].line ?? null,
-    });
-  }
-  return entries;
+  return getTraceIndex(listOf(trace))
+    .inputs()
+    .map((entry) => ({ ...entry }));
 }
 
 /** The final error the result reports, even when the trace has no error event. */
@@ -131,7 +67,7 @@ export function finalError(trace, result) {
   const list = listOf(trace);
   const error = result?.error;
   if (!error) return null;
-  const at = list.findIndex((event) => event.event === "error");
+  const at = getTraceIndex(list).errorIndex();
   return {
     index: at >= 0 ? at : list.length > 0 ? list.length - 1 : null,
     event: "error",
@@ -150,16 +86,18 @@ export function finalError(trace, result) {
  */
 export function outputView(trace, index, result = null) {
   const list = listOf(trace);
+  const indexOf = getTraceIndex(list);
   const last = Math.max(list.length - 1, 0);
   const at = Math.max(0, Math.min(Math.round(Number(index) || 0), last));
-  const pastSegments = outputSegments(list, 0, at);
-  const futureSegments = list.length > 0 ? outputSegments(list, at + 1, last) : [];
-  const inputs = inputEntries(list);
-  const errors = exceptionEntries(list);
+  const pastSegments = indexOf.outputSegments(0, at);
+  const futureSegments = list.length > 0 ? indexOf.outputSegments(at + 1, last) : [];
+  const inputs = indexOf.inputs();
+  const recorded = indexOf.exceptions();
   const final = finalError(list, result);
-  if (final && !errors.some((entry) => entry.index === final.index && entry.event === "error")) {
-    errors.push(final);
-  }
+  const errors =
+    final && !recorded.some((entry) => entry.index === final.index && entry.event === "error")
+      ? [...recorded, final]
+      : recorded;
   return {
     index: at,
     hasTrace: list.length > 0,

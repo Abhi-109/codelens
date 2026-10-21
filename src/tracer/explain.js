@@ -9,6 +9,7 @@
 // first time a concept appears in a run.
 
 import { changedSlots, slotEntries } from "./objects.js";
+import { getTraceIndex } from "./traceIndex.js";
 import { showValue } from "./values.js";
 
 /** Short glossary shown as concept cards. Every concept id a rule can emit must exist here. */
@@ -104,19 +105,12 @@ function sourceLine(source, lineNo) {
 
 /** The first event after `index` that carries the full state. */
 function nextState(trace, index) {
-  for (let i = index + 1; i < trace.length; i += 1) {
-    if (trace[i]?.frames) return trace[i];
-  }
-  return null;
+  return getTraceIndex(trace).nextState(index);
 }
 
 /** Has this source line already run in this frame before this step? */
 function seenBefore(trace, index, line, frameId) {
-  for (let i = 0; i < index; i += 1) {
-    const event = trace[i];
-    if (event.event === "line" && event.line === line && event.frame_id === frameId) return true;
-  }
-  return false;
+  return getTraceIndex(trace).seenBefore(index, line, frameId);
 }
 
 function topVariables(state) {
@@ -139,10 +133,7 @@ export function substituteVars(text, variables, heap) {
 
 /** The next `line` event that carries state, or null. */
 function nextLineEvent(trace, index) {
-  for (let i = index + 1; i < trace.length; i += 1) {
-    if (trace[i].event === "line" && trace[i].frames) return trace[i];
-  }
-  return null;
+  return getTraceIndex(trace).nextLineEvent(index);
 }
 
 /**
@@ -192,13 +183,8 @@ const LIST_METHODS = new Set(["append", "insert", "pop", "remove", "extend", "so
  * (they carry no stack of their own, so we gather them until control moves on).
  */
 function printedText(trace, index) {
-  let out = "";
-  for (let i = index + 1; i < trace.length; i += 1) {
-    const event = trace[i];
-    if (event.event === "line" || event.event === "call" || event.event === "return") break;
-    if (event.event === "output") out += event.text;
-  }
-  return short(out.replace(/\n$/, ""));
+  const raw = getTraceIndex(trace).printedRawAfter(index);
+  return { produced: raw.length > 0, text: short(raw.replace(/\n$/, "")) };
 }
 
 /** The one slot an item assignment changed, named and valued from the next state. */
@@ -224,7 +210,15 @@ function isRecursive(event) {
 function explainLine(event, trace, index, source) {
   const variables = topVariables(event);
   const { text, indent } = sourceLine(source, event.line);
-  if (!text) return { text: "The program moves on.", concept: null };
+  if (!text) {
+    return {
+      text:
+        event.line === 0
+          ? "There are no statements to run."
+          : "The program moves on.",
+      concept: null,
+    };
+  }
 
   // def / class: writing a recipe or a blueprint; nothing runs yet.
   let match = text.match(/^def\s+([A-Za-z_]\w*)/);
@@ -246,6 +240,14 @@ function explainLine(event, trace, index, source) {
   match = text.match(/^for\s+([A-Za-z_]\w*)\s+in\s+(.+):$/);
   if (match) {
     const [, name] = match;
+    const next = nextLineEvent(trace, index);
+    const end = blockEnd(source, event.line, indent);
+    // The next line only counts as another round when it is inside this loop's
+    // body. A final for event is followed by the line after the loop, and the
+    // loop variable still exists there, so its presence proves nothing.
+    if (!next || next.line < event.line || next.line > end) {
+      return { text: `The loop has no more items, so it stops here.`, concept: "loop" };
+    }
     const after = nextState(trace, index);
     const afterVars = topVariables(after);
     if (!(name in afterVars)) {
@@ -268,7 +270,9 @@ function explainLine(event, trace, index, source) {
     const next = nextLineEvent(trace, index);
     const end = blockEnd(source, event.line, indent);
     const first = !seenBefore(trace, index, event.line, event.frame_id);
-    if (next && next.line <= end) {
+    // Same-line suites (`while x: step()`) have their body on the loop's own
+    // line, so `>=` is the correct lower bound here.
+    if (next && next.line >= event.line && next.line <= end) {
       return {
         text: first
           ? `The while loop checks its condition: ${condition} is True, so the loop begins.`
@@ -293,7 +297,7 @@ function explainLine(event, trace, index, source) {
       return { text: `Checks ${condition}, but the program ends before using the answer.`, concept: "condition" };
     }
     const end = blockEnd(source, event.line, indent);
-    if (next.line <= end) {
+    if (next.line >= event.line && next.line <= end) {
       return { text: `${condition} is True, so this branch runs.`, concept: "condition" };
     }
     // The block was skipped. Python either tries an else branch right after
@@ -307,6 +311,47 @@ function explainLine(event, trace, index, source) {
     return {
       text: "The earlier conditions were all False, so this branch runs instead.",
       concept: "condition",
+    };
+  }
+
+  // Statements that move control without producing a value.
+  if (/^break\b/.test(text)) {
+    return { text: "Leaves the nearest loop now.", concept: "loop" };
+  }
+  if (/^continue\b/.test(text)) {
+    return {
+      text: "Skips the rest of this loop round and starts the next one.",
+      concept: "loop",
+    };
+  }
+  if (/^pass\b/.test(text)) {
+    return { text: "Does nothing. It keeps this block valid.", concept: null };
+  }
+  if (/^raise\b/.test(text)) {
+    const raised = text.replace(/^raise\s*/, "").trim();
+    return {
+      text: raised ? `Raises ${short(raised)}.` : "Raises the current exception again.",
+      concept: "error",
+    };
+  }
+  if (/^try\s*:/.test(text)) {
+    return {
+      text: "Starts a protected block: if a line inside raises, Python looks for a matching except.",
+      concept: "error",
+    };
+  }
+  match = text.match(/^except(?:\s+(.+?))?\s*:/);
+  if (match) {
+    const kind = (match[1] ?? "an exception").replace(/\s+as\s+\w+$/, "").trim();
+    return {
+      text: `Catches ${kind}, so the program can continue instead of stopping.`,
+      concept: "error",
+    };
+  }
+  if (/^finally\s*:/.test(text)) {
+    return {
+      text: "Runs this cleanup block whether the try block finished or failed.",
+      concept: "error",
     };
   }
 
@@ -325,8 +370,10 @@ function explainLine(event, trace, index, source) {
   if (/^print\s*\(/.test(text)) {
     const printed = printedText(trace, index);
     return {
-      text: printed
-        ? `This line prints ${printed} on the screen.`
+      text: printed.produced
+        ? printed.text
+          ? `This line prints ${printed.text} on the screen.`
+          : "This line prints a blank line."
         : "This line shows something on the screen.",
       concept: "print",
     };
@@ -482,18 +529,45 @@ function explainEvent(event, trace, index, source) {
       return explainLine(event, trace, index, source);
     case "return":
       return explainReturn(event);
-    case "exception":
+    case "exception": {
+      const type = event.exception?.type ?? "an error";
+      const message = event.exception?.message ?? "no message";
+      const outcome = getTraceIndex(trace).exceptionOutcome(index);
+      if (outcome === "handled") {
+        return {
+          text: `Python raises ${type}: ${message}. A matching except block catches it, so the program can continue.`,
+          concept: "error",
+        };
+      }
+      if (outcome === "propagated") {
+        return {
+          text: `Python raises ${type}: ${message}. No handler caught it here, so it passes outward to the caller.`,
+          concept: "error",
+        };
+      }
       return {
-        text: `Python stops with ${event.exception?.type ?? "an error"}: ${event.exception?.message ?? "no message"}`,
+        text: `Python stops with ${type}: ${message}`,
         concept: "error",
       };
+    }
     case "unwind":
       return {
         text: `The error spreads outward, so ${event.function}() stops without finishing its work.`,
         concept: "error",
       };
     case "output": {
-      const printed = short(event.text.replace(/\n$/, ""));
+      const chunk = String(event.text ?? "");
+      const printed = short(
+        getTraceIndex(trace).printedLineAt(index)?.text ?? event.text.replace(/\n$/, ""),
+      );
+      if (/^\n+$/.test(chunk)) {
+        return {
+          text: printed
+            ? `This finishes the printed line: ${printed}`
+            : "This finishes a blank line.",
+          concept: "print",
+        };
+      }
       return {
         text: printed ? `The program prints: ${printed}` : "The program prints a blank line.",
         concept: "print",
@@ -547,13 +621,29 @@ export function conceptAt(trace, index, source = "") {
   return explainStep(trace, index, source).concept;
 }
 
+/** First step at which each concept appears, per trace and source. */
+const CONCEPT_FIRST = new WeakMap();
+
+function firstConceptSteps(trace, source) {
+  const cached = CONCEPT_FIRST.get(trace);
+  if (cached && cached.source === source) return cached.first;
+  const first = new Map();
+  for (let i = 0; i < trace.length; i += 1) {
+    const concept = explainStep(trace, i, source).concept;
+    if (concept && !first.has(concept)) first.set(concept, i);
+  }
+  CONCEPT_FIRST.set(trace, { source, first });
+  return first;
+}
+
 /** True when `concept` has not appeared in any step before `index`. */
 export function isNewConcept(trace, index, source, concept) {
   if (!concept) return false;
-  for (let i = 0; i < index; i += 1) {
-    if (conceptAt(trace, i, source) === concept) return false;
-  }
-  return true;
+  const list = Array.isArray(trace) ? trace : [];
+  if (list.length === 0) return true;
+  const first = firstConceptSteps(list, source);
+  const at = first.get(concept);
+  return at === undefined || at >= index;
 }
 
 // --- Why did execution come here? -------------------------------------------
@@ -561,22 +651,14 @@ export function isNewConcept(trace, index, source, concept) {
 // previous step that moved control and this one, so the answer comes from the
 // recorded trace and can never contradict it.
 
-const ANCHOR_EVENTS = new Set(["line", "call", "return", "unwind"]);
-
 /** Index of the nearest earlier step that moved control, or -1. */
 function previousAnchorIndex(trace, index) {
-  for (let i = index - 1; i >= 0; i -= 1) {
-    if (ANCHOR_EVENTS.has(trace[i].event)) return i;
-  }
-  return -1;
+  return getTraceIndex(trace).previousAnchorIndex(index);
 }
 
 /** Index of the nearest earlier step in one frame, or -1. */
 function previousInFrameIndex(trace, index, frameId) {
-  for (let i = index - 1; i >= 0; i -= 1) {
-    if (ANCHOR_EVENTS.has(trace[i].event) && trace[i].frame_id === frameId) return i;
-  }
-  return -1;
+  return getTraceIndex(trace).previousAnchorInFrame(index, frameId);
 }
 
 /**
@@ -608,6 +690,13 @@ export function explainTransition(trace, index, source = "") {
       return `Line ${event.line} is still running: the value it called for has come back.`;
     }
     if (same.line > event.line) {
+      const loopLine = sourceLine(source, event.line).text;
+      if (/^for\b/.test(loopLine)) {
+        return `The loop body finished, so Python returned to line ${event.line} to look for the next item.`;
+      }
+      if (/^while\b/.test(loopLine)) {
+        return `The loop body finished, so Python returned to line ${event.line} to check the condition again.`;
+      }
       return `The loop body finished, so Python jumped back up to line ${event.line} for the next round.`;
     }
     if (same.line + 1 === event.line) {
@@ -635,9 +724,14 @@ export function explainTransition(trace, index, source = "") {
   // From here on there is no branch to explain — control is here because the
   // line printed, asked, failed or was stopped. Say which, in plain words.
   if (event.event === "output") {
-    return event.line != null
-      ? `Line ${event.line} is printing, so this text appears now.`
-      : "The program printed this text, then carries on.";
+    const chunk = String(event.text ?? "");
+    const printed = short(getTraceIndex(trace).printedLineAt(index)?.text ?? "");
+    if (/^\n+$/.test(chunk)) {
+      return printed ? `This finishes the printed line: ${printed}.` : "This finishes a blank line.";
+    }
+    return printed
+      ? `Line ${event.line ?? "?"} prints ${printed}, so this text appears now.`
+      : "The program prints this text, then carries on.";
   }
   if (event.event === "input") {
     return `Line ${event.line ?? "?"} asked for a value, so the program waits for it here.`;
@@ -962,10 +1056,23 @@ function justHappened(trace, index, source) {
     const at = frame?.call_line;
     return at != null ? `line ${at} called ${event.function}().` : `${event.function}() was called.`;
   }
-  if (event.event === "return" && previous?.event === "line" && event.return_value) {
+  if (
+    event.event === "return" &&
+    event.function !== "<module>" &&
+    previous?.event === "line" &&
+    event.return_value
+  ) {
     return `line ${previous.line} handed back ${showValue(event.return_value, event.heap)} from ${event.function}().`;
   }
   if (event.event === "exception" && previous?.event === "line") {
+    const outcome = getTraceIndex(trace).exceptionOutcome(index);
+    const type = event.exception?.type ?? "an exception";
+    if (outcome === "handled") {
+      return `line ${previous.line} raised ${type}, and a matching except block caught it.`;
+    }
+    if (outcome === "propagated") {
+      return `line ${previous.line} raised ${type}, and it passed outward to the caller.`;
+    }
     // The line is highlighted *and* just started: it did not finish its work.
     return `line ${previous.line} started running, and this is where it stopped.`;
   }

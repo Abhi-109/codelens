@@ -1,4 +1,15 @@
 {
+  "assign-only": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 4,
+    "exception": null,
+    "frames": 1,
+    "output": "",
+    "status": "completed",
+    "steps": 2
+  },
   "async-await": {
     "error_line": null,
     "error_phase": null,
@@ -234,6 +245,20 @@
     "status": "completed",
     "steps": 10
   },
+  "exception-reraise": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 20,
+    "exception": {
+      "message": "integer division or modulo by zero",
+      "type": "ZeroDivisionError"
+    },
+    "frames": 2,
+    "output": "rethrowing\ncaught at top\n",
+    "status": "completed",
+    "steps": 10
+  },
   "for-loop": {
     "error_line": null,
     "error_phase": null,
@@ -266,6 +291,39 @@
     "output": "Hello, Asha\n",
     "status": "completed",
     "steps": 5
+  },
+  "function-implicit-none": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 9,
+    "exception": null,
+    "frames": 2,
+    "output": "None\n",
+    "status": "completed",
+    "steps": 3
+  },
+  "function-print-return": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 12,
+    "exception": null,
+    "frames": 2,
+    "output": "inside\n42\n",
+    "status": "completed",
+    "steps": 4
+  },
+  "function-return-none": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 9,
+    "exception": null,
+    "frames": 2,
+    "output": "None\n",
+    "status": "completed",
+    "steps": 3
   },
   "function-star-args": {
     "error_line": null,
@@ -324,6 +382,17 @@
     "output": "3\n4.0\n",
     "status": "completed",
     "steps": 4
+  },
+  "io-empty-print": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 7,
+    "exception": null,
+    "frames": 1,
+    "output": "\ndone\n",
+    "status": "completed",
+    "steps": 2
   },
   "io-input": {
     "error_line": null,
@@ -415,6 +484,17 @@
     "output": "[99, 20]\n",
     "status": "completed",
     "steps": 6
+  },
+  "list-print-element": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 7,
+    "exception": null,
+    "frames": 1,
+    "output": "cherry\n",
+    "status": "completed",
+    "steps": 3
   },
   "nested-loops": {
     "error_line": null,

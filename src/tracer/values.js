@@ -2,16 +2,27 @@
 // text. Shared by the UI and the plain-English explainer so both always say
 // the same thing about a value.
 
-/** Anything that can appear as a value: a plain value, or a container. */
-const CONTAINERS = new Set(["list", "tuple", "set", "dict", "object"]);
-
-/** Formats a value or a container, whichever is in front of us. */
-function describeAny(value, heap) {
-  if (value && CONTAINERS.has(value.type)) return describeObject(value, heap);
-  return formatValue(value, heap);
+/**
+ * What a repeat visit to an object says. A container can hold itself
+ * (`a = []; a.append(a)`), so the trace legitimately describes a cycle. Python
+ * prints that as `[[...]]`; printing `[` forever would overflow the JS stack.
+ */
+function cycleMarker(object) {
+  switch (object?.type) {
+    case "dict":
+      return "{…}";
+    case "object":
+      return `${object.class ?? "object"}(…)`;
+    case "tuple":
+      return "(…)";
+    case "set":
+      return "{…}";
+    default:
+      return "[…]";
+  }
 }
 
-export function formatValue(value, heap) {
+export function formatValue(value, heap, seen = new Set()) {
   if (!value) return "?";
   switch (value.type) {
     case "none":
@@ -19,20 +30,18 @@ export function formatValue(value, heap) {
     case "bool":
       return value.value ? "True" : "False";
     case "int":
-    case "float":
       return String(value.value);
+    case "float":
+      // nan and inf have no JSON number, so the tracer records their repr.
+      // Falling back to the number would print "undefined".
+      return value.repr ?? String(value.value);
     case "str": {
       // A string the tracer cut short says so, rather than looking complete.
       const text = value.value ?? "";
       return JSON.stringify(value.truncated ? `${text}…` : text);
     }
-    case "ref": {
-      const object = heap?.[value.id];
-      // A reference whose object is not in this step's snapshot. Saying so is
-      // honest; printing the trace's internal id (`o7`) is not a value.
-      if (!object) return "(not shown at this step)";
-      return describeAny(object, heap);
-    }
+    case "ref":
+      return showValue(value, heap, seen);
     case "function":
       return `${value.name}()`;
     case "class":
@@ -51,21 +60,36 @@ function moreNote(object) {
 }
 
 /** Describes the object a reference points at: a list, dict, or instance. */
-export function describeObject(object, heap) {
+export function describeObject(object, heap, seen = new Set()) {
   if (!object) return "?";
   const note = moreNote(object);
   if (object.type === "list" || object.type === "tuple" || object.type === "set") {
-    return `[${object.items.map((item) => describeAny(item, heap)).join(", ")}${note}]`;
+    const body = object.items.map((item) => showValue(item, heap, seen)).join(", ");
+    const inner = `${body}${note}`;
+    if (object.type === "tuple") {
+      // A one-item tuple keeps Python's trailing comma: (1,) is not (1).
+      return object.items.length === 1 && !note ? `(${body},)` : `(${inner})`;
+    }
+    if (object.type === "set") {
+      if (object.items.length === 0 && !note) return "set()";
+      const shown = `{${inner}}`;
+      // frozenset and set subclasses keep their real name, as Python prints them.
+      return object.class && object.class !== "set" ? `${object.class}(${shown})` : shown;
+    }
+    return `[${inner}]`;
   }
   if (object.type === "dict") {
     const body = object.entries
-      .map((entry) => `${describeAny(entry.key, heap)}: ${describeAny(entry.value, heap)}`)
+      .map(
+        (entry) =>
+          `${showValue(entry.key, heap, seen)}: ${showValue(entry.value, heap, seen)}`,
+      )
       .join(", ");
     return `{${body}${note}}`;
   }
   if (object.type === "object") {
     const body = object.attrs
-      .map((attr) => `${attr.name}=${describeAny(attr.value, heap)}`)
+      .map((attr) => `${attr.name}=${showValue(attr.value, heap, seen)}`)
       .join(", ");
     return `${object.class}(${body}${note})`;
   }
@@ -73,10 +97,17 @@ export function describeObject(object, heap) {
 }
 
 /** Turns any value from the trace into one short display string. */
-export function showValue(value, heap) {
+export function showValue(value, heap, seen = new Set()) {
   if (value?.type === "ref") {
     const object = heap?.[value.id];
-    return object ? describeObject(object, heap) : "(not shown at this step)";
+    if (!object) return "(not shown at this step)";
+    // The trace can describe an object that contains itself. Mark this object
+    // before descending, so a cycle becomes a visible marker instead of a
+    // stack overflow.
+    if (seen.has(value.id)) return cycleMarker(object);
+    const next = new Set(seen);
+    next.add(value.id);
+    return describeObject(object, heap, next);
   }
-  return formatValue(value, heap);
+  return formatValue(value, heap, seen);
 }

@@ -100,6 +100,14 @@ test("valueLine shows a new name as created, not as a change", () => {
   assert.equal(valueLine({ changes: [], frame: null }, { text: "pass" }), "");
 });
 
+test("valueLine says a deleted name is gone instead of drawing an arrow to null", () => {
+  const view = {
+    changes: [{ kind: "removed", name: "x", from: "5", to: null }],
+    frame: { variables: [] },
+  };
+  assert.equal(valueLine(view, { text: "del x" }), "x removed (was 5)");
+});
+
 test("nextStep names the move and its reason", () => {
   const trace = factTrace();
   const graph = buildExecutionGraph(trace, FACT_SOURCE);

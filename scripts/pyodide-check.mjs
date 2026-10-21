@@ -30,6 +30,7 @@ const EXPECTED = {
 const pyodide = await loadPyodide();
 pyodide.FS.writeFile("/tracer.py", readFileSync(join(tracerDir, "tracer.py"), "utf8"));
 pyodide.FS.writeFile("/flowchart.py", readFileSync(join(tracerDir, "flowchart.py"), "utf8"));
+pyodide.FS.writeFile("/analyze.py", readFileSync(join(tracerDir, "analyze.py"), "utf8"));
 await pyodide.runPythonAsync(
   "import sys, importlib.util\n"
     + "spec = importlib.util.spec_from_file_location('tracer', '/tracer.py')\n"
@@ -38,7 +39,10 @@ await pyodide.runPythonAsync(
     + "sys.modules['tracer'] = tracer\n"
     + "flow_spec = importlib.util.spec_from_file_location('flowchart', '/flowchart.py')\n"
     + "flowchart = importlib.util.module_from_spec(flow_spec)\n"
-    + "flow_spec.loader.exec_module(flowchart)\n",
+    + "flow_spec.loader.exec_module(flowchart)\n"
+    + "analyze_spec = importlib.util.spec_from_file_location('analyze', '/analyze.py')\n"
+    + "analyze = importlib.util.module_from_spec(analyze_spec)\n"
+    + "analyze_spec.loader.exec_module(analyze)\n",
 );
 
 const runTraceJson = pyodide.runPython(
@@ -51,6 +55,10 @@ const buildFlowchartJson = pyodide.runPython(
 
 const buildFlowchartGraphJson = pyodide.runPython(
   "import json\nlambda source: json.dumps(flowchart.build_flowchart(source))\n",
+);
+
+const analyzeJson = pyodide.runPython(
+  "import json\nlambda source: json.dumps(analyze.analyze_source(source))\n",
 );
 
 let failed = 0;
@@ -78,7 +86,23 @@ for (const name of Object.keys(EXPECTED).sort()) {
   console.log(
     `${graphOk ? "PASS" : "FAIL"}  ${name}  (flowchart graph: ${Object.keys(graph.functions).length} chart(s))`,
   );
+
+  const profile = JSON.parse(analyzeJson(source));
+  const profileOk =
+    profile.profile_version === 1 &&
+    profile.kind === "program_profile" &&
+    profile.status === "ok" &&
+    Array.isArray(profile.functions) &&
+    Array.isArray(profile.calls);
+  if (!profileOk) failed += 1;
+  console.log(
+    `${profileOk ? "PASS" : "FAIL"}  ${name}  (profile: ${profile.functions?.length ?? 0} function(s))`,
+  );
 }
 
-console.log(failed === 0 ? "\nAll examples trace correctly inside Pyodide." : `\n${failed} example(s) failed.`);
+console.log(
+  failed === 0
+    ? "\nAll examples trace and profile correctly inside Pyodide."
+    : `\n${failed} example(s) failed.`,
+);
 process.exit(failed === 0 ? 0 : 1);

@@ -285,19 +285,37 @@ export function ChangeList({ log, index, onJump }) {
   if (shown.length === 0) return <p className="empty">Nothing has changed yet.</p>;
   return (
     <ol className="changes">
-      {shown.map((entry, i) => (
-        <li key={`${entry.index}-${entry.name}-${i}`}>
-          <button type="button" className="change-jump" onClick={() => onJump(entry.index)}>
-            step {entry.index + 1}
-          </button>
-          <span className="change-name">{entry.name}</span>
-          <span className="change-values">
-            {entry.from === null ? "" : `${entry.from} → `}
-            <strong>{entry.to}</strong>
-          </span>
-          <span className="watch-line">{entry.line ? `line ${entry.line}` : ""}</span>
-        </li>
-      ))}
+      {shown.map((entry, i) => {
+        const removed = entry.kind === "removed" || entry.kind === "removed-slot";
+        const added = entry.kind === "new" || entry.kind === "new-slot";
+        return (
+          <li key={`${entry.index}-${entry.name}-${i}`}>
+            <button type="button" className="change-jump" onClick={() => onJump(entry.index)}>
+              step {entry.index + 1}
+            </button>
+            <span className="change-name">{entry.name}</span>
+            <span className="change-values">
+              {removed ? (
+                <>
+                  <span className="change-removed">removed</span>
+                  {entry.from !== null ? ` (was ${entry.from})` : ""}
+                </>
+              ) : (
+                <>
+                  {added ? (
+                    <>
+                      <span className="change-new">added</span>{" "}
+                    </>
+                  ) : null}
+                  {entry.from === null ? "" : `${entry.from} → `}
+                  <strong>{entry.to}</strong>
+                </>
+              )}
+            </span>
+            <span className="watch-line">{entry.line ? `line ${entry.line}` : ""}</span>
+          </li>
+        );
+      })}
     </ol>
   );
 }

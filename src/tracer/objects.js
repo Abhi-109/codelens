@@ -1,6 +1,8 @@
 // Pure helpers for drawing heap objects (lists, dicts, instances) as
 // diagrams. Shared by the UI; no React here so node --test can cover it.
 
+import { formatValue } from "./values.js";
+
 /**
  * Which names point at each object id, top frame first — the two names
  * that share one id are drawn on the same box ("a, b → o1"). Nested
@@ -41,7 +43,14 @@ export function namesById(frames, heap) {
         const items = object.items ?? object.entries ?? [];
         items.forEach((item, i) => {
           const target = object.type === "dict" ? item.value : item;
-          if (target?.type === "ref") children.push([target.id, `${name}[${i}]`]);
+          if (target?.type !== "ref" || target.id === id) return; // no "a[0]" alias for itself
+          // A dict child is reached by its key, not by its position, so the
+          // path reads like the code the learner wrote: d["x"], not d[0].
+          const path =
+            object.type === "dict"
+              ? `${name}[${formatValue(item.key, byId)}]`
+              : `${name}[${i}]`;
+          children.push([target.id, path]);
         });
       }
       for (const [childId, path] of children) {

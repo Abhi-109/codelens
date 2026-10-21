@@ -33,13 +33,74 @@ const panelId = (id) => `inspector-panel-${id}`;
 
 /* --- The six sections ---------------------------------------------------- */
 
+function ChangeValue({ change }) {
+  if (change.kind === "new" || change.kind === "new-slot") {
+    return (
+      <>
+        <span className="explain-change-tag">new</span>
+        <span className="explain-change-to">{change.to}</span>
+      </>
+    );
+  }
+  if (change.kind === "removed" || change.kind === "removed-slot") {
+    return (
+      <>
+        <span className="explain-change-from">{change.from}</span>
+        <span className="explain-change-tag">removed</span>
+      </>
+    );
+  }
+  return (
+    <>
+      <span className="explain-change-from">{change.from}</span>
+      <span className="explain-change-arrow" aria-hidden="true">
+        →
+      </span>
+      <span className="explain-change-to">{change.to}</span>
+    </>
+  );
+}
+
+function ExplainChanges({ view }) {
+  if (view.kind !== "line" && view.kind !== "call") return null;
+  const changes = Array.isArray(view.changes) ? view.changes : [];
+  const label = view.kind === "line" ? "Changes when this line runs" : "Values passed in";
+
+  if (changes.length === 0) {
+    if (view.kind !== "line") return null;
+    return (
+      <div className="explain-part">
+        <div className="explain-part-label">{label}</div>
+        <p className="explain-changes-empty">
+          {view.after
+            ? "No variable or container values change on this line."
+            : "The trace has no later state for this line, so its changes are unavailable."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="explain-part">
+      <div className="explain-part-label">{label}</div>
+      <ul className="explain-changes" aria-label="Value changes at this step">
+        {changes.map((change, i) => (
+          <li key={`${change.name}:${change.kind}:${i}`} className="explain-change">
+            <span className="explain-change-name">{change.name}</span>
+            <ChangeValue change={change} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ExplainPanel({ ctx }) {
   const {
     result,
     view,
     line,
     callTitle,
-    currentNode,
     previousEvent,
     nextEvent,
     nextReason,
@@ -57,35 +118,28 @@ function ExplainPanel({ ctx }) {
     <>
       <PanelHead
         title="What's happening"
-        hint="The step in plain English, and what comes next."
-        help="Every step has three parts: what just happened, what is about to happen, and why this line runs now. Nothing here is written by hand - it is read from the one event the step is built from."
+        hint="What happened, what changed, and what comes next."
+        help="The explanation is read from the one trace event this step is built from. Open the reasoning below for control flow; the Advanced mode adds raw execution metadata."
       />
 
       {result ? (
         <div className="explain-head">
-          <span className="explain-label">Current step</span>
+          <span className="explain-label">Step {index + 1}</span>
           <span className="explain-where">{`line ${line ?? "?"} · ${callTitle}`}</span>
         </div>
       ) : null}
 
       {result ? (
         <>
-          {view.code ? <code className="step-code">{view.code.text}</code> : null}
-          {currentNode?.action ? <p className="step-action">{currentNode.action}</p> : null}
           <div className="explain-part">
             <div className="explain-part-label">Just happened</div>
             <p className="explain-text just">{view.explanation.justHappened ?? "Nothing yet."}</p>
           </div>
           <div className="explain-part">
-            <div className="explain-part-label">About to happen</div>
+            <div className="explain-part-label">Next</div>
             <p className="explain-text about">{view.explanation.aboutToHappen}</p>
           </div>
-          {view.explanation.why ? (
-            <div className="explain-part">
-              <div className="explain-part-label">Why this line runs now</div>
-              <p className="explain-text why">{view.explanation.why}</p>
-            </div>
-          ) : null}
+          <ExplainChanges view={view} />
         </>
       ) : (
         <p className="explain-text about">
@@ -94,61 +148,69 @@ function ExplainPanel({ ctx }) {
       )}
 
       {showConcept && concept && !dismissed.has(view.explanation.concept) ? (
-        <div className="concept-card">
-          <strong>{concept.term}</strong>
-          <span>{concept.blurb}</span>
+        <details className="concept-card">
+          <summary>New idea · {concept.term}</summary>
+          <p>{concept.blurb}</p>
           <button
             type="button"
             className="ghost"
-            aria-label="Dismiss this card"
             onClick={() => dismissConcept(view.explanation.concept)}
           >
-            ✕
+            Hide
           </button>
-        </div>
+        </details>
       ) : null}
 
-      {/* The old panel C, folded in: the same step seen as a path rather than
-          as prose, with each row able to jump to the step it names. */}
-      <div className={`flow-block${detail.structured ? " flow-structured" : ""}`}>
-        <div className="flow-block-head">
-          <h4>Control flow</h4>
-          {detail.structured ? (
-            <p className="panel-hint">Where control came from, where it is, and where it goes.</p>
+      {view.explanation.why || detail.structured ? (
+        <details className="explain-more">
+          <summary>Why this line runs now</summary>
+          {view.explanation.why ? (
+            <p className="explain-text why">{view.explanation.why}</p>
           ) : null}
-        </div>
-        <ol className="flow-steps">
-          <li className="flow-step past">
-            <span className="flow-tag">before</span>
-            <button
-              type="button"
-              className="flow-line"
-              onClick={() => jumpTo(index - 1)}
-              disabled={index === 0}
-            >
-              {previousEvent ? stepLabel(previousEvent) : "nothing yet"}
-            </button>
-            <p className="flow-why">{view.explanation.justHappened ?? "Nothing has run yet."}</p>
-          </li>
-          <li className="flow-step now">
-            <span className="flow-tag">now</span>
-            <span className="flow-line">{stepLabel(view.event)}</span>
-            <p className="flow-why">{view.explanation.why ?? view.explanation.aboutToHappen}</p>
-          </li>
-          <li className="flow-step next">
-            <span className="flow-tag">next</span>
-            <button
-              type="button"
-              className="flow-line"
-              onClick={() => jumpTo(index + 1)}
-              disabled={!nextEvent}
-            >
-              {stepLabel(nextEvent)}
-            </button>
-            <p className="flow-why">{nextReason ?? "The run stops here."}</p>
-          </li>
-        </ol>
-      </div>
+
+          {/* The old panel C, folded in: the same step seen as a path rather
+              than as prose, with each row able to jump to the step it names. */}
+          <div className={`flow-block${detail.structured ? " flow-structured" : ""}`}>
+            <div className="flow-block-head">
+              <h4>Control flow</h4>
+              {detail.structured ? (
+                <p className="panel-hint">Where control came from, where it is, and where it goes.</p>
+              ) : null}
+            </div>
+            <ol className="flow-steps">
+              <li className="flow-step past">
+                <span className="flow-tag">before</span>
+                <button
+                  type="button"
+                  className="flow-line"
+                  onClick={() => jumpTo(index - 1)}
+                  disabled={index === 0}
+                >
+                  {previousEvent ? stepLabel(previousEvent) : "nothing yet"}
+                </button>
+                <p className="flow-why">{view.explanation.justHappened ?? "Nothing has run yet."}</p>
+              </li>
+              <li className="flow-step now">
+                <span className="flow-tag">now</span>
+                <span className="flow-line">{stepLabel(view.event)}</span>
+                <p className="flow-why">{view.explanation.why ?? view.explanation.aboutToHappen}</p>
+              </li>
+              <li className="flow-step next">
+                <span className="flow-tag">next</span>
+                <button
+                  type="button"
+                  className="flow-line"
+                  onClick={() => jumpTo(index + 1)}
+                  disabled={!nextEvent}
+                >
+                  {stepLabel(nextEvent)}
+                </button>
+                <p className="flow-why">{nextReason ?? "The run stops here."}</p>
+              </li>
+            </ol>
+          </div>
+        </details>
+      ) : null}
 
       {result?.error ? (
         <p className="error-inline">
@@ -213,7 +275,9 @@ export function VariablesPanel({ ctx }) {
   } = ctx;
   const [layout, setLayout] = useState("boxes");
   const rows = variableRows(view, showAfter);
-  const previews = view.changes.filter((change) => change.kind === "new");
+  const previews = view.changes.filter(
+    (change) => change.kind === "new" || change.kind === "removed",
+  );
   const defined = view.frame?.defined ?? [];
   const scope = scopeLabel(view.frame);
 
@@ -290,7 +354,14 @@ export function VariablesPanel({ ctx }) {
 
       {previews.length > 0 ? (
         <p className="preview">
-          After this line: {previews.map((change) => `${change.name} = ${change.to}`).join(", ")}
+          After this line:{" "}
+          {previews
+            .map((change) =>
+              change.kind === "removed"
+                ? `${change.name} is removed (was ${change.from})`
+                : `${change.name} = ${change.to}`,
+            )
+            .join(", ")}
         </p>
       ) : null}
       {view.shared.map((note) => (
@@ -315,7 +386,7 @@ export function VariablesPanel({ ctx }) {
 
 /** Exported for the Combined view, for the same reason as VariablesPanel. */
 export function StackPanel({ ctx }) {
-  const { view, olderCalls, selectedCall, jumpToCall, clearSelectedCall } = ctx;
+  const { view, olderCalls, selectedCall, selectFrame, clearSelectedCall } = ctx;
   return (
     <>
       <PanelHead
@@ -326,7 +397,7 @@ export function StackPanel({ ctx }) {
       <CallList
         callStack={view.callStack}
         selectedId={view.frame?.frameId ?? null}
-        onSelect={jumpToCall}
+        onSelect={selectFrame}
       />
       {olderCalls > 0 ? (
         <p className="preview">
@@ -334,7 +405,12 @@ export function StackPanel({ ctx }) {
           finish.
         </p>
       ) : null}
-      {selectedCall !== null && selectedCall !== view.frameId ? (
+      {view.selectionLost ? (
+        <p className="preview">
+          That call has finished, so its variables are gone. Showing the call that is
+          running now.
+        </p>
+      ) : selectedCall !== null && selectedCall !== view.frameId ? (
         <p className="preview">
           Showing an older call's variables.{" "}
           <button type="button" className="ghost" onClick={clearSelectedCall}>
@@ -347,7 +423,7 @@ export function StackPanel({ ctx }) {
 }
 
 function MemoryPanel({ ctx }) {
-  const { heap, heapNames, objectChanged, view, detail, jumpToCall } = ctx;
+  const { heap, heapNames, objectChanged, view, detail, selectFrame } = ctx;
   const ids = Object.keys(heap ?? {});
   return (
     <>
@@ -367,7 +443,7 @@ function MemoryPanel({ ctx }) {
           changes={objectChanged}
           showIds={detail.showTypes}
           selectedId={view.frame?.frameId ?? null}
-          onSelectFrame={jumpToCall}
+          onSelectFrame={selectFrame}
           shared={view.shared}
         />
       )}
@@ -377,6 +453,7 @@ function MemoryPanel({ ctx }) {
 
 const OUTCOME_LABELS = {
   handled: "Handled",
+  propagated: "Moved to caller",
   uncaught: "Uncaught",
   raised: "Raised",
 };

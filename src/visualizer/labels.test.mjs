@@ -39,3 +39,37 @@ test("the after state updates a row and adds a brand new one", () => {
     { name: "y", text: "2", isArg: true },
   ]);
 });
+
+test("the after state reads the later snapshot, so a mutated list is not stale", () => {
+  const view = {
+    frame: {
+      frameId: 1,
+      variables: [{ name: "xs", text: "[1, 2]", isArg: false }],
+      args: [],
+    },
+    after: {
+      frames: [{ frame_id: 1, variables: { xs: { type: "ref", id: "o1" } } }],
+      heap: { o1: { type: "list", items: [{ type: "int", value: 1 }, { type: "int", value: 2 }, { type: "int", value: 3 }] } },
+    },
+    changes: [{ kind: "new-slot", name: "xs[2]", from: null, to: "3" }],
+  };
+  assert.deepEqual(variableRows(view, true), [
+    { name: "xs", text: "[1, 2, 3]", type: "ref", refId: "o1", isArg: false },
+  ]);
+});
+
+test("rows that changed come first, but no unchanged row is hidden", () => {
+  const view = {
+    frame: {
+      variables: [
+        { name: "a", text: "1", isArg: false },
+        { name: "b", text: "2", isArg: false },
+      ],
+    },
+    changes: [{ kind: "changed", name: "b", from: "1", to: "2" }],
+  };
+  assert.deepEqual(
+    variableRows(view, false).map((row) => row.name),
+    ["b", "a"],
+  );
+});

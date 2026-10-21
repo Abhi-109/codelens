@@ -114,8 +114,19 @@ class CorpusTests(unittest.TestCase):
                     self.assertEqual((result.get("error") or {}).get("type"), case["error_type"])
                 golden = GOLDEN[case["name"]]
                 self.assertEqual(result["output"], golden["output"], "stdout changed")
-                self.assertEqual(result["steps"], golden["steps"], "step count changed")
-                self.assertEqual(len(result["trace"]), golden["events"], "event count changed")
+                if declared(case) == "timeout":
+                    # A wall-clock stop lands after however many loop iterations
+                    # the scheduler allowed, so the exact counts are not stable.
+                    # Status, stdout and the timeout event are the contract.
+                    self.assertGreater(result["steps"], 0)
+                    self.assertLessEqual(result["steps"], MAX_STEPS)
+                    self.assertTrue(
+                        any(event["event"] == "timeout" for event in result["trace"]),
+                        "a timed-out run must record its timeout event",
+                    )
+                else:
+                    self.assertEqual(result["steps"], golden["steps"], "step count changed")
+                    self.assertEqual(len(result["trace"]), golden["events"], "event count changed")
 
     def test_output_events_add_up_to_the_printed_output(self):
         for case in CORPUS:

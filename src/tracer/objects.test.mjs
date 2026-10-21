@@ -35,10 +35,17 @@ test("namesById names nested objects after their parent's path", () => {
   const names = namesById(frames, heap);
   assert.deepEqual(names.get("o2"), ["rex.tricks"]);
   assert.deepEqual(names.get("o3"), ["rex.tricks[0]"]);
-  // Objects only reachable through a dict value get the entry index path.
+  // Objects only reachable through a dict value are named by the key's value,
+  // exactly as the learner would write it.
   const dictHeap = { o1: { type: "dict", entries: [{ key: str("a"), value: ref("o2") }] }, o2: { type: "list", items: [] } };
   const dictNames = namesById([frame({ d: ref("o1") })], dictHeap);
-  assert.deepEqual(dictNames.get("o2"), ["d[0]"]);
+  assert.deepEqual(dictNames.get("o2"), ['d["a"]']);
+});
+
+test("a name pointing at itself is not also named after a slot", () => {
+  const heap = { o1: { type: "list", items: [ref("o1")] } };
+  const names = namesById([frame({ a: ref("o1") })], heap);
+  assert.deepEqual(names.get("o1"), ["a"]);
 });
 
 test("slotEntries numbers list slots", () => {
