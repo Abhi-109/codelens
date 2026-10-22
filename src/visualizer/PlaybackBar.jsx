@@ -8,10 +8,42 @@
  *
  * Every control is a real `<button>`, `<input>` or `<select>`, so it is
  * reachable by keyboard, announced with its purpose, and disabled the moment
- * the trace cannot support the action.
+ * the trace cannot support the action. Transport controls are icons with
+ * accessible names, which keeps the bar to one calm row.
  */
 
 import { SPEED_OPTIONS } from "./playback.js";
+
+const icon = (path, extra = null) => (
+  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+    {path}
+    {extra}
+  </svg>
+);
+
+const ICONS = {
+  first: (
+    <>
+      <path d="M4 3v10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M12.5 3.6 6 8l6.5 4.4V3.6Z" fill="currentColor" />
+    </>
+  ),
+  back: <path d="M10.5 3.2 5 8l5.5 4.8V3.2Z" fill="currentColor" />,
+  play: <path d="M5 3.4 12.4 8 5 12.6V3.4Z" fill="currentColor" />,
+  pause: (
+    <>
+      <rect x="4.6" y="3.4" width="2.6" height="9.2" rx="0.7" fill="currentColor" />
+      <rect x="8.8" y="3.4" width="2.6" height="9.2" rx="0.7" fill="currentColor" />
+    </>
+  ),
+  next: <path d="M5.5 3.2 11 8l-5.5 4.8V3.2Z" fill="currentColor" />,
+  last: (
+    <>
+      <path d="M12 3v10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M3.5 3.6 10 8l-6.5 4.4V3.6Z" fill="currentColor" />
+    </>
+  ),
+};
 
 export default function PlaybackBar({
   trace,
@@ -38,48 +70,62 @@ export default function PlaybackBar({
       <div className="controls">
         <button
           type="button"
+          className="transport"
           aria-label="First step"
           title="First step"
           onClick={() => onJump(0)}
           disabled={!hasTrace || atStart}
         >
-          ⏮
+          {icon(ICONS.first)}
         </button>
         <button
           type="button"
+          className="transport"
           aria-label="Step back"
+          title="Step back (←)"
           onClick={() => onJump(index - 1)}
           disabled={!hasTrace || atStart}
         >
-          ◀ Back
+          {icon(ICONS.back)}
         </button>
         <button
           type="button"
-          className="play"
+          className="transport play"
           onClick={onTogglePlay}
           disabled={!hasTrace}
           aria-pressed={playing}
+          aria-label={playing ? "Pause" : "Play"}
+          title={playing ? "Pause (Space)" : "Play (Space)"}
         >
-          {playing ? "⏸ Pause" : "▶ Play"}
+          {icon(playing ? ICONS.pause : ICONS.play)}
         </button>
         <button
           type="button"
+          className="transport"
           aria-label="Step forward"
+          title="Step forward (→)"
           onClick={() => onJump(index + 1)}
           disabled={!hasTrace || atEnd}
         >
-          Next ▶
+          {icon(ICONS.next)}
         </button>
         <button
           type="button"
+          className="transport"
           aria-label="Last step"
           title="Last step"
           onClick={() => onJump(trace.length - 1)}
           disabled={!hasTrace || atEnd}
         >
-          ⏭
+          {icon(ICONS.last)}
         </button>
+
+        <span className="step-readout" aria-hidden="true">
+          {hasTrace ? `${index + 1} / ${trace.length}` : "— / —"}
+        </span>
+
         <input
+          className="timeline"
           type="range"
           min={0}
           max={Math.max(trace.length - 1, 0)}
@@ -89,10 +135,13 @@ export default function PlaybackBar({
           aria-label="Step"
           aria-valuetext={hasTrace ? `Step ${index + 1} of ${trace.length}` : "No steps recorded"}
         />
+
         <select
+          className="speed"
           value={speed}
           onChange={(event) => onSpeedChange(Number(event.target.value))}
           aria-label="Playback speed"
+          title="Playback speed"
         >
           {SPEED_OPTIONS.map((value) => (
             <option key={value} value={value}>
@@ -107,7 +156,12 @@ export default function PlaybackBar({
           Glossary
         </button>
         <details className="dev-menu">
-          <summary>Developer</summary>
+          <summary aria-label="Developer options" title="Developer options">
+            <span className="bar-wide">Developer</span>
+            <span className="bar-narrow" aria-hidden="true">
+              ⋯
+            </span>
+          </summary>
           <div className="dev-pop">
             <label className="dev-check">
               <input

@@ -585,3 +585,44 @@ the program anywhere the recorder did not go.
 
 All suites pass: 111 Python tests, 526 JS tests, plus lint and a production
 build.
+
+## Phase 12 — One workspace, three regions
+
+The workspace had grown a row of controls per stage: a second header inside the
+shell, run buttons in the toolbar *and* the code pane, a canvas heading above
+the canvas tabs, an adapter pill strip under those, and a playback bar that
+wrapped into three rows on a phone. Each addition was reasonable on its own; the
+sum was a dashboard.
+
+The chrome now lives in `src/visualizer/workspace.css`, loaded after `App.css`
+so it wins by order rather than by `!important`. The page has three regions:
+
+- **one toolbar** — file, honest run state, learning mode, Run and Restart. The
+  engine chip appears only while Python is loading or has failed; the step
+  count moved to the playback bar where the slider is.
+- **the canvas**, with one toolbar: a segmented control for the five views and,
+  for the Adaptive view, a single "View: Auto → Generic" menu. Every adapter
+  alternative and the recognizer's reason moved into that menu, so the pill
+  strip and its permanent "why" details are gone. The run map stays above the
+  canvas and now collapses.
+- **the inspector**, six underline tabs in one non-wrapping row, with the panel
+  on a flat surface instead of a tinted card inside a column.
+
+The code and inspector columns are still resizable; the inspector is now a
+fixed pixel width (320–480px) because a tabbed panel has a comfortable size,
+while the code column stays a percentage. Below 1200px the canvas and inspector
+take turns again, and below 900px it is one pane at a time. The playback bar is
+one row of transport icons, a step readout, the timeline and the speed, with
+Glossary and the Developer menu at the right.
+
+Smaller systemic fixes came with it: a 4px-scale spacing pass, `.state-toggle`
+and the Combined view's tabs use the same segmented control as the toolbar, the
+drawing's zoom/fit/follow controls are a borderless footer, thin scrollbars
+replace the default grey bars, and `box-sizing: border-box` inside `.app` fixed
+a real horizontal overflow (the stage's error card was `width: 100%` plus its
+own padding).
+
+All gates pass: 111 Python tests, 526 JS tests, lint and a production build.
+The screenshots used for verification were taken against a running dev server
+at 1600, 1100 and 420px with the recursion example, a `for` loop, a runtime
+error, round stepping, playback, every view and the inspector tabs.

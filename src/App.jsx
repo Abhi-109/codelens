@@ -13,8 +13,8 @@ import { buildRunStory } from "./tracer/runStory.js";
 import { changeLog, variableSeries } from "./tracer/stepView";
 import { buildExecutionGraph } from "./flowchart/executionGraph.js";
 import ControlFlowChart from "./flowchart/ControlFlowChart.jsx";
-import AdaptiveView from "./visualizer/AdaptiveView.jsx";
-import { AUTO_ADAPTER, adapterLabel, resolveAdaptiveView } from "./visualizer/adaptive.js";
+import AdaptiveView, { AdaptiveTools } from "./visualizer/AdaptiveView.jsx";
+import { resolveAdaptiveView } from "./visualizer/adaptive.js";
 import CombinedView from "./visualizer/CombinedView.jsx";
 import Inspector from "./visualizer/Inspector.jsx";
 import PlaybackBar from "./visualizer/PlaybackBar.jsx";
@@ -41,7 +41,7 @@ import {
   saveMode,
 } from "./visualizer/learningMode.js";
 import { createRunGate } from "./visualizer/runGate.js";
-import { VIZ_LABELS, loadViz, saveViz } from "./visualizer/vizMode.js";
+import { loadViz, saveViz } from "./visualizer/vizMode.js";
 import { clampStep } from "./visualizer/workspace.js";
 import { ExecutionSessionProvider } from "./visualizer/session/ExecutionSessionProvider.jsx";
 import { useExecutionSession } from "./visualizer/session/useExecutionSession.js";
@@ -57,8 +57,10 @@ import {
   selectTrace,
   selectTraceIndex,
 } from "./visualizer/session/selectors.js";
-import { BrandLogo } from "./brand/BrandLogo.jsx";
 import "./App.css";
+// The workspace chrome is the last layer, so its layout rules win over the
+// stage-by-stage rules in App.css without a single !important.
+import "./visualizer/workspace.css";
 
 const MODULE = "<module>";
 
@@ -97,15 +99,18 @@ const EXAMPLES = [
 
 const START_EXAMPLE = 3; // Recursion — the best demo of the execution graph.
 
-// Column widths are percentages; each side keeps a minimum so nothing collapses.
+// The code column is a percentage, so it scales with the window; the inspector
+// is a fixed pixel width, because a tabbed panel has a comfortable size and
+// giving it a share of a narrow window is what made it feel cramped.
 const COLS_KEY = "codelens.columns";
-const DEFAULT_COLUMNS = { left: 28, mid: 49 };
-const MIN_LEFT = 18;
-const MIN_MID = 26;
-const MIN_RIGHT = 18;
+const DEFAULT_COLUMNS = { left: 30, right: 368 };
+const MIN_LEFT = 20;
+const MAX_LEFT = 46;
+const MIN_RIGHT = 320;
+const MAX_RIGHT = 480;
 
-// Below 1280px the canvas and the inspector take turns, chosen by this bar;
-// from 1280px up all three columns are on screen together and it is hidden.
+// Below 1200px the canvas and the inspector take turns, chosen by this bar;
+// from 1200px up all three columns are on screen together and it is hidden.
 // "Code" is only reachable as a tab on phones, where the code column would
 // otherwise have no room of its own.
 const PANES = [
@@ -155,8 +160,13 @@ function runStateOf({ running, engine, result, trace, sourceDirty }) {
 function loadColumns() {
   try {
     const raw = JSON.parse(localStorage.getItem(COLS_KEY));
-    if (raw && Number.isFinite(raw.left) && Number.isFinite(raw.mid)) {
-      return { left: clamp(raw.left, MIN_LEFT, 90), mid: clamp(raw.mid, MIN_MID, 90) };
+    if (raw && Number.isFinite(raw.left)) {
+      return {
+        left: clamp(raw.left, MIN_LEFT, MAX_LEFT),
+        // A split saved before the inspector had its own width is discarded
+        // rather than reinterpreted as a column of a different unit.
+        right: Number.isFinite(raw.right) ? clamp(raw.right, MIN_RIGHT, MAX_RIGHT) : DEFAULT_COLUMNS.right,
+      };
     }
   } catch {
     // localStorage can be missing or blocked; fall back to the defaults.
@@ -455,25 +465,6 @@ function Workspace() {
   const nextReason = nextEvent ? explainStep(trace, index + 1, shownSource).text : null;
   const olderCalls = Math.max(view.callStack.length - 1, 0);
   const runState = runStateOf({ running, engine, result, trace, sourceDirty });
-  const canvasLabel = VIZ_LABELS[viz] ?? viz;
-  const effectiveAdapter = adaptive?.built?.adapterId ?? "generic";
-  const recognizedAdapter =
-    adaptive?.options?.recognitionId ?? storedRecognition?.adapterId ?? "generic";
-  const fallbackReason = adaptive?.built?.fallbackReason ?? null;
-  const viewIndicator =
-    result && viz === "scene"
-      ? `${canvasLabel} · ${
-          selectedAdapter === AUTO_ADAPTER ? "Auto" : "Manual"
-        } → ${adapterLabel(effectiveAdapter)}`
-      : `${canvasLabel}${viz === "scene" ? " · Auto" : ""}`;
-  const viewTitle =
-    viz === "scene" && result
-      ? fallbackReason
-        ? `Showing ${adapterLabel(effectiveAdapter)} because ${adapterLabel(
-            recognizedAdapter,
-          )} could not be used at this step: ${fallbackReason}`
-        : `Showing ${adapterLabel(effectiveAdapter)} at this step`
-      : "The canvas currently in use";
 
   // Keep the lit-up line in view without ever scrolling the page.
   useEffect(() => {
@@ -641,13 +632,13 @@ function Workspace() {
   function moveSplitter(event) {
     const drag = splitDrag.current;
     if (!drag) return;
-    const delta = ((event.clientX - drag.x) / drag.width) * 100;
     if (drag.which === "left") {
-      const left = clamp(drag.left + delta, MIN_LEFT, 100 - drag.mid - MIN_RIGHT);
-      setColumns((c) => ({ ...c, left }));
+      const delta = ((event.clientX - drag.x) / drag.width) * 100;
+      setColumns((c) => ({ ...c, left: clamp(drag.left + delta, MIN_LEFT, MAX_LEFT) }));
     } else {
-      const mid = clamp(drag.mid + delta, MIN_MID, 100 - drag.left - MIN_RIGHT);
-      setColumns((c) => ({ ...c, mid }));
+      // Dragging the right-hand divider left makes the inspector wider.
+      const right = clamp(drag.right - (event.clientX - drag.x), MIN_RIGHT, MAX_RIGHT);
+      setColumns((c) => ({ ...c, right }));
     }
   }
 
@@ -717,52 +708,42 @@ function Workspace() {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-line">
-            <h1>
-              <BrandLogo className="app-brand-logo" />
-            </h1>
-            <span className="brand-badge">Python</span>
-          </div>
-          <span className="file-name" title={fileName}>
+      {/* One toolbar for the whole workspace: which file, how the run stands,
+          how much detail to use, and the two run actions. The site navigation
+          above it stays the shell's job. */}
+      <header className="app-toolbar">
+        <div className="tb-file">
+          <span className="tb-lang" aria-hidden="true">
+            PY
+          </span>
+          <span className="tb-name" title={fileName}>
             {fileName}
           </span>
-        </div>
-        <span className={`engine engine-${engine}`}>
-          Runtime · {engine === "ready" ? "ready" : engine}
-        </span>
-        <span
-          className={`run-status status-${runState.id}`}
-          title={runState.title ?? undefined}
-        >
-          {runState.label}
-        </span>
-        <span className="view-indicator" title={viewTitle}>
-          {viewIndicator}
-        </span>
-        <div className="top-actions">
-          <button type="button" className="run" onClick={handleRun} disabled={running}>
-            {running ? "Starting…" : "▶ Run"}
-          </button>
-          <button
-            type="button"
-            className="ghost"
-            onClick={handleRun}
-            disabled={running || !result}
-            title="Run the current source again from the first step"
+          <span
+            className={`tb-state tb-state-${runState.id}`}
+            title={runState.title ?? runState.label}
           >
-            ↻ Restart
-          </button>
+            <span className="tb-state-dot" aria-hidden="true" />
+            {runState.label}
+          </span>
         </div>
+
+        {engine === "loading" || engine === "failed" ? (
+          <span className={`tb-engine tb-engine-${engine}`}>
+            {engine === "failed" ? "Python engine failed" : "Loading Python…"}
+          </span>
+        ) : null}
+
+        <div className="tb-spacer" />
+
         {/* The learning mode belongs to the whole workspace, not to one pane,
             so it lives in the bar that is on screen whichever pane you are in. */}
-        <div className="state-toggle mode-switch" role="group" aria-label="Learning mode">
+        <div className="seg seg-mode" role="group" aria-label="Learning mode">
           {LEARNING_MODES.map((id) => (
             <button
               key={id}
               type="button"
-              className={mode === id ? "on" : ""}
+              className={`seg-item${mode === id ? " on" : ""}`}
               aria-pressed={mode === id}
               title={MODE_BLURBS[id]}
               onClick={() => setMode(id)}
@@ -771,31 +752,56 @@ function Workspace() {
             </button>
           ))}
         </div>
-        <span className="step-count">
-          {trace.length > 0
-            ? `${sourceDirty ? "Previous run · " : ""}Step ${index + 1} of ${trace.length}`
-            : "Not run yet"}
-        </span>
+
+        <span className="tb-divider" aria-hidden="true" />
+
+        <button type="button" className="run" onClick={handleRun} disabled={running}>
+          <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+            <path d="M4.5 3.2 12 8l-7.5 4.8V3.2Z" fill="currentColor" />
+          </svg>
+          {running ? "Starting…" : "Run"}
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={handleRun}
+          disabled={running || !result}
+          title="Run the current source again from the first step"
+          aria-label="Restart run"
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <path
+              d="M12.7 6.3A5 5 0 1 0 13 9.2M12.7 3v3.6H9.1"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
       </header>
 
       <main
         className={`layout${resizing ? " resizing" : ""}`}
         ref={layoutRef}
         data-tab={pane}
-        style={{ "--col-left": `${columns.left}%`, "--col-mid": `${columns.mid}%` }}
+        style={{ "--col-left": `${columns.left}%`, "--col-right": `${columns.right}px` }}
       >
-        <section className="pane code-pane panel" data-pane="code" id="pane-code">
+        <section className="pane code-pane" data-pane="code" id="pane-code">
           <div className="pane-head">
-            <h3>Your Python code</h3>
-            {stepping && (
+            <h3 className="pane-label">Code</h3>
+            {stepping ? (
               <button type="button" className="ghost" onClick={() => setEditing(true)}>
-                ✎ Edit
+                Edit
               </button>
+            ) : (
+              <span className="pane-note">{sourceDirty ? "edited" : "draft"}</span>
             )}
           </div>
 
           {stepping ? (
-            <div className="code-view readonly" ref={codeView}>
+            <div className="code-view" ref={codeView}>
               {source.split("\n").map((text, i) => (
                 <div key={i} ref={line === i + 1 ? currentLine : null}>
                   <CodeLine
@@ -852,9 +858,9 @@ function Workspace() {
                 </option>
               ))}
             </select>
-            <button type="button" className="run" onClick={handleRun} disabled={running}>
-              {running ? "Starting…" : "▶ Run"}
-            </button>
+            <span className="pane-foot-hint">
+              {stepping ? "Click a line to jump to a step that runs it" : "Pick an example or write your own"}
+            </span>
           </div>
         </section>
 
@@ -866,7 +872,7 @@ function Workspace() {
         />
 
         {/* On narrow windows the canvas and the inspector take turns, so the
-            code column keeps its own tab. From 1280px up this bar is hidden
+            code column keeps its own tab. From 1200px up this bar is hidden
             and both are on screen together. It follows the same pattern as the
             inspector strip: one tab stop, arrows to move, Home and End to jump. */}
         <div className="tabs" role="tablist" aria-label="Workspace" onKeyDown={onPaneKeyDown}>
@@ -898,7 +904,15 @@ function Workspace() {
           <VisualizationPane
             viz={viz}
             onVizChange={setViz}
-            heading={<h3>Visualize</h3>}
+            tools={
+              viz === "scene" && result ? (
+                <AdaptiveTools
+                  adaptive={adaptive}
+                  adapter={selectedAdapter}
+                  onAdapterChange={setAdapter}
+                />
+              ) : null
+            }
           >
             <RunStoryCard story={runStory} index={index} onJump={jumpTo} />
             {viz === "scene" ? (
@@ -906,8 +920,6 @@ function Workspace() {
                 adaptive={adaptive}
                 trace={trace}
                 result={result}
-                adapter={selectedAdapter}
-                onAdapterChange={setAdapter}
                 onJumpLine={jumpToLine}
                 onJumpCall={jumpToCall}
                 onSelectFrame={selectFrame}

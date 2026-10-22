@@ -169,8 +169,9 @@ src/flowchart/           draws the same trace as a call tree or a flowchart
     ▼
 src/visualizer/          the workspace beside the canvas
     ├── Inspector.jsx     six tabbed sections (Explain…History), real ARIA tabs
-    ├── AdaptiveView.jsx, SceneView.jsx the canvas and its validated scenes
+    ├── AdaptiveView.jsx, SceneView.jsx the canvas, its validated scenes and the view menu
     ├── RunStoryCard.jsx  the run map above the canvas, current part marked
+    ├── workspace.css     the workspace chrome: toolbar, split, inspector, playback
     ├── adaptive.js       Auto/manual adapter choice and the header label
     ├── PlaybackBar.jsx   stepping, timeline, speed, and the Developer menu
     ├── TimelinePane.jsx, timeline.js the virtualised step table and its pure rows
@@ -306,7 +307,7 @@ codelens/
 │   │   ├── adaptive.test.mjs    # composite capabilities, fallback, empty and determinism
 │   │   ├── runGate.js           # rejects stale run/profile/recognition results (pure)
 │   │   ├── runGate.test.mjs
-│   │   ├── AdaptiveView.jsx     # Adaptive canvas: chooser, fallback reason, empty states
+│   │   ├── AdaptiveView.jsx     # Adaptive canvas: view menu, fallback reason, empty states
 │   │   ├── SceneView.jsx        # renders one validated scene
 │   │   ├── sceneKeys.js         # matches scene highlights to their slots (pure)
 │   │   ├── sceneKeys.test.mjs
@@ -315,7 +316,8 @@ codelens/
 │   │   ├── Canvas.jsx           # the shared surface: pan, zoom, fit, follow, expand
 │   │   ├── CallTree.jsx         # canvas 1: the calls this run made, nested
 │   │   ├── CombinedView.jsx     # canvas 3: the tree beside the stack or variables
-│   │   ├── VisualizationPane.jsx # the canvas strip, and the one place a mode is chosen
+│   │   ├── VisualizationPane.jsx # one canvas toolbar: the five views and the tools slot
+│   │   ├── workspace.css        # the chrome layer: toolbar, split, tabs, playback bar
 │   │   └── SimpleFlow.jsx       # the v1 block outline, behind "Simple view"
 │   ├── flowchart/
 │   │   ├── callTree.js          # frames -> a tree of calls, one node per call (pure)
@@ -403,8 +405,11 @@ in [docs/scope.md](docs/scope.md).
 
 Working end to end, and teaching: the tracer runs the bundled examples plus a
 60-program corpus covering 33 categories of Python, and the UI replays any of
-them on three canvases — call tree, control flow and combined — with a
-six-section inspector and plain-English explanations for every kind of step. Runs
+them on five canvases — Adaptive, call tree, control flow, combined and
+timeline — with a six-section inspector and plain-English explanations for every
+kind of step. One workspace toolbar, one canvas toolbar and one playback bar
+replace the four competing control rows the page used to have; the drawing keeps
+the space, and the inspector is a single tabbed column. Runs
 with very large call trees open capped at 200 visible frames, with a counted
 **Show all calls** escape hatch. Both graph canvases support keyboard
 pan/zoom/fit and focus-centring, and control flow adds roving function tabs. The

@@ -2,13 +2,18 @@ import { useRef } from "react";
 import { VIZ_BLURBS, VIZ_LABELS, VIZ_MODES } from "./vizMode.js";
 
 /**
- * The canvas chooser: one strip of tabs over whichever drawing is active.
+ * The canvas chooser and the drawing, in one pane.
  *
- * It sits in the same pane as the drawing, so the three canvases are one thing
- * to look at rather than three places to go. The tab strip follows the ARIA
- * tabs pattern — one tab stop, arrows to move, Home and End to jump — and it
- * owns its arrow keys, which the workspace's global stepper already declines
- * to touch while a `[role="tablist"]` has focus.
+ * The toolbar is one row: a segmented control for the five canvases on the
+ * left, and an optional `tools` slot on the right for whatever that canvas
+ * needs (the adaptive view's adapter menu). There is deliberately no heading
+ * above it - the active tab says what the drawing is - and no second strip of
+ * controls under it.
+ *
+ * The tab strip follows the ARIA tabs pattern — one tab stop, arrows to move,
+ * Home and End to jump — and it owns its arrow keys, which the workspace's
+ * global stepper already declines to touch while a `[role="tablist"]` has
+ * focus.
  *
  * Choosing a tab changes presentation only. The step, the playing state and
  * the speed belong to the run, not to the canvas, so moving between them can
@@ -17,10 +22,10 @@ import { VIZ_BLURBS, VIZ_LABELS, VIZ_MODES } from "./vizMode.js";
  * @param {Object} props
  * @param {string} props.viz the active canvas id
  * @param {(viz: string) => void} props.onVizChange
- * @param {import("react").ReactNode} [props.heading] the pane heading beside the tabs
+ * @param {import("react").ReactNode} [props.tools] controls for the active canvas
  * @param {import("react").ReactNode} props.children the active canvas
  */
-export default function VisualizationPane({ viz, onVizChange, heading = null, children }) {
+export default function VisualizationPane({ viz, onVizChange, tools = null, children }) {
   const refs = useRef([]);
   // With one canvas there is no choice to offer, so the strip stays out of the
   // way rather than showing a single button that does nothing.
@@ -43,10 +48,9 @@ export default function VisualizationPane({ viz, onVizChange, heading = null, ch
 
   return (
     <div className="viz-pane">
-      <div className="flow-head viz-head">
-        {heading}
+      <div className="canvas-toolbar">
         {multi ? (
-          <div className="viz-tabs" role="tablist" aria-label="Visualization" onKeyDown={onKeyDown}>
+          <div className="seg" role="tablist" aria-label="Visualization" onKeyDown={onKeyDown}>
             {VIZ_MODES.map((id, i) => {
               const active = viz === id;
               return (
@@ -62,7 +66,7 @@ export default function VisualizationPane({ viz, onVizChange, heading = null, ch
                   ref={(node) => {
                     refs.current[i] = node;
                   }}
-                  className={`viz-tab${active ? " on" : ""}`}
+                  className={`seg-item${active ? " on" : ""}`}
                   onClick={() => onVizChange?.(id)}
                 >
                   {VIZ_LABELS[id] ?? id}
@@ -71,6 +75,7 @@ export default function VisualizationPane({ viz, onVizChange, heading = null, ch
             })}
           </div>
         ) : null}
+        {tools ? <div className="canvas-tools">{tools}</div> : null}
       </div>
       <div
         className="viz-body"

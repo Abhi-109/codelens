@@ -1,0 +1,1328 @@
+/* The workspace chrome: the frame the visualizer lives in.
+ *
+ * This file is the last layer for the *shell* of the Python playground — the
+ * toolbar, the three-column split, the canvas toolbar, the inspector and the
+ * playback bar. It does not restyle any drawing (the execution graph, the
+ * scene stage, the control-flow canvas) or any inspector panel internals;
+ * those stay in App.css, which still owns the visual language of the content.
+ *
+ * The reason for a separate layer is hierarchy. The old rules were added a
+ * stage at a time and had accumulated four competing control rows. Here the
+ * page has one toolbar, one navigation strip per region, and one content
+ * surface each, sized on the 4px scale in styles/tokens.css.
+ */
+
+/* --- The frame ------------------------------------------------------------ */
+
+.app {
+  gap: 0;
+  padding: 0;
+  background: var(--bg);
+}
+
+/* Padding must never come on top of a 100% width. The stage's error card set
+   `width: 100%` plus its own padding and pushed a horizontal scrollbar onto
+   the whole canvas; border-box makes width mean what every layout here
+   assumes it means. */
+.app,
+.app *,
+.app *::before,
+.app *::after {
+  box-sizing: border-box;
+}
+
+/* A thin, quiet scrollbar in every scroller inside the workspace. One scroll
+   per region is fine; six competing grey bars down the page is not. */
+.app * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.app *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.app *::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+}
+
+.app *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* --- The single workspace toolbar ----------------------------------------- */
+
+.app > .app-toolbar {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: var(--space-3);
+  flex: none;
+  min-height: 52px;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.tb-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.tb-lang {
+  flex: none;
+  padding: 1px 5px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font: 600 9.5px/1.5 var(--mono);
+  letter-spacing: 0.08em;
+}
+
+.tb-name {
+  min-width: 0;
+  max-width: 24ch;
+  overflow: hidden;
+  font: 500 13px/1.4 var(--mono);
+  color: var(--text-h);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tb-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 2px 8px 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.tb-state-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.tb-state-completed {
+  color: var(--ok);
+}
+
+.tb-state-running,
+.tb-state-loading {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.tb-state-error,
+.tb-state-engine_error {
+  color: var(--danger);
+}
+
+.tb-state-edited,
+.tb-state-timeout,
+.tb-state-step_limit,
+.tb-state-output_limit,
+.tb-state-internal_error {
+  color: var(--warn);
+}
+
+.tb-engine {
+  flex: none;
+  font-size: 11px;
+  color: var(--warn);
+}
+
+.tb-engine-failed {
+  color: var(--danger);
+}
+
+.tb-spacer {
+  flex: 1;
+}
+
+.tb-divider {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+
+/* --- Segmented controls ---------------------------------------------------- */
+
+.seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--code-bg);
+}
+
+.app .seg-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.app .seg-item:hover:not(:disabled) {
+  color: var(--text-h);
+  background: var(--accent-bg);
+}
+
+.app .seg-item.on {
+  background: var(--surface);
+  color: var(--text-h);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.app .seg-item:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* --- Run actions ----------------------------------------------------------- */
+
+.app .run {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--accent-fill);
+  border-radius: var(--radius-md);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.app .run:hover:not(:disabled) {
+  border-color: var(--accent-fill);
+  filter: brightness(1.06);
+}
+
+.app .icon-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+}
+
+.app .icon-btn:hover:not(:disabled) {
+  border-color: var(--border);
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+/* --- The three columns ----------------------------------------------------- */
+
+.layout {
+  gap: 0;
+  padding: 0;
+  grid-template-columns: var(--col-left, 30%) 7px minmax(0, 1fr) 7px var(--col-right, 348px);
+}
+
+/* Dividers are hairlines until you reach for them; panes are separated by
+   space and one line, not by a frame around each one. */
+.splitter::after {
+  width: 1px;
+  height: 100%;
+  border-radius: 0;
+  background: var(--border);
+}
+
+.splitter:hover::after,
+.layout.resizing .splitter::after {
+  background: var(--accent-border);
+}
+
+.pane {
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+}
+
+.code-pane {
+  padding-right: var(--space-3);
+}
+
+.graph-pane {
+  padding: var(--space-3) var(--space-4) var(--space-3);
+}
+
+.side-pane {
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  background: var(--surface);
+}
+
+/* --- Pane headings --------------------------------------------------------- */
+
+.pane-head {
+  min-height: 26px;
+}
+
+.app .pane-head h3,
+.pane-label {
+  margin: 0;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.pane-note {
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.app .pane-head .ghost {
+  border-color: transparent;
+  color: var(--text);
+}
+
+.app .pane-head .ghost:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+/* --- The code editor ------------------------------------------------------- */
+
+.pane.code-pane.panel {
+  padding: var(--space-4) var(--space-3) var(--space-3) var(--space-4);
+  border: 0;
+  background: transparent;
+}
+
+.code-pane textarea {
+  padding: var(--space-4) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: var(--code-bg);
+  color: var(--text-h);
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.8;
+  tab-size: 4;
+}
+
+.code-pane textarea:focus-visible {
+  border-color: var(--accent-border);
+}
+
+.code-view {
+  padding: var(--space-2) 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: var(--code-bg);
+  font-size: 13.5px;
+  line-height: 1.8;
+  scrollbar-gutter: stable;
+}
+
+/* Every line is a target for "jump here", but only the run's line is marked:
+   no card, no outline, no shadow per line. */
+.app .code-line {
+  gap: 10px;
+  min-height: 25px;
+  padding: 1px 16px 1px 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-h);
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.8;
+}
+
+.app .code-line:hover {
+  background: var(--accent-bg);
+}
+
+.app .code-line.current {
+  background: var(--accent-bg);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.app .code-line.just-ran:not(.current) {
+  box-shadow: inset 2px 0 0 var(--border-strong);
+}
+
+.app .code-line.code-error {
+  box-shadow: inset 2px 0 0 var(--danger);
+  background: var(--danger-bg);
+}
+
+.app .code-mark {
+  width: 9px;
+  color: var(--accent);
+  font-size: 8px;
+}
+
+.app .ln {
+  min-width: 2ch;
+  color: var(--text);
+  font-size: 11.5px;
+  opacity: 0.65;
+}
+
+.app .code-line.current .ln {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.code-hint {
+  margin-left: 10px;
+  font-size: 11.5px;
+  color: var(--text);
+  opacity: 0.9;
+}
+
+.pane-foot {
+  gap: var(--space-2);
+}
+
+.pane-foot select {
+  flex: 0 1 auto;
+  max-width: 180px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.pane-foot-hint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inputs textarea {
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+}
+
+/* --- The canvas toolbar ---------------------------------------------------- */
+
+.viz-pane {
+  gap: 0;
+}
+
+.canvas-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+  min-height: 34px;
+  margin-bottom: var(--space-3);
+}
+
+.canvas-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  min-width: 0;
+}
+
+/* One menu, not a second toolbar: the current adapter and every alternative
+   with the registry's reason, folded away until asked for. */
+.view-menu {
+  position: relative;
+  flex: none;
+}
+
+.view-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1;
+  list-style: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.view-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.view-menu > summary:hover {
+  border-color: var(--border-strong);
+  color: var(--text-h);
+}
+
+.view-menu-kicker {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.view-menu-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.view-menu-arrow {
+  color: var(--text);
+  font-weight: 400;
+}
+
+.view-menu-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 45;
+  width: min(360px, calc(100vw - 32px));
+  padding: var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.view-menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app .view-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+.app .view-choice:hover {
+  background: var(--code-bg);
+}
+
+.app .view-choice.on {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.app .view-choice.unavailable,
+.app .view-choice.error {
+  opacity: 0.6;
+}
+
+.view-choice-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-h);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.view-choice-tag {
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--code-bg);
+  color: var(--text);
+  font: 600 9px/1.6 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.view-choice-state {
+  margin-left: auto;
+  color: var(--warn);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.view-choice-note {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.view-menu-note {
+  margin: 8px 2px 0;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.view-menu-note strong {
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.view-menu-foot {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* --- The run map ----------------------------------------------------------- */
+
+.run-story {
+  margin: 0 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.run-story-head {
+  padding: 6px var(--space-3);
+}
+
+.run-story-head::before {
+  content: "▸";
+  flex: none;
+  color: var(--text);
+  font-size: 9px;
+}
+
+.run-story[open] .run-story-head::before {
+  content: "▾";
+}
+
+.run-story-heading {
+  color: var(--text-h);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.run-story-count {
+  font-size: 11px;
+}
+
+.run-story-list {
+  gap: 0;
+  max-height: min(216px, 32vh);
+  padding: var(--space-1) var(--space-1) 6px;
+}
+
+.app .run-story-button {
+  gap: 7px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+}
+
+.run-story-part {
+  border-radius: var(--radius-md);
+}
+
+.run-story-meta {
+  gap: 5px;
+}
+
+/* The kind stays, as a quiet word rather than a fourth pill on the row. */
+.run-story-kind {
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.run-story-title {
+  font-size: 11.5px;
+}
+
+.run-story-text {
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.app .run-story-rounds {
+  gap: var(--space-1);
+  padding: 2px 8px 7px 24px;
+}
+
+.app .run-story-round {
+  padding: 1px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.app .run-story-round:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--surface);
+  color: var(--text-h);
+}
+
+/* --- The canvas itself ----------------------------------------------------- */
+
+.viz-body {
+  gap: 0;
+}
+
+.adaptive-view {
+  gap: var(--space-2);
+}
+
+/* The first thing a learner sees before a run: an invitation, not a box. */
+.scene-empty-state {
+  min-height: 0;
+  border: 0;
+  background: radial-gradient(70% 60% at 50% 40%, var(--accent-bg), transparent 72%);
+}
+
+.scene-fallback {
+  margin: 0 0 6px;
+  padding: 4px 10px;
+  border-left: 2px solid var(--warn);
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.scene-fallback-label {
+  display: inline;
+  margin-right: 6px;
+  color: var(--warn);
+  font-size: 10px;
+}
+
+.scene-view {
+  border-radius: var(--radius-lg);
+}
+
+/* The drawing fills the pane instead of stopping at a viewport fraction. */
+.viz-canvas {
+  height: auto;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--code-bg);
+}
+
+/* The drawing's own controls (zoom, fit, follow, expand) are a footer for the
+   canvas, not another row of boxed widgets. */
+.app .viz-tools {
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.app .viz-tools button {
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.app .viz-tools button:hover {
+  border-color: transparent;
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+.app .viz-toggle {
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+}
+
+.app .viz-toggle:hover {
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+.app .viz-legend-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+}
+
+.app .viz-legend-menu > summary:hover {
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+/* --- The inspector --------------------------------------------------------- */
+
+.inspector {
+  gap: 0;
+}
+
+.inspector .inspector-tabs {
+  gap: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding: 0;
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: none;
+}
+
+.inspector .inspector-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.inspector .inspector-tab {
+  flex: none;
+  padding: 5px 7px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 11.5px;
+  letter-spacing: 0;
+  margin-bottom: -1px;
+}
+
+.inspector .inspector-tab:hover:not(:disabled) {
+  color: var(--text-h);
+  border-bottom-color: var(--border-strong);
+}
+
+.inspector .inspector-tab.on {
+  color: var(--text-h);
+  border-bottom-color: var(--accent);
+  background: transparent;
+  font-weight: 600;
+}
+
+.inspector .inspector-tab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -4px;
+}
+
+.inspector .inspector-body,
+.inspector[data-section="explain"] .inspector-body {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.run-story-list {
+  scrollbar-gutter: stable;
+}
+
+.inspector .panel-head {
+  margin-bottom: var(--space-3);
+}
+
+/* Panel-level switches (boxes/table, before/after) are the same segmented
+   control as the canvas and the mode switch, so a control looks like a
+   control wherever it appears. */
+.app .state-toggle {
+  display: inline-flex;
+  gap: 1px;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--code-bg);
+}
+
+.app .state-toggle button {
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.app .state-toggle button:hover:not(:disabled) {
+  color: var(--text-h);
+}
+
+.app .state-toggle button.on {
+  background: var(--surface);
+  color: var(--text-h);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+/* The Combined view's two sub-views use the same language. */
+.app .cmb-tabs {
+  gap: 1px;
+  padding: 2px;
+  border-bottom: 1px solid var(--border);
+  background: var(--code-bg);
+}
+
+.app .cmb-tab {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.app .cmb-tab.on {
+  background: var(--surface);
+  color: var(--text-h);
+  box-shadow: var(--shadow-sm);
+}
+
+.vars-controls {
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.inspector .panel-head h3 {
+  font-size: 13.5px;
+  letter-spacing: -0.1px;
+}
+
+.inspector .panel-hint {
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.explain-part + .explain-part {
+  margin-top: var(--space-3);
+}
+
+/* --- The playback bar ------------------------------------------------------ */
+
+.controls-bar {
+  gap: var(--space-3);
+  min-height: 54px;
+  padding: 0 var(--space-4);
+  padding-bottom: max(0px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.controls {
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.app .controls .transport {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+}
+
+.app .controls .transport:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+.app .controls .transport.play {
+  width: 32px;
+  height: 32px;
+  margin: 0 6px;
+  border-radius: 50%;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+.app .controls .transport.play:hover:not(:disabled) {
+  background: var(--accent-fill);
+  filter: brightness(1.06);
+}
+
+.step-readout {
+  flex: none;
+  min-width: 64px;
+  margin-left: var(--space-2);
+  color: var(--text);
+  font: 500 11px/1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.app .controls input.timeline {
+  flex: 1;
+  min-width: 80px;
+  height: 4px;
+  margin: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--border);
+  appearance: none;
+  cursor: pointer;
+}
+
+.app .controls input.timeline::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  appearance: none;
+}
+
+.app .controls input.timeline::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.app .controls input.timeline:disabled {
+  opacity: 0.5;
+}
+
+.app .speed {
+  flex: none;
+  height: 28px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.bar-actions {
+  gap: var(--space-1);
+}
+
+.bar-actions .ghost {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+}
+
+.bar-narrow {
+  display: none;
+}
+
+.bar-actions .ghost:hover:not(:disabled) {
+  border-color: var(--border);
+  background: var(--code-bg);
+}
+
+.dev-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.dev-menu > summary:hover {
+  border-color: var(--border);
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+/* --- Narrow windows -------------------------------------------------------- */
+
+/* Two columns: the code, then the tabbed canvas/inspector beside it. */
+@media (max-width: 1199px) {
+  .layout {
+    grid-template-columns: var(--col-left, 32%) 7px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  [data-pane="code"] {
+    grid-area: 1 / 1 / 3 / 2;
+  }
+
+  [data-split="left"] {
+    grid-area: 1 / 2 / 3 / 3;
+  }
+
+  .tabs {
+    display: flex;
+    grid-area: 1 / 3 / 2 / 4;
+  }
+
+  [data-pane="graph"],
+  [data-pane="side"] {
+    grid-area: 2 / 3 / 3 / 4;
+  }
+
+  [data-split="mid"] {
+    display: none;
+  }
+
+  .tabs {
+    align-items: center;
+    gap: 2px;
+    align-self: start;
+    margin: var(--space-3) var(--space-4) 0;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--code-bg);
+  }
+
+  .app .tab {
+    padding: 2px 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font-size: 12px;
+  }
+
+  .app .tab.on {
+    border: 0;
+    background: var(--surface);
+    color: var(--text-h);
+    font-weight: 600;
+  }
+
+  .side-pane {
+    background: transparent;
+  }
+
+  [data-pane="side"] .inspector {
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+  }
+}
+
+/* Phones: one column, one pane at a time. */
+@media (max-width: 899px) {
+  .app > .app-toolbar {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-height: 0;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .tb-file {
+    flex: 1 1 100%;
+  }
+
+  .tb-spacer {
+    display: none;
+  }
+
+  .tb-divider {
+    display: none;
+  }
+
+  .seg-mode {
+    margin-right: auto;
+  }
+
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .tabs {
+    grid-area: 1 / 1 / 2 / 2;
+    margin: var(--space-2) var(--space-3) 0;
+  }
+
+  .tab-code {
+    display: inline-block;
+  }
+
+  [data-pane="code"],
+  [data-pane="graph"],
+  [data-pane="side"] {
+    grid-area: 2 / 1 / 3 / 2;
+  }
+
+  .splitter {
+    display: none;
+  }
+
+  .layout:not([data-tab="code"]) [data-pane="code"],
+  .layout:not([data-tab="graph"]) [data-pane="graph"],
+  .layout:not([data-tab="inspector"]) [data-pane="side"] {
+    display: none;
+  }
+
+  .pane {
+    padding: var(--space-3);
+  }
+
+  .app > .app-toolbar .seg-item {
+    padding: 0 8px;
+  }
+
+  .controls-bar {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-height: 0;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .controls {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .app .controls input.timeline {
+    flex: 1 0 100%;
+    max-width: none;
+    order: 5;
+    margin: var(--space-2) 0 0;
+  }
+
+  .bar-actions {
+    width: auto;
+    margin-left: auto;
+    justify-content: flex-end;
+  }
+
+  .app .controls .transport {
+    width: 28px;
+    height: 28px;
+  }
+
+  .app .controls .transport.play {
+    width: 30px;
+    height: 30px;
+    margin: 0 4px;
+  }
+
+  .run-story-list {
+    max-height: 168px;
+  }
+
+  .canvas-toolbar {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .seg {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .seg::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-pane="graph"] .viz-canvas:not(.tl-root) {
+    max-height: 48vh;
+  }
+}
+
+@media (max-width: 600px) {
+  .tb-name {
+    max-width: 14ch;
+  }
+
+  .tb-state {
+    font-size: 10px;
+  }
+
+  .app .seg-item {
+    padding: 0 8px;
+    font-size: 11.5px;
+  }
+
+  .step-readout {
+    min-width: 48px;
+    margin-left: 2px;
+    font-size: 10px;
+  }
+
+  .bar-wide {
+    display: none;
+  }
+
+  .bar-narrow {
+    display: inline;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .bar-actions .ghost {
+    padding: 0 6px;
+  }
+}

@@ -3250,7 +3250,7 @@ h3 {
 
 /* Only the pane the tab names is drawn; the other is off screen entirely, so
    neither wastes room and neither has to share a viewport with the other. */
-@media (max-width: 1279px) {
+@media (max-width: 1199px) {
   .layout:not([data-tab="graph"]) [data-pane="graph"],
   .layout:not([data-tab="inspector"]) [data-pane="side"] {
     display: none;
