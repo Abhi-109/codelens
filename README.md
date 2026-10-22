@@ -139,7 +139,7 @@ Python code
     │                                                            language-neutral contract)
     └──► tracer-poc/analyze.py  static AST profile, never runs ──► docs/program-profile.md
                                                                 (versioned, deterministic)
-tracer-poc/corpus.py      55 programs, one per construct    ──►  docs/supported-python.md
+tracer-poc/corpus.py      60 programs, one per construct    ──►  docs/supported-python.md
     │                                                      (what the tracer really supports,
     ▼                                                       kept in sync by the tests)
 src/tracer/              reads the JSON in the browser
@@ -208,9 +208,9 @@ after that.
 Three suites, all of which should pass on every commit:
 
 ```bash
-npm run test:tracer   # 110 Python tests: the tracer, the flowchart model, the static
+npm run test:tracer   # 111 Python tests: the tracer, the flowchart model, the static
                       # program profile and the corpus
-npm run test:js       # 502 JS tests: the call tree and control flow model and layout, the
+npm run test:js       # 511 JS tests: the call tree and control flow model and layout, the
                       # graph, the teaching layer, the corpus, the trace index, the program
                       # profile parser and recognition engine, the adapter registry,
                       # recursion, searching and sorting scenes, the statement stage and
@@ -224,7 +224,7 @@ npm run lint          # oxlint
 npm run build         # production build
 ```
 
-The corpus is the breadth behind those numbers: 55 programs across 32 categories
+The corpus is the breadth behind those numbers: 60 programs across 33 categories
 of Python, each traced for real (`tracer-poc/corpus.py`) and checked on both
 sides — `test_corpus.py` against the claims it makes, and `src/tracer/corpus.test.mjs`
 step by step through the UI's own functions. `docs/supported-python.md` is kept in
@@ -251,6 +251,7 @@ codelens/
 │   ├── program-profile.md  # the static AST profile contract (version 1)
 │   ├── recognition.md      # evidence rules and confidence for algorithm recognition
 │   ├── visualization-adapters.md # adapter contract, scene schema, validation rules
+│   ├── brand.md            # the mark, palette, asset files and usage rules
 │   ├── implementation-plan.md # the site build: audit, phases, and status
 │   └── roadmap.md          # what is built, what is next
 ├── src/
@@ -263,6 +264,10 @@ codelens/
 │   ├── styles/tokens.css   # design tokens: colour, spacing, radius, both themes
 │   ├── styles/contrast.test.mjs # WCAG audit of those tokens, in both themes
 │   ├── index.css           # document base: type, focus ring, reduced motion
+│   ├── brand/
+│   │   ├── BrandLogo.jsx   # the mark and horizontal lockup, theme-aware
+│   │   ├── brand.css       # logo colours and placement sizes
+│   │   └── wordmarkPath.js # "CodeLens" outlined to paths, no font shipped
 │   ├── shell/
 │   │   ├── AppShell.jsx    # nav, theme toggle, breadcrumbs, footer
 │   │   ├── states.jsx      # loading, empty, error and 404 states
@@ -351,7 +356,7 @@ codelens/
 ├── tracer-poc/
 │   ├── tracer.py           # THE TRACER — single source of truth
 │   ├── analyze.py          # read-only AST program profile, never executes source
-│   ├── corpus.py           # 55 programs, one per construct category
+│   ├── corpus.py           # 60 programs, one per construct category
 │   ├── dump_corpus.py      # runs them for real; writes the golden and the fixture
 │   ├── dump_recognition.py # records search/sort/recursion fixtures and corpus profiles
 │   ├── corpus-golden.json  # recorded status, stdout and counts per program
@@ -384,12 +389,13 @@ in [docs/scope.md](docs/scope.md).
 | [docs/program-profile.md](docs/program-profile.md) | The static AST program profile the adaptive engine will read |
 | [docs/recognition.md](docs/recognition.md) | Evidence rules and confidence for algorithm recognition |
 | [docs/visualization-adapters.md](docs/visualization-adapters.md) | Adapter contract, scene schema and validation rules |
+| [docs/brand.md](docs/brand.md) | The CodeLens mark, palette, asset files and usage |
 | [docs/roadmap.md](docs/roadmap.md) | Build order and current status |
 
 ## Status
 
 Working end to end, and teaching: the tracer runs the bundled examples plus a
-55-program corpus covering 32 categories of Python, and the UI replays any of
+60-program corpus covering 33 categories of Python, and the UI replays any of
 them on three canvases — call tree, control flow and combined — with a
 six-section inspector and plain-English explanations for every kind of step. Runs
 with very large call trees open capped at 200 visible frames, with a counted

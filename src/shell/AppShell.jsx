@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { BrandLogo } from '../brand/BrandLogo.jsx';
 import { Link } from '../router.jsx';
 import { useRouter } from '../routerContext.js';
 import { currentTheme, toggleTheme } from '../theme.js';
@@ -77,17 +78,7 @@ export function AppShell({ children, wide = false }) {
     <div className={isApp ? 'shell shell-app' : 'shell'}>
       <header className="shell-nav">
         <Link to="/" className="shell-brand" aria-label="CodeLens home">
-          <svg viewBox="0 0 20 20" width="19" height="19" aria-hidden="true" className="shell-brand-mark">
-            <path
-              d="M7.2 5.4 3.4 10l3.8 4.6M12.8 5.4 16.6 10l-3.8 4.6"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <span>CodeLens</span>
+          <BrandLogo className="shell-brand-logo" decorative />
         </Link>
 
         <nav className={menuOpen ? 'shell-links shell-links-open' : 'shell-links'} aria-label="Main">
@@ -136,7 +127,7 @@ export function AppShell({ children, wide = false }) {
         <footer className="shell-footer">
           <div className="shell-footer-inner">
             <div className="shell-footer-brand">
-              <span className="shell-footer-name">CodeLens</span>
+              <BrandLogo className="shell-footer-logo" />
               <p>
                 Watch your code run, one step at a time. Free, in your browser — your
                 code never leaves your machine.

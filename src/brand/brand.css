@@ -1,0 +1,40 @@
+/* Brand mark and lockup. Colours are theme tokens: the mark is electric lime
+   on a dark surface and obsidian on a light one, so it never loses contrast. */
+
+.brand-logo,
+.brand-mark {
+  display: block;
+  flex: none;
+}
+
+.brand-logo {
+  width: auto;
+  height: 30px;
+}
+
+.brand-logo-word {
+  fill: var(--logo-word);
+}
+
+.brand-logo-mark,
+.brand-mark {
+  color: var(--logo-mark);
+}
+
+.brand-mark {
+  width: 24px;
+  height: 24px;
+}
+
+/* Placements. */
+.shell-brand-logo {
+  height: 30px;
+}
+
+.shell-footer-logo {
+  height: 30px;
+}
+
+.app-brand-logo {
+  height: 28px;
+}

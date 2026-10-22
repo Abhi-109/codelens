@@ -55,6 +55,7 @@ import {
   selectTrace,
   selectTraceIndex,
 } from "./visualizer/session/selectors.js";
+import { BrandLogo } from "./brand/BrandLogo.jsx";
 import "./App.css";
 
 const MODULE = "<module>";
@@ -710,7 +711,9 @@ function Workspace() {
       <header className="topbar">
         <div className="brand">
           <div className="brand-line">
-            <h1>CodeLens</h1>
+            <h1>
+              <BrandLogo className="app-brand-logo" />
+            </h1>
             <span className="brand-badge">Python</span>
           </div>
           <span className="file-name" title={fileName}>

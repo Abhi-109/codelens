@@ -3912,6 +3912,7 @@ h3 {
 
 .app > header .brand h1 {
   font-size: 19px;
+  display: flex;
 }
 
 .brand-badge {

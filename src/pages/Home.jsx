@@ -15,6 +15,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { BrandMark } from "../brand/BrandLogo.jsx";
 import { Link } from "../router.jsx";
 import { FEATURES } from "./languages.js";
 import {
@@ -272,8 +273,8 @@ function HeroPreview() {
 
 export default function Home() {
   usePageMeta(
-    "CodeLens - See your code come to life",
-    "CodeLens is a code visualization and programming education platform: see your code come to life. Watch a program run one step at a time — the line about to run, every variable, the call stack and the output, explained in plain English. Python is the first supported language.",
+    "CodeLens — See your code think.",
+    "CodeLens is a code visualization and programming education platform. See your code think: watch a program run one step at a time — the line about to run, every variable, the call stack and the output, explained in plain English. Python is the first supported language.",
   );
 
   return (
@@ -288,7 +289,10 @@ export default function Home() {
 
       <section className="home-hero">
         <div className="home-copy">
-          <span className="home-eyebrow">Visualize · Learn · Understand</span>
+          <span className="home-eyebrow home-eyebrow-brand">
+            <BrandMark className="home-eyebrow-mark" decorative />
+            See your code think.
+          </span>
           <h1 className="home-title">
             See your code
             <br />

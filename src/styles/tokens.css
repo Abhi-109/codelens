@@ -60,6 +60,10 @@
   --accent-border: rgb(59 91 255 / 35%);
   --code-bg: #f1f3fa;
 
+  /* Brand. On a light surface the logo is one colour: obsidian. */
+  --logo-mark: #101010;
+  --logo-word: #101010;
+
   /* Accents. Dark enough to read as text on a white panel: #14b8a6 only
      managed 2.49:1 here, which is under what a graphic needs and well under
      what the 11px return value needs. */
@@ -148,6 +152,10 @@
   --accent-bg: rgb(77 140 255 / 12%);
   --accent-border: rgb(77 140 255 / 45%);
   --code-bg: #0d1424;
+
+  /* Brand: electric lime mark, warm white wordmark. */
+  --logo-mark: #c7ff5e;
+  --logo-word: #f5f3ed;
 
   --teal: #22d3c5;
   --violet: #8b5cf6;
