@@ -9,6 +9,7 @@ import {
 import { CONCEPTS, explainStep, isNewConcept } from "./tracer/explain";
 import { namesById, objectChanges } from "./tracer/objects";
 import { recognizeProgram } from "./tracer/recognition";
+import { buildRunStory } from "./tracer/runStory.js";
 import { changeLog, variableSeries } from "./tracer/stepView";
 import { buildExecutionGraph } from "./flowchart/executionGraph.js";
 import ControlFlowChart from "./flowchart/ControlFlowChart.jsx";
@@ -17,6 +18,7 @@ import { AUTO_ADAPTER, adapterLabel, resolveAdaptiveView } from "./visualizer/ad
 import CombinedView from "./visualizer/CombinedView.jsx";
 import Inspector from "./visualizer/Inspector.jsx";
 import PlaybackBar from "./visualizer/PlaybackBar.jsx";
+import RunStoryCard from "./visualizer/RunStoryCard.jsx";
 import CallTree from "./visualizer/CallTree.jsx";
 import TimelinePane from "./visualizer/TimelinePane.jsx";
 import VisualizationPane from "./visualizer/VisualizationPane.jsx";
@@ -396,6 +398,13 @@ function Workspace() {
         : null,
     [viz, result, adaptiveContext, selectedAdapter],
   );
+  // The map of the whole run: derived from the trace only, so it cannot
+  // describe a step the recorder did not take.
+  const runStory = useMemo(
+    () => (result && trace.length > 0 ? buildRunStory(trace, shownSource) : null),
+    [result, trace, shownSource],
+  );
+
   const example = EXAMPLES.find((entry) => entry.code === source) ?? null;
   const fileName = example ? `${example.name}.py` : "untitled.py";
 
@@ -891,6 +900,7 @@ function Workspace() {
             onVizChange={setViz}
             heading={<h3>Visualize</h3>}
           >
+            <RunStoryCard story={runStory} index={index} onJump={jumpTo} />
             {viz === "scene" ? (
               <AdaptiveView
                 adaptive={adaptive}

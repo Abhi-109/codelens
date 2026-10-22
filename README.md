@@ -146,6 +146,7 @@ src/tracer/              reads the JSON in the browser
     ├── client.js         runs the tracer in a Web Worker (Pyodide)
     ├── traceIndex.js     per-trace lookup tables, cached by the trace array
     ├── stepView.js       one tested view of step N: line, variables, changes, stack
+    ├── runStory.js       the whole run in a few sentences: rounds, values, result
     ├── explain.js        turns each step into a plain-English sentence
     ├── flow.js           builds the flowchart and loop counts
     ├── history.js        numeric-series guard and SVG chart geometry
@@ -169,6 +170,7 @@ src/flowchart/           draws the same trace as a call tree or a flowchart
 src/visualizer/          the workspace beside the canvas
     ├── Inspector.jsx     six tabbed sections (Explain…History), real ARIA tabs
     ├── AdaptiveView.jsx, SceneView.jsx the canvas and its validated scenes
+    ├── RunStoryCard.jsx  the run map above the canvas, current part marked
     ├── adaptive.js       Auto/manual adapter choice and the header label
     ├── PlaybackBar.jsx   stepping, timeline, speed, and the Developer menu
     ├── TimelinePane.jsx, timeline.js the virtualised step table and its pure rows
@@ -210,7 +212,7 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 111 Python tests: the tracer, the flowchart model, the static
                       # program profile and the corpus
-npm run test:js       # 511 JS tests: the call tree and control flow model and layout, the
+npm run test:js       # 525 JS tests: the call tree and control flow model and layout, the
                       # graph, the teaching layer, the corpus, the trace index, the program
                       # profile parser and recognition engine, the adapter registry,
                       # recursion, searching and sorting scenes, the statement stage and
@@ -218,7 +220,8 @@ npm run test:js       # 511 JS tests: the call tree and control flow model and l
                       # capabilities, fallback and stale-run rejection, early-step evidence
                       # wording, source-dirty status, exception chains, the router, the
                       # homepage preview, the language picker, the workspace modules,
-                      # variable history, the timeline and comparison helpers,
+                      # variable history, the run story (rounds, value chains and
+                      # error endings), the timeline and comparison helpers,
                       # output/input/error entries, and the design tokens' contrast
 npm run lint          # oxlint
 npm run build         # production build
@@ -298,6 +301,7 @@ codelens/
 │   │   ├── workspace.test.mjs
 │   │   ├── vizMode.js           # which canvas draws the run (pure)
 │   │   ├── vizMode.test.mjs
+│   │   ├── RunStoryCard.jsx     # the run map above the canvas (pure model input)
 │   │   ├── adaptive.js          # Auto/manual adapter choice and validated scene build (pure)
 │   │   ├── adaptive.test.mjs    # composite capabilities, fallback, empty and determinism
 │   │   ├── runGate.js           # rejects stale run/profile/recognition results (pure)
@@ -346,6 +350,8 @@ codelens/
 │       ├── sortingAdapter.js   # four list-sort families from real traces (pure)
 │       ├── scene.js            # scene contract and validator (pure)
 │       ├── stepView.js         # one view of a step, shared by every panel (pure)
+│       ├── runStory.js         # trace -> the plain-English map of the whole run (pure)
+│       ├── runStory.test.mjs
 │       ├── explain.js          # step -> plain-English sentence (pure functions)
 │       ├── flow.js             # flowchart model and loop counts
 │       ├── history.js          # numeric-series guard and chart geometry (pure)
@@ -385,6 +391,7 @@ in [docs/scope.md](docs/scope.md).
 | [docs/supported-python.md](docs/supported-python.md) | What the tracer supports today, by construct |
 | [docs/graph-diagnosis.md](docs/graph-diagnosis.md) | Why the old graph did not teach, and the rebuild plan |
 | [docs/ui-diagnosis.md](docs/ui-diagnosis.md) | Why each panel exists, and the one-step convention the UI follows |
+| [docs/run-story.md](docs/run-story.md) | The map of a whole run: parts, round counting and honesty rules |
 | [docs/flowchart-format.md](docs/flowchart-format.md) | The textbook flowchart's node and edge contract |
 | [docs/program-profile.md](docs/program-profile.md) | The static AST program profile the adaptive engine will read |
 | [docs/recognition.md](docs/recognition.md) | Evidence rules and confidence for algorithm recognition |

@@ -2179,6 +2179,207 @@ h3 {
   min-height: 0;
 }
 
+/* --- The run map: the whole story of the run, above the drawing ------------- */
+
+/* Three or four sentences that say what the program does, with every number
+   counted from the trace. It sits between the tab strip and the drawing so it
+   is read before the step details, and it collapses when the canvas needs the
+   room. The list is capped rather than the pane: the canvas keeps its height. */
+.run-story {
+  flex: none;
+  margin: 4px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.run-story-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.run-story-head::-webkit-details-marker {
+  display: none;
+}
+
+.run-story[open] .run-story-head {
+  border-bottom: 1px solid var(--border);
+}
+
+.run-story-heading {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.run-story-count {
+  font-size: 11px;
+  color: var(--text);
+}
+
+.run-story-sep {
+  margin: 0 4px;
+}
+
+.run-story-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 6px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 172px;
+  overflow: auto;
+}
+
+.run-story-part {
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-sm);
+}
+
+.run-story-part.on {
+  border-left-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.run-story-button {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.run-story-button:hover {
+  background: var(--code-bg);
+}
+
+.run-story-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.run-story-index {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  font: 10px/1 var(--mono);
+  color: var(--text);
+}
+
+.run-story-part.on .run-story-index {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface);
+}
+
+.run-story-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.run-story-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.run-story-label {
+  font: 10px/1.3 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.run-story-kind {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--code-bg);
+  color: var(--text);
+}
+
+.run-story-here {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.run-story-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.run-story-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.run-story-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.run-story-chip {
+  font: 11px/1.45 var(--mono);
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+.run-story-chip b {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.run-story-chain {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.run-story-output {
+  font-size: 11px;
+  color: var(--text);
+}
+
+.run-story-output code {
+  font: 11px/1.4 var(--mono);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
 /* The drawing fills whatever pane it is given and never grows the page. */
 .viz-canvas {
   display: flex;

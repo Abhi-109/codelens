@@ -548,3 +548,35 @@ All suites pass: 111 Python tests, 511 JS tests, plus lint and a production
 build. Two opt-in checks need a local Pyodide install: `npm run test:pyodide`
 and `npm run check:explain`. What remains on A3 is debounced generation; see the
 roadmap above for the rest.
+
+## Phase 11 — The run map: teaching the mechanism, not just the state
+
+Phase 10 made every step explain itself. The gap that remained was the one a
+beginner hits first: forty honest steps do not add up to the rule that produced
+them. A `for` loop's rule — "this body runs five times, adding 1 then 2 then 3"
+— exists only across those steps, and nothing on screen said it.
+
+`src/tracer/runStory.js` now writes that rule down. It reads the same trace the
+canvas replays and produces at most eight parts: setup, a repeat part per loop
+that actually repeated, call parts (including recursion depth and the return
+chain), the ending with the real printed text, a straight-through part for
+programs with no repetition, and an error or limit part that never pretends the
+run finished. `RunStoryCard` puts the map above the canvas, marks the part the
+current step is inside, and jumps to a part's first step when clicked.
+
+The counting is where the honesty lives, and the tests enforce it: rounds are
+body executions, so a `for` loop's exhausted check is not a round; a loop is
+only reported when the source line is really a loop header; chain links must be
+values the trace recorded; a subclass instance is never reported as its base;
+and a loop in a function called many times gets no single round count. All 60
+corpus programs are checked, and exact stories are asserted for the `for` loop,
+the `while` loop, nested loops, a `break`, recursion, a subclass and an error.
+
+Limitations are documented rather than papered over in
+[docs/run-story.md](run-story.md): inner loops have no separate round sentence,
+loops in multi-call functions have no single round count, and printed text is
+attributed only where it can be. The next teaching layer is prediction at loop
+and decision boundaries, generated from the next recorded state.
+
+All suites pass: 111 Python tests, 525 JS tests, plus lint and a production
+build.
