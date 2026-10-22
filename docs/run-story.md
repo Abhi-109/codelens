@@ -29,6 +29,10 @@ A story has at most eight parts, in run order, each pointing at a real step:
 parts overlap (a call inside a loop, a loop inside a called function), it picks
 the smallest range, so the most specific part is the one marked.
 
+A `repeat` part also carries `roundJumps`: the header step of every round. The
+card uses them for "Round 3 of 5" and its previous/next round buttons, so a
+long loop can be stepped a round at a time without leaving the map.
+
 ## What is counted, and how
 
 - **Rounds are body executions, not header visits.** A `for` loop visits its

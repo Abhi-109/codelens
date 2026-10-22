@@ -578,5 +578,10 @@ loops in multi-call functions have no single round count, and printed text is
 attributed only where it can be. The next teaching layer is prediction at loop
 and decision boundaries, generated from the next recorded state.
 
-All suites pass: 111 Python tests, 525 JS tests, plus lint and a production
+While a repeat part is active, the card also shows "Round 3 of 5" with previous
+and next round buttons, so a loop of thirty rounds costs a few clicks instead
+of thirty. Those jumps are the trace's own header steps; the card never moves
+the program anywhere the recorder did not go.
+
+All suites pass: 111 Python tests, 526 JS tests, plus lint and a production
 build.

@@ -212,7 +212,7 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 111 Python tests: the tracer, the flowchart model, the static
                       # program profile and the corpus
-npm run test:js       # 525 JS tests: the call tree and control flow model and layout, the
+npm run test:js       # 526 JS tests: the call tree and control flow model and layout, the
                       # graph, the teaching layer, the corpus, the trace index, the program
                       # profile parser and recognition engine, the adapter registry,
                       # recursion, searching and sorting scenes, the statement stage and

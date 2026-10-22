@@ -489,6 +489,9 @@ function repeatSection(trace, frame, loop, changes) {
     to: frame.steps[loop.toPos],
     line: loop.line,
     rounds,
+    // One jump per round, so the card can move a round at a time instead of
+    // asking for a click per line.
+    roundJumps: loop.starts.map((position) => frame.steps[position]),
     chain,
     values,
   };

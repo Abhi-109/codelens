@@ -108,6 +108,19 @@ test("rounds are body executions, so a for loop's exhausted check is not one", (
   assert.equal(story("for-loop").sections[2].outputSummary, "15");
 });
 
+test("a repeat section exposes one jump per round", () => {
+  const program = CORPUS["for-loop"];
+  const repeat = section("for-loop", "repeat");
+  assert.equal(repeat.roundJumps.length, repeat.rounds);
+  assert.deepEqual(repeat.roundJumps, [2, 4, 6, 8, 10]);
+  for (const step of repeat.roundJumps) {
+    assert.ok(step >= repeat.from && step <= repeat.to);
+    assert.equal(program.trace[step].event, "line");
+    assert.equal(program.trace[step].line, 2);
+  }
+  assert.equal(section("break-continue", "repeat").roundJumps.length, 6);
+});
+
 test("a while loop's changing value becomes the chain", () => {
   const repeat = section("while-loop", "repeat");
   assert.equal(repeat.rounds, 3);

@@ -21,7 +21,39 @@ const KIND_LABELS = {
   limit: "Limit",
 };
 
-function Part({ section, order, current, onJump }) {
+function RoundControls({ section, index, onJump }) {
+  const jumps = section.roundJumps ?? [];
+  if (jumps.length < 2) return null;
+  // How many rounds have started by this step. 1-based for the label; the
+  // buttons use the same number as an index into `jumps`.
+  const started = jumps.filter((step) => step <= index).length;
+  if (started === 0) return null;
+  return (
+    <div className="run-story-rounds">
+      <span className="run-story-round-label">
+        Round {started} of {jumps.length}
+      </span>
+      <button
+        type="button"
+        className="run-story-round"
+        disabled={started < 2}
+        onClick={() => onJump?.(jumps[started - 2])}
+      >
+        ◀ Previous round
+      </button>
+      <button
+        type="button"
+        className="run-story-round"
+        disabled={started >= jumps.length}
+        onClick={() => onJump?.(jumps[started])}
+      >
+        Next round ▶
+      </button>
+    </div>
+  );
+}
+
+function Part({ section, order, current, index, onJump }) {
   const active = current?.id === section.id;
   return (
     <li className={`run-story-part${active ? " on" : ""}`}>
@@ -64,6 +96,7 @@ function Part({ section, order, current, onJump }) {
           ) : null}
         </span>
       </button>
+      {active ? <RoundControls section={section} index={index} onJump={onJump} /> : null}
     </li>
   );
 }
@@ -99,6 +132,7 @@ export default function RunStoryCard({ story, index, onJump }) {
             section={section}
             order={order + 1}
             current={current}
+            index={index}
             onJump={onJump}
           />
         ))}

@@ -2380,6 +2380,48 @@ h3 {
   color: var(--text-h);
 }
 
+/* Round controls live under the active repeat part: one click per round, not
+   one click per line, without leaving the map for the playback bar. */
+.run-story-rounds {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 7px 6px 31px;
+}
+
+.run-story-round-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.run-story-round {
+  font: inherit;
+  font-size: 10px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.run-story-round:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  color: var(--text-h);
+}
+
+.run-story-round:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.run-story-round:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
 /* The drawing fills whatever pane it is given and never grows the page. */
 .viz-canvas {
   display: flex;
