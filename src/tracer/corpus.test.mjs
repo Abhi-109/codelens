@@ -26,11 +26,17 @@ import { gunzipSync } from "node:zlib";
 
 import { buildExecutionGraph } from "../flowchart/executionGraph.js";
 import { cardBody, nodeRunIndex } from "../flowchart/nodeBody.js";
+import { DEFAULT_REGISTRY } from "./adapters.js";
 import { explainStep } from "./explain.js";
+import { recognizeProgram } from "./recognition.js";
 import { errorStep, getStepView } from "./stepView.js";
+import { getTraceIndex } from "./traceIndex.js";
 
 const CORPUS = JSON.parse(
   gunzipSync(readFileSync(new URL("./__fixtures__/corpus.json.gz", import.meta.url))),
+);
+const RECOGNITION = JSON.parse(
+  gunzipSync(readFileSync(new URL("./__fixtures__/recognition.json.gz", import.meta.url))),
 );
 const PROGRAMS = Object.entries(CORPUS);
 
@@ -289,6 +295,110 @@ test("a run stopped by a limit is shown as stopped, with its real last state", (
     const view = getStepView(trace, trace.length - 1, source);
     assert.ok(view.explanation.aboutToHappen.length > 0, `${name}: the stop is explained`);
     assert.doesNotMatch(readable(view), LEAKED, `${name}: no leak at the stop`);
+  }
+});
+
+test("no step of any program falls back to the generic line wording", () => {
+  // The fallback still exists for unfamiliar syntax, but every construct the
+  // corpus promises has a specific explanation. A new program that only says
+  // "Runs this line: …" is a gap in the shared explainer, not a new feature.
+  for (const [name, program] of PROGRAMS) {
+    const { source, trace } = program;
+    for (let i = 0; i < trace.length; i += 1) {
+      if (trace[i].event !== "line") continue;
+      const view = getStepView(trace, i, source);
+      assert.doesNotMatch(
+        view.explanation.aboutToHappen,
+        /^Runs this line:/,
+        `${name} step ${i}: ${view.code?.text ?? "(no code)"}`,
+      );
+    }
+  }
+});
+
+test("statements the generic rules used to skip name what really happened", () => {
+  const expected = [
+    ["class-basic", 9, 'Sets self.name to "Rex".'],
+    ["class-basic", 10, "Sets self.tricks to []."],
+    ["class-basic", 14, "Calls the method append() on self.tricks."],
+    ["class-property", 6, "Decorates the function below with property, so it is wrapped before anyone calls it."],
+    ["tuple-unpack", 2, "Unpacks point into x and y: x = 3, y = 4."],
+    ["tuple-unpack", 3, "Swaps x and y: x = 4, y = 3."],
+    ["list-mutation", 5, "Deletes one item: scores[2]."],
+    ["import-module", 1, "Loads the math module and makes it available."],
+    ["import-module", 2, "Takes sqrt from math, so the program can use it by name."],
+    ["generator-delegates", 5, "Hands every value from inner() to the caller, one at a time."],
+    ["generator-delegates", 7, "Produces 'a' and pauses here until the next value is asked for."],
+    ["alias-dict-in-list", 3, "Sets rows[0]['score'] to 5."],
+  ];
+  for (const [name, index, text] of expected) {
+    const { source, trace } = PROGRAMS.find(([key]) => key === name)[1];
+    const view = getStepView(trace, index, source);
+    assert.equal(view.explanation.aboutToHappen, text, `${name} step ${index}`);
+  }
+});
+
+test("aliasing keeps one object behind two names or two slots", () => {
+  // Two names for one list: the trace, not the explainer, proves they share it.
+  const shared = CORPUS["alias-shared"];
+  const view = getStepView(shared.trace, 3, shared.source);
+  assert.equal(view.shared.length, 1);
+  assert.deepEqual([...view.shared[0].names].sort(), ["alias", "numbers"]);
+  assert.match(view.shared[0].text, /same list/);
+
+  // One dictionary stored twice in a list stays one object: writing through
+  // rows[0] is visible through rows[1], and the heap holds a single dict.
+  const nested = CORPUS["alias-dict-in-list"];
+  const after = nested.trace[4];
+  const rows = after.heap[after.frames[0].variables.rows.id];
+  assert.equal(rows.type, "list");
+  assert.equal(rows.items[0].id, rows.items[1].id);
+  assert.equal(after.heap[rows.items[0].id].entries.length, 2);
+});
+
+test("a function can return from more than one exit", () => {
+  const { source, trace } = CORPUS["function-early-return"];
+  const returned = trace
+    .filter((event) => event.event === "return" && event.function === "classify")
+    .map((event) => event.return_value.value);
+  assert.deepEqual(returned, ["negative", "zero", "positive"]);
+  for (const line of [3, 5, 6]) {
+    assert.ok(
+      trace.some((event) => event.event === "return" && event.line === line),
+      `the return on line ${line} ran`,
+    );
+  }
+  assert.match(getStepView(trace, 6, source).explanation.aboutToHappen, /hands back 'negative'/);
+  assert.match(getStepView(trace, 7, source).explanation.aboutToHappen, /hands back "negative"/);
+});
+
+test("every step builds a valid scene for the adapter recognition chose", () => {
+  // The canvas only ever draws what the registry validated. This is the same
+  // path the Adaptive canvas takes, over every recorded step of every program.
+  for (const [name, program] of PROGRAMS) {
+    const profile = RECOGNITION.corpus_profiles[name];
+    assert.ok(profile, `${name}: no recorded profile`);
+    const { source, trace, result } = program;
+    const recognition = recognizeProgram({ profile, trace, status: result.status });
+    const traceIndex = getTraceIndex(trace);
+    for (let i = 0; i < trace.length; i += 1) {
+      const where = `${name} step ${i} (${trace[i].event})`;
+      const context = {
+        stepView: getStepView(trace, i, source),
+        trace,
+        traceIndex,
+        source,
+        profile,
+        recognition,
+        result,
+      };
+      const built = DEFAULT_REGISTRY.build(recognition.adapterId, context);
+      assert.equal(built.validation?.valid, true, `${where}: ${built.validation?.errors?.join("; ")}`);
+      assert.ok(["ok", "partial"].includes(built.scene.status), `${where}: scene status`);
+      assert.equal(built.fallbackReason, null, `${where}: fell back because ${built.fallbackReason}`);
+      assert.equal(built.scene.adapterId, recognition.adapterId, `${where}: drawn adapter`);
+      assert.equal(built.scene.meta.stepIndex, i, `${where}: scene points at this step`);
+    }
   }
 });
 

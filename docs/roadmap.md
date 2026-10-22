@@ -230,7 +230,7 @@ zoom clamp that hid the current node. The rebuild fixed the root causes:
 
 ## Supported-Python corpus
 
-- [x] `tracer-poc/corpus.py`: 55 programs across 32 categories, each with the
+- [x] `tracer-poc/corpus.py`: 60 programs across 33 categories, each with the
       claim the tracer must honour about it
 - [x] `dump_corpus.py` records exact stdout and counts (`corpus-golden.json`) and
       vendors the traces for the JS tests (`src/tracer/__fixtures__/corpus.json.gz`)
@@ -488,8 +488,51 @@ the run), and reconstructing state between recorded steps. A trace only exposes
 the state its recorded steps carry, so the comparison says "Not comparable"
 rather than inventing more.
 
-Breadth is proven rather than claimed: `tracer-poc/corpus.py` holds 55 programs
-across 32 categories of Python, `test_corpus.py` checks the tracer against them
+## Phase 10 — Universal program coverage and real-world validation
+
+The coverage audit ran 15 unfamiliar programs (shared mutable containers,
+nested conditions, early returns, comprehension variants, two prompts, nested
+`break`, `while`/`else`, two calls on one line, an uncaught custom error, a
+`finally` return, tree-shaped recursion, a mixed menu) through the real tracer,
+the StepView, the statement stage, the scene validator and recognition. All
+traced correctly and all stayed on the safe adapter except Fibonacci, which
+recognition already reported as recursion. No recognition rule changed: no
+false positive or false negative was found, so no positive/negative pair was
+justified.
+
+Five gaps were real enough to add to the corpus, which is now **60 programs
+across 33 categories**: `alias-shared` and `alias-dict-in-list` (two names or
+two slots for one object), `if-nested` (a condition inside a condition),
+`function-early-return` (three exits called in a loop) and `io-two-inputs`
+(two prompts, each paired with its answer). The aliasing programs prove the
+shared-object note and the trace's repeated heap reference rather than
+asserting them.
+
+The Generic fallback improved first, in shared explanation code only. Lines
+that used to read "Runs this line: …" now name what the trace shows: an
+attribute assignment reads the new value from the next state (`self.points` is
+set to 15), tuple targets unpack or swap with their real values, `yield` and
+`yield from` say what they hand on, imports and decorators say what they load
+or wrap, `async def` says when the body runs, `del` names its target, a nested
+subscript assignment names its slot, and a method on a dotted or indexed
+receiver names that receiver. The fallback still exists for syntax no rule
+knows, but no recorded step of the corpus reaches it, and
+`src/tracer/corpus.test.mjs` now enforces that.
+
+Every step of every program now also goes through the adapter registry and
+`validateScene`, not just the six execution-semantics programs: 1,415 steps
+across 60 programs build a valid scene for the adapter recognition chose, with
+no fallback.
+
+No performance change was made, because none was justified: on a 1,502-event
+run the whole per-step path measured 21.3 ms for `getStepView`, 11.5 ms for
+the statement stage and 42.9 ms for the generic scene (about 0.05 ms per
+step, p95 0.061 ms); the trace index builds in 0.32 ms for 402 events. The
+existing index is already reused through its WeakMap, and the remaining
+bounded scans are far below a frame at these sizes.
+
+Breadth is proven rather than claimed: `tracer-poc/corpus.py` holds 60 programs
+across 33 categories of Python, `test_corpus.py` checks the tracer against them
 and keeps [supported-python.md](supported-python.md) in sync, and
 `src/tracer/corpus.test.mjs` walks every step of every program through the UI's
 own functions. A `no-example-hardcoding` test keeps example-specific words out of
@@ -501,7 +544,7 @@ visualizer uses, so every value on it comes from the engine, and the language
 grid marks Python as the only card that opens anything
 (`src/pages/preview.js`, `src/pages/languages.js`, both tested).
 
-All suites pass: 110 Python tests, 502 JS tests, plus lint and a production
+All suites pass: 111 Python tests, 511 JS tests, plus lint and a production
 build. Two opt-in checks need a local Pyodide install: `npm run test:pyodide`
 and `npm run check:explain`. What remains on A3 is debounced generation; see the
 roadmap above for the rest.

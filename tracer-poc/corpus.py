@@ -112,6 +112,22 @@ CORPUS = [
         "title": "A one-line choice",
         "source": ("n = 4\nlabel = 'even' if n % 2 == 0 else 'odd'\nprint(f'{n} is {label}')\n"),
     },
+    {
+        "name": "if-nested",
+        "category": "if / elif / else",
+        "title": "One condition inside another",
+        "source": (
+            "n = 12\n"
+            "if n > 0:\n"
+            "    if n % 2 == 0:\n"
+            "        kind = 'positive even'\n"
+            "    else:\n"
+            "        kind = 'positive odd'\n"
+            "else:\n"
+            "    kind = 'not positive'\n"
+            "print(kind)\n"
+        ),
+    },
     # --- loops --------------------------------------------------------------
     {
         "name": "for-loop",
@@ -245,6 +261,29 @@ CORPUS = [
         ),
     },
     {
+        "name": "alias-shared",
+        "category": "aliasing",
+        "title": "Two names for one list",
+        "source": (
+            "numbers = [1, 2]\n"
+            "alias = numbers\n"
+            "alias.append(3)\n"
+            "numbers[0] = 9\n"
+            "print(numbers, alias)\n"
+        ),
+    },
+    {
+        "name": "alias-dict-in-list",
+        "category": "aliasing",
+        "title": "One dictionary kept twice in a list",
+        "source": (
+            "row = {'name': 'Asha'}\n"
+            "rows = [row, row]\n"
+            "rows[0]['score'] = 5\n"
+            "print(rows[1])\n"
+        ),
+    },
+    {
         "name": "comprehension",
         "category": "comprehensions",
         "title": "A list and a dict built in one line",
@@ -301,6 +340,22 @@ CORPUS = [
             "    return 42\n"
             "\n"
             "print(report())\n"
+        ),
+    },
+    {
+        "name": "function-early-return",
+        "category": "functions",
+        "title": "Three exits, taken one at a time",
+        "source": (
+            "def classify(n):\n"
+            "    if n < 0:\n"
+            "        return 'negative'\n"
+            "    if n == 0:\n"
+            "        return 'zero'\n"
+            "    return 'positive'\n"
+            "\n"
+            "for n in [-1, 0, 2]:\n"
+            "    print(n, classify(n))\n"
         ),
     },
     {
@@ -667,6 +722,17 @@ CORPUS = [
             "print('no newline', end='...')\n"
             "print('continues')\n"
         ),
+    },
+    {
+        "name": "io-two-inputs",
+        "category": "input and output",
+        "title": "Two prompts, two answers",
+        "source": (
+            "first = input('First? ')\n"
+            "second = input('Second? ')\n"
+            "print(first, second)\n"
+        ),
+        "inputs": ["Asha", "Ravi"],
     },
     {
         "name": "io-empty-print",

@@ -258,11 +258,12 @@ class _Tracer:
         self.line_steps = 0
         self.frame_counter = 0
         self.values = _Values()
+        self.stopping = False  # a _StopTrace is unwinding; its frames are tracer noise
 
     # --- Python calls this on every event ---------------------------------
     def __call__(self, frame, event, arg):
-        if frame.f_code.co_filename != USER_FILE:
-            return None  # ignore our own code and the standard library
+        if self.stopping or frame.f_code.co_filename != USER_FILE:
+            return None  # ignore our own code, the standard library, and a limit unwind
         try:
             self._handle(frame, event, arg)
         except (_StopTrace, RecursionError):
@@ -320,6 +321,9 @@ class _Tracer:
 
         elif event == "exception":
             exc_type, exc_value, _ = arg
+            if exc_type is _StopTrace:
+                self.stopping = True  # do not show the tracer's own stop as a user error
+                return
             exception = {"type": exc_type.__name__, "message": _safe_str(exc_value)}
             self.pending[key] = exception
             self.last_exception[key] = exception

@@ -29,7 +29,7 @@ inside Pyodide in the browser.
 | strings | f-strings, concatenation, methods, slicing | `strings` | traced |
 | numbers | integer and float arithmetic, large integers, 0.3000…004 | `numbers` | traced |
 | booleans | and, or, not, chained comparisons | `booleans` | traced |
-| if / elif / else | one branch of three, plus the one-line conditional expression | `if-elif-else`, `ternary` | traced |
+| if / elif / else | one branch of three, a nested condition, plus the one-line conditional expression | `if-elif-else`, `if-nested`, `ternary` | traced |
 | for loop | iterating a range | `for-loop` | traced |
 | while loop | counting down, `while`/`else` | `while-loop` | traced |
 | break and continue | leaving a loop early, skipping one pass | `break-continue` | traced |
@@ -40,8 +40,10 @@ inside Pyodide in the browser.
 | dictionaries | add, update, look up, iterate the items | `dict-basics` | traced |
 | dictionaries | a dictionary holding lists (the group-by pattern) | `dict-nested` | traced |
 | sets | membership, intersection, difference | `set-basics` | traced |
+| aliasing | two names for one list, and one dictionary kept twice in a list | `alias-shared`, `alias-dict-in-list` | traced |
 | comprehensions | list and dict comprehensions, with a filter | `comprehension` | traced |
 | functions | a call, a parameter, a return value | `function-basic`, `function-return-none`, `function-implicit-none`, `function-print-return` | traced |
+| functions | early returns from more than one exit, called in a loop | `function-early-return` | traced |
 | function arguments | default values, keyword arguments | `function-args` | traced |
 | function arguments | `*args` and `**kwargs` | `function-star-args` | traced |
 | scope | a function changing a global | `scope-global` | traced |
@@ -64,6 +66,7 @@ inside Pyodide in the browser.
 | classes | objects kept in a dictionary, built in a loop | `combo-class-loop-dict` | traced |
 | imports | `import math` and `from math import sqrt` | `import-module` | traced |
 | input and output | `input()` with the values the app supplies, and `print` | `io-input` | traced |
+| input and output | two prompts, each answer paired with its own prompt | `io-two-inputs` | traced |
 | input and output | `print` with `sep` and `end` | `io-print-options`, `io-empty-print` | traced |
 | generators | a function that yields, driven by a for loop | `generator` | traced |
 | generators | `yield from` passing values through | `generator-delegates` | traced |

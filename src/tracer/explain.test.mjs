@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CONCEPTS, conceptAt, explainStep, explainStepView, explainTransition, isNewConcept } from "./explain.js";
+import { CONCEPTS, conceptAt, explainStep, explainStepView, explainTransition, insideOpenBracket, isNewConcept } from "./explain.js";
 
 // --- trace builders ---------------------------------------------------------
 
@@ -58,6 +58,19 @@ function framesEvent(i, event, frames, { heap = {}, line = 1, returnValue = null
 test("module call starts the program", () => {
   const trace = [state(0, "call")];
   assert.equal(explainStep(trace, 0).text, "The program starts running, from the very top.");
+});
+
+test("a line inside a multi-line expression is explained as part of that expression", () => {
+  const source = "data = {\n    'a': 1,\n}\n";
+  const trace = [state(0, "call"), state(1, "line", { line: 2 })];
+  assert.equal(insideOpenBracket(source, 1), false);
+  assert.equal(insideOpenBracket(source, 2), true);
+  assert.equal(explainStep(trace, 1, source).text, "Evaluates this part of the expression.");
+});
+
+test("brackets inside strings and comments do not make a later line an expression", () => {
+  const source = '"""doc { [ ( """\n# { [ (\nvalue = "["\nprint(value)\n';
+  assert.equal(insideOpenBracket(source, 4), false);
 });
 
 test("module return ends the program", () => {

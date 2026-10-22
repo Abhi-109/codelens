@@ -9,7 +9,7 @@
 // recorded state; a print's text comes from the recorded output. Nothing here
 // evaluates user code on its own.
 
-import { blockEnd, statementKind, substituteVars } from "./explain.js";
+import { blockEnd, insideOpenBracket, statementKind, substituteVars } from "./explain.js";
 import { getTraceIndex } from "./traceIndex.js";
 import { showValue } from "./values.js";
 
@@ -89,6 +89,7 @@ const STEP_LABELS = Object.freeze({
   case: "Case",
   await: "Await",
   lambda: "Lambda",
+  expression: "Function call",
 });
 
 function isObject(value) {
@@ -558,7 +559,14 @@ export function buildStatementStage(context = {}) {
     return errorStage(view, traceIndex);
   }
   if (event.event !== "line") {
-    const stage = baseStage(view, traceIndex, "step", "Step", view.code?.text ?? null);
+    const stopped = ["step_limit", "timeout", "output_limit"].includes(event.event);
+    const stage = baseStage(
+      view,
+      traceIndex,
+      "step",
+      stopped ? "Stopped" : "Step",
+      stopped ? null : view.code?.text ?? null,
+    );
     stage.loopContext = loopContextFor(view, source, trace);
     return stage;
   }
@@ -604,7 +612,7 @@ export function buildStatementStage(context = {}) {
     view,
     traceIndex,
     "step",
-    stepLabel(info.text),
+    insideOpenBracket(source, view.line) ? "Expression" : stepLabel(info.text),
     info.text || null,
   );
   stage.loopContext = loopContextFor(view, source, trace);

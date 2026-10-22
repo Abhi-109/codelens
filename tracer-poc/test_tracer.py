@@ -164,6 +164,14 @@ class TracerTests(unittest.TestCase):
         r = run_trace("while True:\n    print('x' * 1000)\n", max_steps=10 ** 6)
         self.assertEqual(r["status"], "output_limit")
 
+    def test_output_limit_does_not_show_the_tracers_own_stop_as_a_user_error(self):
+        r = run_trace("while True:\n    print('x' * 1000)\n", max_steps=10 ** 6)
+        kinds = [e["event"] for e in r["trace"]]
+        self.assertNotIn("_StopTrace", json.dumps(r["trace"]))
+        self.assertNotIn("exception", kinds)
+        self.assertNotIn("unwind", kinds)
+        self.assertEqual(kinds[-1], "output_limit")
+
     def test_broken_repr_does_not_crash_tracer(self):
         src = "class Bad:\n    __slots__ = ()\n    def __repr__(self):\n        raise ValueError('no')\nb = Bad()\n"
         self.assertEqual(run_trace(src)["status"], "completed")

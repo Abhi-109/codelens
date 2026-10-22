@@ -121,6 +121,16 @@ function variableShow(variables, heap, name) {
   return showValue(variables[name], heap);
 }
 
+/** The shown value of `name.attr`, or null when the trace does not hold it. */
+function attributeValue(variables, heap, path) {
+  const match = String(path).match(/^([A-Za-z_]\w*)\.([A-Za-z_]\w*)$/);
+  if (!match) return null;
+  const root = variables[match[1]];
+  if (root?.type !== "ref") return null;
+  const attr = (heap?.[root.id]?.attrs ?? []).find((entry) => entry.name === match[2]);
+  return attr ? showValue(attr.value, heap) : null;
+}
+
 /** Substitutes known variable names in a condition, so "count >= 90" reads "68 >= 90". */
 export function substituteVars(text, variables, heap) {
   let out = text.replace(/[A-Za-z_]\w*/g, (name) => {
@@ -234,6 +244,31 @@ function explainLine(event, trace, index, source) {
       text: `Defines a class named ${match[1]}: a blueprint for objects. Nothing happens until an object is made from it.`,
       concept: "class",
     };
+  }
+  match = text.match(/^async\s+def\s+([A-Za-z_]\w*)/);
+  if (match) {
+    return {
+      text: `Defines an async function named ${match[1]}. It runs when the program awaits it.`,
+      concept: "function",
+    };
+  }
+  if (/^@[A-Za-z_]\w*/.test(text)) {
+    const decorator = text.slice(1).replace(/\(.*$/, "");
+    return {
+      text: `Decorates the function below with ${decorator}, so it is wrapped before anyone calls it.`,
+      concept: "function",
+    };
+  }
+  match = text.match(/^from\s+([\w.]+)\s+import\s+(.+)$/);
+  if (match) {
+    return {
+      text: `Takes ${short(match[2])} from ${match[1]}, so the program can use it by name.`,
+      concept: null,
+    };
+  }
+  match = text.match(/^import\s+(.+)$/);
+  if (match) {
+    return { text: `Loads the ${short(match[1])} module and makes it available.`, concept: null };
   }
 
   // Loops.
@@ -354,6 +389,29 @@ function explainLine(event, trace, index, source) {
       concept: "error",
     };
   }
+  match = text.match(/^yield\s+from\s+(.+)$/);
+  if (match) {
+    return {
+      text: `Hands every value from ${short(match[1])} to the caller, one at a time.`,
+      concept: "loop",
+    };
+  }
+  match = text.match(/^yield(?:\s+(.+))?$/);
+  if (match) {
+    const produced = match[1] ? substituteVars(match[1], variables, event.heap) : null;
+    return {
+      text: produced ? `Produces ${produced} and pauses here until the next value is asked for.` : "Pauses here, handing nothing back.",
+      concept: "return",
+    };
+  }
+  match = text.match(/^del\s+(.+)$/);
+  if (match) {
+    const target = match[1].trim();
+    return {
+      text: target.includes("[") ? `Deletes one item: ${short(target)}.` : `Deletes the name ${short(target)}.`,
+      concept: target.includes("[") ? "list" : "variable",
+    };
+  }
 
   // Returning a value (the return event right after confirms what is handed back).
   match = text.match(/^return(?:\s+(.+))?$/);
@@ -419,8 +477,60 @@ function explainLine(event, trace, index, source) {
     }
     return { text: `Calls the method ${method}() on ${receiver}.`, concept: "function-call" };
   }
+  // A method on a dotted or indexed receiver, such as self.items.append(x).
+  match = text.match(/^([^()]+)\.([A-Za-z_]\w*)\((.*)\)$/);
+  if (match) {
+    return {
+      text: `Calls the method ${match[2]}() on ${short(match[1])}.`,
+      concept: "function-call",
+    };
+  }
 
   // Assignments.
+  match = text.match(/^([A-Za-z_]\w*\.[A-Za-z_]\w*)\s*=(?!=)\s*(.*)$/);
+  if (match) {
+    const [, target, rhs] = match;
+    const after = nextState(trace, index);
+    const afterVars = topVariables(after);
+    const now = attributeValue(afterVars, after?.heap, target);
+    const shown = now ?? (rhs ? substituteVars(rhs, variables, event.heap) : null);
+    return {
+      text: shown ? `Sets ${target} to ${shown}.` : `Sets ${target}.`,
+      concept: "variable",
+    };
+  }
+  match = text.match(/^([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)+)\s*=(?!=)\s*(.+)$/);
+  if (match) {
+    const names = match[1].split(",").map((part) => part.trim());
+    const provided = match[2].split(",").map((part) => part.trim());
+    const after = nextState(trace, index);
+    const afterVars = topVariables(after);
+    const shown = names.every((name) => name in afterVars)
+      ? names.map((name) => `${name} = ${variableShow(afterVars, after?.heap, name)}`)
+      : [];
+    const swapped =
+      names.length === provided.length &&
+      names.every((name, i) => provided[names.length - 1 - i] === name);
+    if (swapped) {
+      return {
+        text: `Swaps ${names.join(" and ")}${shown.length ? `: ${shown.join(", ")}` : ""}.`,
+        concept: "variable",
+      };
+    }
+    return {
+      text: `Unpacks ${short(match[2])} into ${names.join(" and ")}${shown.length ? `: ${shown.join(", ")}` : ""}.`,
+      concept: "variable",
+    };
+  }
+  match = text.match(/^([A-Za-z_]\w*(?:\[[^\]]+\]){2,})\s*=(?!=)\s*(.*)$/);
+  if (match) {
+    const [, target, rhs] = match;
+    const value = rhs ? substituteVars(rhs, variables, event.heap) : null;
+    return {
+      text: value ? `Sets ${short(target)} to ${value}.` : `Sets ${short(target)}.`,
+      concept: "index",
+    };
+  }
   match = text.match(AUGMENTED_RE);
   if (match) {
     const [, name, op, rhs] = match;
@@ -479,6 +589,11 @@ function explainLine(event, trace, index, source) {
   match = text.match(CALL_RE);
   if (match) {
     return { text: `Calls the function ${match[1]}().`, concept: "function-call" };
+  }
+
+  // A line inside a multi-line literal or call.
+  if (insideOpenBracket(source, event.line)) {
+    return { text: "Evaluates this part of the expression.", concept: null };
   }
 
   return { text: `Runs this line: ${text}`, concept: null };
@@ -882,6 +997,46 @@ function nameIn(text, re) {
  * @param {string} text the trimmed source line
  * @returns {string} one of STATEMENT_KINDS
  */
+/**
+ * True when a 1-based line starts inside a bracket opened on an earlier line.
+ * That makes the line part of one expression, not a statement of its own.
+ * Brackets inside strings and comments are ignored.
+ */
+export function insideOpenBracket(source, line) {
+  const lines = String(source ?? "").split("\n");
+  let depth = 0;
+  let quote = null;
+  let escaped = false;
+  for (let i = 0; i < Math.min(line - 1, lines.length); i += 1) {
+    const text = lines[i];
+    for (let j = 0; j < text.length; j += 1) {
+      const char = text[j];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (quote.length === 3 ? text.startsWith(quote, j) : char === quote) {
+          if (quote.length === 3) j += 2;
+          quote = null;
+        }
+        continue;
+      }
+      if (char === "#") break;
+      if (char === "'" || char === '"') {
+        const triple = text.startsWith(char.repeat(3), j);
+        quote = triple ? char.repeat(3) : char;
+        if (triple) j += 2;
+      } else if (char === "(" || char === "[" || char === "{") {
+        depth += 1;
+      } else if (char === ")" || char === "]" || char === "}") {
+        depth = Math.max(0, depth - 1);
+      }
+    }
+    if (quote && quote.length === 1) quote = null; // no single-line string crosses a newline
+    escaped = false;
+  }
+  return depth > 0;
+}
+
 export function statementKind(text) {
   const line = String(text ?? "").trim();
   if (!line) return "other";
@@ -1051,6 +1206,15 @@ function justHappened(trace, index, source) {
   if (index <= 0) return null;
   const event = trace[index];
   const previous = trace[index - 1];
+  if (event.event === "step_limit") {
+    return "The run hit the step limit before the next line, so it stopped here.";
+  }
+  if (event.event === "timeout") {
+    return "The run hit the time limit before the next step, so it stopped here.";
+  }
+  if (event.event === "output_limit") {
+    return "The output was cut off at the character limit, so the run stopped here.";
+  }
   if (event.event === "call" && event.function !== "<module>") {
     const frame = event.frames?.[event.frames.length - 1];
     const at = frame?.call_line;

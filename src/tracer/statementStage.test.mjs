@@ -193,6 +193,14 @@ test("fallback steps name the operation instead of always saying Step", () => {
   }
 });
 
+test("a safety-limit step is labelled Stopped, not Step", () => {
+  for (const name of ["limit-steps", "limit-output", "limit-timeout"]) {
+    const { stage, context } = stageFor(name, CORPUS[name].trace.length - 1);
+    assert.equal(stage.label, "Stopped", name);
+    assert.equal(validateStatementStage(stage, context).valid, true, name);
+  }
+});
+
 test("an empty program says so instead of showing a blank Step", () => {
   const trace = EMPTY.trace;
   const stepView = getStepView(trace, 1, EMPTY.source);

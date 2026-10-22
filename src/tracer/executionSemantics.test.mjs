@@ -80,6 +80,33 @@ test("the raw trace keeps output as writes and closes the module with a return",
   }
 });
 
+test("a safety-limit step says what stopped it, not an error or a finished loop", () => {
+  for (const [name, reason] of [
+    ["limit-steps", /step limit/],
+    ["limit-output", /character limit/],
+    ["limit-timeout", /time limit/],
+  ]) {
+    const { trace } = entry(name);
+    const index = trace.length - 1;
+    const view = viewOf(name, index);
+    assert.equal(trace[index].event, trace.at(-1).event);
+    assert.match(view.explanation.justHappened, reason, name);
+    assert.doesNotMatch(view.explanation.justHappened, /error|loop ends/i, name);
+    const { stage, context } = staged(name, index);
+    assert.equal(stage.label, "Stopped", name);
+    assert.equal(validateStatementStage(stage, context).valid, true, name);
+  }
+
+  // The output limit used to leave the tracer's own _StopTrace exception in
+  // the trace, where it looked like a learner error.
+  const { trace } = entry("limit-output");
+  assert.deepEqual(
+    trace.filter((event) => event.event === "exception" || event.event === "unwind"),
+    [],
+  );
+  assert.doesNotMatch(JSON.stringify(trace), /_StopTrace/);
+});
+
 test("a print newline is the end of its line, never a blank line", () => {
   for (const name of [
     "list-print-element",
