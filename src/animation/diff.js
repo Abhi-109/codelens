@@ -2,10 +2,11 @@
 //
 // Tasks 5a–5c cover list/tuple state: object lifecycle, cell changes,
 // append/insert/pop/delete, state-proven tail growth/shrinkage, verified
-// swap/shift movement and truncation fallbacks. Dict, set and object contents
-// belong to task 6. A transition this module cannot model honestly
-// carries a highlight with a reason, or is classified as deferred by the tests;
-// it is never silently skipped.
+// swap/shift movement and truncation fallbacks. Task 6 adds dictionary entries,
+// set membership, object attributes and non-sequence lifecycle, keyed by
+// identity rather than visible position. A transition this module cannot model
+// honestly carries a highlight with a reason, or is classified as deferred by
+// the tests; it is never silently skipped.
 //
 // What the diff may look at is fixed by docs/animation.md section 2: the two
 // snapshots, the next event's recorded facts, and (for a return) whether recorded
@@ -914,9 +915,8 @@ export function diffSteps(prev, next, context = {}) {
     }
   }
 
-  // List/tuple state: object lifecycle, cell changes, append/insert/pop/delete,
-  // state-proven tail growth/shrinkage and verified movement. Dictionaries,
-  // sets and object contents stay task 6's job.
+  // Object state: lifecycle, list/tuple cells and movement, and keyed
+  // dict/set/object contents with exact insertion order.
   const collections = collectionActions(before, after, step, {
     prev,
     source: options.source,

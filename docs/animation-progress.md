@@ -1,12 +1,12 @@
 # Animation visualizer: progress
 
-**Current phase:** 1 (Diff engine) — tasks 1–4 and 5a–5c of 8 done. Tasks 6–8 await
+**Current phase:** 1 (Diff engine) — tasks 1–4, 5a–5c and 6 of 8 done. Tasks 7–8 await
 approval, one at a time.
 **Last updated:** 2026-10-24
 
 ## Phase checklist
 - [x] 0 Audit
-- [ ] 1 Diff engine (tasks 1–4 and 5a–5c of 8 done)
+- [ ] 1 Diff engine (tasks 1–4, 5a–5c and 6 of 8 done)
 - [ ] 2 Two-panel page + generic stage
 - [ ] 3 List motion
 - [ ] 4 Frames, recursion, objects
@@ -28,6 +28,7 @@ approval, one at a time.
 | 1.5b-swap Swap movement: one verified `move.swap` per pair, apply/reverse, duplicate-value and evidence fallbacks | done | `1c95b27` |
 | 1.5b-shift Shift movement: one verified adjacent `move.shift`, destination-only apply, `change` inverse, evidence fallbacks | done | `6c8e2c7` |
 | 1.5c Insert/pop shapes: verified `grow.insert`, bare `shrink.pop`, explicit `shrink.delete`, Python-normalized insert indices, conservative fallbacks | done | this commit |
+| 1.6 Dict/set/object contents: keyed entry and attribute add/remove/change, non-sequence lifecycle, exact inverse with insertion order, deferred ambiguity | done | `f8edf2f` + `82f369f` + `34f1145` + this docs commit |
 
 ## Decisions made
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the
@@ -91,6 +92,15 @@ approval, one at a time.
   intermediate mutation is invented. Truncated lists and tuple targets never claim an
   insert/delete. The corpus has no insert/pop source, so synthetic snapshot pairs provide the
   coverage and genuine insert/pop trace coverage remains deferred.
+- 2026-10-24 — **Task 6 models non-sequence content by identity, not position.** Dictionary
+  entries and object attributes are keyed by canonical key/name and carry `payload.index`
+  only so insertion order can be restored exactly; set membership is keyed by value and its
+  index is only the sorted serialization order, never movement. Removals are emitted from
+  the highest old index down and additions from the lowest new index up, so forward and
+  reverse application both preserve order. Surviving-key reordering, structural changes under
+  `more`, an addition to an object already showing 30 attributes, and class changes stay
+  deferred with a highlight rather than inventing a remove-and-reinsert or the identity of a
+  hidden attribute. No tracer, trace-format, action-kind or UI change was needed.
 
 ## Open questions for the owner
 None open. All four Phase 0 questions were answered on 2026-10-24 and are recorded above;
@@ -115,20 +125,49 @@ the Phase 1 plan is waiting for approval, not for clarification.
   steps that the animation needs.
 - Sets are sorted by the tracer, so the diff must never look at their positions: elements
   appear and disappear only (decided 2026-10-24).
-- Deferred dict/set/object content and non-sequence lifecycle changes may currently produce
-  no action for that change. The classification test counts them instead of claiming a
-  fallback, and an empty diff is not proof that the whole state is unchanged.
+- A change wholly hidden behind `more` can leave the visible snapshot identical, so an
+  empty diff is not proof that the whole state is unchanged. The guard test classifies every
+  fixture transition and compares exact state; it does not claim to see hidden contents.
+- Dictionary/set/attribute removal, empty-container transitions and the ambiguous reorder,
+  truncation and 30-attribute-cap cases do not occur in the corpus. They are covered by
+  synthetic snapshot pairs, not by real traces.
 - Pre-existing build warning: the main JS chunk is 662 KB (> Vite's 500 KB advisory). Not a
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await approval to start Phase 1 task 6: dict/set/object diff. Task 5c (insert/pop and
-truncation/delayed-call fallbacks) is done; tasks 7–8 are unchanged in the approved plan.
+Await approval to start Phase 1 task 7. Task 6 (dict/set/object content and non-sequence
+lifecycle) is done and every fixture transition now round trips; tasks 7–8 are unchanged in
+the approved plan.
 
-## Task 1.5 audit-fix notes (docs and tests only)
-- `docs/animation.md` §9–§12 now states that dict/set/object content and non-sequence
-  lifecycle changes are deferred to task 6 and may produce no action for the deferred
-  change. It no longer claims every unmodelled change yields a reasoned action, that an
+## Task 1.6 notes (dict, set and object contents)
+- `diff.js` adds keyed content diffing for dictionaries, sets and objects plus whole-entry
+  lifecycle for all three. Dictionary entries and object attributes are matched by canonical
+  key/name; set members by value. Add is `appear`, remove is `disappear`, value/attribute
+  change is `change`, all on the existing `entry`/`attribute`/`object` targets. No new action
+  kind or trace field was added.
+- Removals are emitted from the highest old index down, then changes, then additions from the
+  lowest new index up. The `appear`/`disappear` payload index restores insertion order; a set's
+  index is only its sorted serialization order. Forward and reverse application both produce
+  the exact section-3 state, including `more`, `class` and key order.
+- Deferred with a highlight: reordering surviving dictionary entries or attributes,
+  structural changes under `more`, an object addition while 30 attributes are visible, and
+  class changes. A wholly hidden change with identical visible content produces no action;
+  the documentation states that an empty list is not proof of no state change.
+- Measured on the 114 corpus and recognition programs: 2933 event steps, 2819 consecutive
+  pairs, **2933 supported, 0 deferred** (Task 5 baseline: 2896 supported, 37 deferred). All
+  37 former `task-6` pairs now round trip exactly. Real traces pin dictionary add/change
+  (`dict-basics`), set add (`set-basics`), attribute add and object lifecycle (`class-basic`)
+  and attribute change (`combo-class-loop-dict`); dictionary/object lifecycle disappearance
+  is observed in `comprehension`, `function-star-args`, `exception-custom` and
+  `recognition/linear-dict`. Entry/attribute removals, empty containers, mixed transitions,
+  ambiguity and malformed actions are synthetic; the focused lifecycle test is synthetic but
+  the corpus also exercises both directions. The JS suite is **632 tests** and all four gates
+  pass.
+
+## Task 1.5 audit-fix notes (docs and tests only; superseded by task 6)
+- At that point `docs/animation.md` §9–§12 stated that dict/set/object content and
+  non-sequence lifecycle changes were deferred to task 6 and might produce no action for the
+  deferred change. It no longer claims every unmodelled change yields a reasoned action, that an
   empty result proves the whole state unchanged, that the suite prints a report, or that
   every non-round-tripping transition carries a highlight. The per-program report belongs to
   task 8.

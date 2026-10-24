@@ -1,23 +1,24 @@
 # Animation diff: actions and rules
 
-**Status:** Phase 1 in progress. Tasks 1–4 and 5a–5c are implemented and tested: the
+**Status:** Phase 1 in progress. Tasks 1–4, 5a–5c and 6 are implemented and tested: the
 vocabulary (`actions.js`), the safe evaluator (`evaluate.js`), the statement-shape parser
-(`lineShape.js`), the diff core (`diff.js`), and the list/tuple half of the collection diff
-with verified swap/shift movement and insert/pop shapes. Task 6 (dict/set/object contents)
-has not landed. Sections marked *(planned)* are the contract the rest of Phase 1 is held to;
-they describe code that does not exist yet. Nothing in this document lets the renderer invent
-an event: if a fact is not in the trace or the source, the action is a highlight or a change,
-never a move.
+(`lineShape.js`), the diff core (`diff.js`), and the collection diff for lists, tuples,
+dictionaries, sets and objects, with verified swap/shift movement, insert/pop shapes and
+exactly reversible content and lifecycle actions. Task 7 (`apply.js` and the whole-corpus
+property) and task 8 (the per-program report and remaining goldens) are still ahead.
+Nothing in this document lets the renderer invent an event: if a fact is not in the trace or
+the source, the action is a highlight or a change, never a move.
 
 **The layer is partial on purpose, and this document does not claim it is complete.**
 List and tuple lifecycle, visible cell changes, append/insert/pop/delete, state-proven tail
-growth/shrink, truncation fallbacks, and swap/shift movement now produce exactly reversible
-state actions. Dict, set and object contents are task 6 and are currently deferred: a
-transition that changes only their contents or lifecycle may produce no action for that
-change. A list transition is never silently skipped: its list/tuple part either round-trips
-or carries a highlight with a reason. This does not imply that every non-sequence change
-produces an action. Section 11 records the remaining gap and the tasks that close it;
-section 12 states exactly what the proof covers.
+growth/shrink, truncation fallbacks and swap/shift movement produce exactly reversible state
+actions. Dictionary entries, set membership, object attributes and non-sequence lifecycle do
+too, keyed by entry/attribute identity rather than visible position. Ambiguous cases stay
+deferred with a highlight: reordering surviving dict entries or attributes, structural changes
+under truncation, an attribute that appears while the object already shows 30 attributes, and
+a class change. A change wholly hidden behind `more` can still leave no action, so an empty
+action list is not proof that the whole state is unchanged. Section 11 records exactly what
+remains deferred; section 12 states what the proof covers.
 
 ## 1. What the layer is
 
@@ -132,6 +133,13 @@ index `0..length`, and `delete` removes any cell. An explicit `pop(i)` is always
 only bare `pop()` uses `pop`. `applyState` rejects a malformed pair rather than half-applying
 it.
 
+`appear` and `disappear` on an `entry` or `attribute` target also carry
+`payload.index`: for a dictionary or object, the position of that entry/attribute on the
+side the action describes, and for a set, the position in the trace's sorted serialization.
+The index exists so the exact snapshot can be restored; for a set it is not a visible
+position and the diff never emits movement from it. A `change` on an entry or attribute has
+no payload.
+
 The `error` payload follows the trace: an `exception` event records only `{type, message}`
 and the event's `line`, so the raising frame's badge has no `phase`; the terminal `error`
 event carries the top-level error object, including `phase` (`"compile"` for a syntax error,
@@ -175,9 +183,12 @@ transition, and the diff merges rather than duplicates.
 | console | `{ kind: "console" }` | `console` |
 
 Dict keys are serialized canonically (object keys sorted at every depth), so two runs —
-or two recomputations of the same step — produce the same path. Variable targets are
-frame-qualified: `n` in the module frame and `n` in a recursive frame are different paths,
-which is what lets the same name animate in two cards without colliding.
+or two recomputations of the same step — produce the same path. A set uses the member value
+as its `entry.key`, because membership has no position; two equal members are one member.
+Object attributes are keyed by name, and the object id keeps the attribute's owner stable
+across rebinding. Variable targets are frame-qualified: `n` in the module frame and `n` in a
+recursive frame are different paths, which is what lets the same name animate in two cards
+without colliding.
 
 ## 8. Evidence rules for movement *(shapes: task 3; movement: 5b)*
 
@@ -317,9 +328,9 @@ exactly the documented cases: `groups.setdefault(...).append(...)` twice and the
 `x, y = …` tuple assignments in `tuple-unpack`. Nothing in the corpus is silently dropped,
 and no statement is reported as a movement shape without the indices to prove adjacency.
 
-## 9. Collections *(list/tuple state: task 5a; movement: 5b; pop/insert/truncation: 5c; dict/set/object: task 6)*
+## 9. Collections *(list/tuple: tasks 5a–5c; dict/set/object: task 6)*
 
-Task 5a compares each heap entry by object id and supports the list/tuple half of the state:
+The diff compares each heap entry by object id. The list/tuple half of the state:
 
 * **list / tuple lifecycle** — an object that becomes reachable is one `appear` on the
   object target, carrying the whole entry in `to`; one that stops being reachable is one
@@ -377,12 +388,39 @@ Task 5a compares each heap entry by object id and supports the list/tuple half o
   deferred, because the hidden positions cannot be restored.
 * **unsupported list structure** — a structural change the shape and snapshots do not
   prove gets a `highlight` on the object with `reason: "unknown-shape"` or `"unsupported"`;
-  it is never guessed as a move. For the list/tuple comparison, an empty action list means
-  no list/tuple change was detected, not that the step was skipped. It is not proof that the
-  whole state did not change: dict/set/object changes are deferred (section 11).
-* **dict / set / object** — task 6. Task 5a emits no entry or attribute action for them and
-  classifies those transitions deferred (section 11). A dict or set on an insert/pop-looking
-  source line therefore never produces a list-cell action.
+  it is never guessed as a move. An empty action list means no change this layer models was
+  detected, not that the step was skipped. It is not proof that the whole state did not
+  change: hidden content and unmodelled facts can still differ (section 11). A dict or set on
+  an insert/pop-looking source line never produces a list-cell action.
+
+The non-sequence half is keyed by identity, never by visible position:
+
+* **dictionary entries** — entries are matched by canonical key in insertion order. A new
+  key is one `appear` on its `entry` target with `payload.index`; a removed key is one
+  `disappear` carrying its value and old index; a changed value is one `change`. Unchanged
+  entries produce nothing. Removals are emitted from the highest old index down, then
+  changes, then additions from the lowest new index up, so applying the actions recreates the
+  after order and reversing them restores the before order exactly. If surviving keys change
+  relative order, or a structural change happens while `more > 0`, the transition is
+  deferred with a highlight instead of guessing a remove-and-reinsert.
+* **set membership** — a set is a bag of values. Its serialization is sorted, so positions
+  are not history and never produce movement. Membership is keyed by the member value: an
+  added member is one `appear`, a removed member one `disappear`, both on an `entry` target,
+  and `payload.index` only restores the sorted snapshot. While a set is truncated, any
+  visible membership change or a change in `more` defers the whole transition with a
+  highlight; a class change always does.
+* **object attributes** — attributes are matched by name on one stable object id. An added
+  attribute is one `appear` with `payload.index`, a removed one one `disappear`, and a
+  changed one one `change`; unchanged attributes produce nothing. Reordering surviving
+  attributes is deferred. The tracer shows at most 30 attributes and records no `more`
+  marker, so an addition to an object already showing 30 could be a hidden attribute
+  surfacing; that case is deferred rather than invented. A class change is deferred, and a
+  changed `other` entry (for example a `__slots__` instance) is `unsupported`.
+* **non-sequence lifecycle** — a dictionary, set or object that becomes reachable is one
+  `appear` on the `object` target carrying the whole entry; one that stops being reachable
+  is one `disappear` carrying its last entry. Lifecycle is not followed by content actions,
+  and reversing the whole-entry action restores the object and its contents exactly.
+  A transition between sequence and non-sequence kinds is `unsupported`.
 
 `more` means "there are cells we cannot see"; the diff never claims a position past the
 visible window.
@@ -426,12 +464,11 @@ that step's actions. The rules for the non-collection half of the state:
 
 Tasks 5a–5c model list and tuple state as described in section 9: lifecycle, visible cell
 changes, append/insert/pop/delete, state-proven tail growth/shrink and truncation fallbacks,
-all exactly reversible, plus verified swap/shift movement. Dict, set and object contents are
-task 6. Until it lands, a transition that changes only dict, set or object contents still
-yields no state action and is counted as deferred (section 11). A list transition is never
-silently skipped: its list/tuple part either round-trips or carries a highlight with a
-reason. That does not mean every non-sequence change generates an action; deferred
-dict/set/object changes may have none.
+all exactly reversible, plus verified swap/shift movement. Task 6 adds dictionary entries,
+set membership, object attributes and non-sequence lifecycle with the same exact inverse.
+A transition is never silently skipped: a modelled part either round-trips or carries a
+highlight with a reason. Ambiguous or hidden changes can still produce no action for that
+change, so an empty list is not proof that the whole state is unchanged (section 11).
 
 The module's surface, all pure and free of I/O, clocks and randomness:
 
@@ -445,7 +482,7 @@ The module's surface, all pure and free of I/O, clocks and randomness:
 | `reverseActions(actions, state?)` | the actions that undo the step; overlays dropped; optional `state` enables tuple and container checks |
 | `consoleFollowsReturn(trace, i)` | the recorded fact behind `to: "console"` |
 
-## 11. Reporting ambiguity and unsupported cases *(reporting: task 8; dict/set/object: task 6)*
+## 11. Reporting ambiguity and unsupported cases *(reporting: task 8)*
 
 Fallback reasons are a closed set:
 
@@ -461,31 +498,28 @@ Rules:
 
 * no step is dropped. A step with no visible change may legitimately yield `[]`. Most
   changes this layer cannot model yield a conservative action carrying a reason, but that is
-  not an absolute rule: dictionary, set and object content changes, and applicable
-  non-sequence lifecycle changes, are deferred to task 6 and may currently produce no action
-  for the deferred change. Deferral is not a fallback action and is not claimed as one;
+  not an absolute rule: a change wholly hidden behind `more`, or a hidden attribute on a
+  capped object, can leave no visible evidence and therefore no action. Absence of an action
+  is not a claim that the state did not change;
 * every fallback action explains itself in `reason` (and optionally `payload.note`);
-* the task-5 suite asserts the classification and exact counts for the corpus and
+* the task-6 suite asserts the classification and exact counts for the corpus and
   recognition fixtures — event steps, supported steps, deferred steps and fallback reasons.
   It does not print a per-program report; that report belongs to task 8;
-* an empty result means this diff detected no change it models. For a list/tuple comparison
-  it means no list/tuple change; for the whole state it is **not** proof that nothing
-  changed while dict/set/object changes remain deferred. It never means "skipped".
+* an empty result means this diff detected no change it models. It is **not** proof that
+  nothing changed, because hidden content behind `more` can change without altering the
+  visible snapshot. It never means "skipped".
 
-**Tasks 5a–5c close the list/tuple half of the gap; dict, set and object contents remain task 6.**
-The task-5 suite classifies **every** event step of the corpus and recognition fixtures:
-2933 over 114 programs, of which 114 are run-start steps and the other 2819 are consecutive
-state pairs. 2896 event steps round trip forward and backward. All 37 deferred steps are
-consecutive pairs, so 2782 of the 2819 pairs round trip and 37 are deferred to task 6. The
-deferred set is exactly dict/set/object content and non-sequence lifecycle changes; no list
-transition is deferred for lack of an action. For every deferred pair the test applies and
-reverses the frame and variable actions and compares the exact `frames` state. It also
-applies and reverses the actions of every list/tuple object that exists on either side,
-including one that appears or disappears, so sequence lifecycle is proven even where a dict,
-set or object change makes the whole snapshots unequal. Deferred dict/set/object objects are
-counted as deferred, not claimed to round-trip individually. A list/tuple object that does
-not round trip must carry a highlight that explains it; a non-sequence object is deferred
-without needing one.
+**Task 6 closes the non-sequence gap. Every corpus transition is now supported.**
+The suite classifies **every** event step of the corpus and recognition fixtures: 2933 over
+114 programs, of which 114 are run-start steps and the other 2819 are consecutive state
+pairs. All 2933 event steps round trip forward and backward, including all 2819 consecutive
+pairs, so **0 pairs are deferred**. The 37 pairs deferred at task 5 were exactly
+dict/set/object content and non-sequence lifecycle changes; each now applies and reverses its
+own actions to the exact before and after state. No list transition was deferred for lack of
+an action, and none is now. The test still applies and reverses the frame and variable
+actions separately for every step and checks every list/tuple object on either side
+individually, so a whole-state pass cannot hide a broken frame, variable or sequence object.
+The fixture counts remain pinned exactly, not used as thresholds.
 
 The fixtures do not contain an insert/pop source, so genuine insert/pop trace coverage remains
 deferred. Synthetic snapshot pairs pin those shapes instead: literal and variable insertion
@@ -505,8 +539,22 @@ with their recorded contents. `list-basics`, `alias-shared`, `class-basic`, `tup
 `filter-list`, `bubble-truncated` and `merge-sort` pin lifecycle, aliasing, nested receiver
 resolution, tuple immutability, truncated changes and state-proven tail growth. Swap, shift
 and insert/pop shapes are pinned separately; real insert/pop trace coverage remains deferred
-until a fixture records one. Nothing here may be read as coverage of dict/set/object contents
-(task 6); section 12 says exactly what the property proves.
+until a fixture records one.
+
+Dictionary, set and object coverage is deliberately split between real traces and synthetic
+pairs. Real traces pin a dictionary key addition and value change (`dict-basics` steps 3 and
+4), a set member addition (`set-basics` step 3), an object lifecycle appearance plus two
+attribute additions (`class-basic` steps 8, 10 and 11), and an attribute value change
+(`combo-class-loop-dict` step 16). Non-sequence lifecycle disappearance is also observed:
+dictionary and object entries leave the heap in `comprehension`, `function-star-args`,
+`exception-custom` and `recognition/linear-dict`, and the whole-corpus round trip covers it.
+The corpus contains no dictionary, set or attribute removal, so removals, empty containers,
+mixed add/remove/change transitions and keyed action-id determinism are pinned synthetically;
+the focused lifecycle test uses synthetic snapshots even though the corpus also exercises
+both directions. Synthetic pairs also pin every deferred non-sequence case named in section
+9: dictionary reordering, truncated dictionary membership, set truncation and class changes,
+object reordering, an addition to a capped object, and malformed entry/attribute actions.
+Synthetic-only behavior is never described as observed in a real trace.
 
 ## 12. Reversibility contract
 
@@ -523,20 +571,21 @@ The comparison is a deep equality of the exact state object in section 3 — eve
 variables, the stack's frame ids/functions/call_lines, and the whole heap including
 `more`, `class` and ordering. It is **not** normalised, sorted or filtered to make a test
 pass. If a supported transition cannot satisfy it, the diff is wrong and must change, not the
-test. A transition explicitly deferred under section 11 is not yet a counterexample, but its
-frame/variable and list/tuple parts must still satisfy the property.
+test. A transition explicitly deferred under section 11 is not yet a counterexample, but
+its frame, variable and modelled object parts must still satisfy the property.
 
-**Tasks 5a–5c's proof covers list and tuple state, insert/pop shapes and swap/shift movement; task 6 remains.**
-The property is proven for all 2819 consecutive pairs' list/tuple state (the 2933 event steps
-include 114 run-start steps): 2782 pairs round trip as whole snapshots. In the 37 pairs
-deferred to task 6, the test asserts the frame and variable actions round trip exactly, then
-applies and reverses the actions of every list/tuple object on either side — including
-lifecycle appearances and disappearances — individually. Deferred dict/set/object entries
-are counted, not independently round-tripped. The six task-4 golden programs are unchanged
-and still round trip in full. Movement and insert/pop are proven with the same property; the
-remaining unproven state is dict/set/object contents (task 6). Genuine insert/pop trace
-coverage is deferred because the current fixtures contain no such source; synthetic snapshot
-pairs prove the shape rules and the exact inverse pairs.
+**Tasks 5a–5c and 6 prove exact inversion over every fixture transition.**
+The property is proven for all 2819 consecutive pairs (the 2933 event steps include 114
+run-start steps): all 2819 pairs round trip as whole snapshots, and all 2933 event steps are
+supported. The 37 pairs deferred at task 5 were exactly dict/set/object content and
+non-sequence lifecycle changes; each now applies and reverses to the exact before and after
+state. The six task-4 golden programs are unchanged and still round trip in full. Movement,
+insert/pop, keyed entries and attributes and non-sequence lifecycle are proven with the same
+property. Genuine insert/pop trace coverage is still absent because the current fixtures
+contain no such source, and real dictionary/set/attribute removals are likewise absent;
+synthetic snapshot pairs prove those shapes and the exact inverse pairs. A hidden-only change
+behind `more` cannot be observed in either snapshot, which is why an empty action list remains
+weaker than state equality; the suite does not claim to detect one.
 
 Inverse pairs:
 
@@ -553,6 +602,11 @@ Inverse pairs:
 | `move` `shift` (`a[i+1] = a[i]`, `i → i+1`) | one `change` on the destination cell `i+1`, `from` the copied value and `to` the overwritten value; the source cell `i` is unchanged. Never a shift in the opposite direction. |
 | `call` (frame) | `disappear` (frame, `from` = the frame) |
 
+For a dictionary entry, set member or object attribute, the element in the first two rows is
+that entry or attribute, including its `payload.index`; reversing an appearance removes it
+by key/name, and reversing a disappearance reapplies it at the recorded index. That is what
+restores insertion order, not merely membership.
+
 A shift-copy is not a rotation. `a[i+1] = a[i]` copies the source over the destination and
 leaves the source in place, so reversing it must restore the overwritten destination value;
 reversing the arrow would copy the wrong value back into `i`.
@@ -562,39 +616,40 @@ every overlay of the previous step is dropped (`overlayActionsAt` returns none f
 step); a forward step installs only its own. This is tested separately from the snapshot
 property, so a passing reversibility test can never hide a stuck flash or a stale arrow.
 
-After task 6, the suite must run the property over **every** program in the corpus,
-the recognition fixture and the animation fixture, and over **every** consecutive state pair
-— not a sample. Task 5a already runs the same partition over every program and every pair,
-and proves the list/tuple side of each pair; programs that cannot be fully modelled are still
-diffed, their frame/variable and list/tuple actions remain exact, and the deferred
-dict/set/object change may produce no action until task 6.
+The suite runs the property over **every** program in the corpus and the recognition
+fixture and over **every** consecutive state pair — not a sample. Every frame, variable,
+list/tuple, dictionary, set and object is compared as part of the exact section-3 state, so a
+passing whole-state comparison cannot hide a broken frame or object.
 
-### Tasks 5a–5c status of the property
+### Tasks 5a–5c and 6 status of the property
 
 `applyState`, `reverseActions` and `stateActions` implement the contract for the kinds tasks
-5a–5c emit: `appear`, `disappear`, `change`, `call`, object lifecycle, cell changes,
-`grow.append`/`grow.insert` and `shrink.pop`/`shrink.delete`. A verified insert applies at its
-normalized index and reverses to a delete at the same index; a bare pop reverses to an append,
-and an explicit pop (including the last cell) reverses to an insert. Overlays are dropped by
-`reverseActions` and ignored by `applyState`, so they can never mutate the snapshot.
-`move.swap` is applied as exactly one exchange of its index pair and reversed by itself;
-`move.shift` updates only its destination and reverses to one `change` restoring the
-overwritten value. A malformed `move` pair, target or index pair, a malformed
-`grow`/`shrink` target, a tuple cell mutation, or a middle `shrink.pop` is rejected rather than
-half-applied. `reverseActions(actions, state)` takes the optional after-state precisely so it
-can reject a tuple-cell inverse; without it, the function cannot know a container's type.
+5a–5c and 6 emit: `appear`, `disappear`, `change`, `call`, object lifecycle, cell changes,
+`grow.append`/`grow.insert`, `shrink.pop`/`shrink.delete`, and keyed entry/attribute content.
+A verified insert applies at its normalized index and reverses to a delete at the same index;
+a bare pop reverses to an append, and an explicit pop (including the last cell) reverses to an
+insert. A dictionary entry or object attribute appearance splices at its carried
+`payload.index`; its inverse removes the same key or name, and a disappearance reverses to an
+appearance at the old index. Set membership is value-keyed and carries its sorted index only
+for exact restoration. Overlays are dropped by `reverseActions` and ignored by `applyState`,
+so they can never mutate the snapshot. `move.swap` is applied as exactly one exchange of its
+index pair and reversed by itself; `move.shift` updates only its destination and reverses to
+one `change` restoring the overwritten value. A malformed `move` pair, target or index pair,
+a malformed `grow`/`shrink` target, a missing payload index, a tuple cell mutation, a
+non-dictionary entry change, or a middle `shrink.pop` is rejected rather than half-applied.
+`reverseActions(actions, state)` takes the optional after-state precisely so it can reject a
+tuple-cell inverse; without it, the function cannot know a container's type.
 
-The suite runs the property on the six task-4 golden programs, on every list/tuple program
+The suite runs the property on the six task-4 golden programs, on every collection program
 of the fixtures, and on **every** event step of the corpus and recognition fixtures — 2933
-over 114 programs, including 114 run starts and 2819 consecutive pairs. All 2896 supported
-event steps round trip forward and backward; that is every run start plus 2782 pairs. The 37
-deferred consecutive pairs are counted and classified as task 6; the test checks their frame
-and variable state exactly and checks every list/tuple object on either side individually,
-including lifecycle, while their deferred non-sequence objects are counted rather than
-round-tripped. The comparison is strict deep equality of the state object of section 3:
-object key order is not part of the state, and nothing is normalised, sorted or filtered.
-The fixture counts are pinned in the test, not used as thresholds, so a regenerated fixture
-must update them deliberately.
+over 114 programs, including 114 run starts and 2819 consecutive pairs. All 2933 event steps
+round trip forward and backward; that is every run start plus all 2819 pairs, with no
+deferred pair left. Synthetic pairs check the ambiguous cases separately and require a
+highlight with no state action, so a deferred shape is never counted as supported. The
+comparison is strict deep equality of the state object of section 3: object key order is not
+part of the state, and nothing is normalised, sorted or filtered. The fixture counts are
+pinned in the test, not used as thresholds, so a regenerated fixture must update them
+deliberately.
 
 ## 13. What the layer never does
 
@@ -614,6 +669,6 @@ must update them deliberately.
 | 3 | statement-shape parser (`lineShape.js`) | **done** |
 | 4 | diff core: snapshots, frames, calls, returns, print, error, variables, `applyState`/`reverseActions` | **done** |
 | 5 | list/tuple diff, movement inference, ambiguity fallbacks | **done:** 5a (lifecycle, visible cell changes, append/delete, state-proven tail growth/shrink), 5b (swap/shift movement), 5c (insert/pop shapes, truncation and delayed-call fallbacks) |
-| 6 | dict/set/object diff | planned |
-| 7 | `apply.js` + whole-corpus reversibility property | partly: `applyState`/`reverseActions` and the property for variables, frames, console facts and task-5 list/tuple state including movement and insert/pop landed; dict/set/object state completes with task 6 |
-| 8 | golden action lists (20+ programs), determinism report, fixture wiring | partly: six task-4 goldens plus task-5 list/tuple, lifecycle, truncation, tail-growth and synthetic insert/pop goldens; the full set lands after task 6 |
+| 6 | dict/set/object contents, keyed entries/attributes and non-sequence lifecycle | **done:** keyed add/remove/change with exact inverse, whole-entry lifecycle, ambiguous reorder/truncation/cap cases deferred with a highlight |
+| 7 | `apply.js` + whole-corpus reversibility property | partly: `applyState`/`reverseActions` and the property for variables, frames, console facts, list/tuple state and dict/set/object state landed over the whole fixture corpus; `apply.js` remains |
+| 8 | golden action lists (20+ programs), determinism report, fixture wiring | partly: six task-4 goldens plus task-5 collection goldens and task-6 real/synthetic keyed-action tests; the per-program report and full golden set remain |
