@@ -176,7 +176,7 @@ or two recomputations of the same step — produce the same path. Variable targe
 frame-qualified: `n` in the module frame and `n` in a recursive frame are different paths,
 which is what lets the same name animate in two cards without colliding.
 
-## 8. Evidence rules for movement *(partly: shapes done in task 3, movement in task 5)*
+## 8. Evidence rules for movement *(shapes: task 3; swap: 5b part 1; shift: 5b part 2)*
 
 A movement action needs **both**:
 
@@ -321,10 +321,18 @@ Task 5a compares each heap entry by object id and supports the list/tuple half o
   `disappear`, carrying its last entry in `from` so the reverse restores it. A list that
   appears already carries its cells; there is no second cell action.
 * **cells** — equal-length cell changes are `change` on the cell, with the exact trace
-  values. Sorting or reversing a list is therefore a set of cell changes with
-  `reason: "unknown-shape"` until task 5b proves movement from the executed line's shape;
-  a direct subscript assignment with a resolved shape has no reason. The diff never claims
-  an order that the snapshot cannot prove.
+  values. Sorting or reversing a list is a set of cell changes with `reason:
+  "unknown-shape"`, because those lines carry no movement shape; a direct subscript
+  assignment with a resolved shape has no reason. The diff never claims an order that the
+  snapshot cannot prove.
+* **movement (swap)** — when the executed line is a recognized swap and the snapshots show
+  exactly those two cells exchanged (and no other cell changed), the diff emits **one**
+  `move.swap` on the lower-index cell with `payload.indices = [i, j]` in the order the
+  statement wrote them. Aliases are keyed by object id, so one swap is one action. Equal
+  values at the two cells prove nothing visible: the step gets a `duplicate-values`
+  highlight and no state action. If the indices, object or values do not agree, the step
+  stays a cell `change` with `reason: "unknown-shape"`, never a guessed move. Shift
+  (`a[i+1] = a[i]`) is 5b part 2 and is still a `change`.
 * **append/delete** — task 5a emits `grow.append` for a recognized `append` and
   `shrink.delete` for a recognized `del`. Task 5c wires `insert`/`pop`; the vocabulary and
   `applyState`/`reverseActions` already support all four motions. `grow.append` is
@@ -473,14 +481,14 @@ variables, the stack's frame ids/functions/call_lines, and the whole heap includ
 `more`, `class` and ordering. It is **not** normalised, sorted or filtered to make a test
 pass. If a transition cannot satisfy it, the diff is wrong and must change, not the test.
 
-**Task 5a's proof covers list and tuple state; movement, pop/insert shapes and task 6 remain.**
+**Task 5a's proof covers list and tuple state; swap movement is added in 5b part 1, while shift, pop/insert shapes and task 6 remain.**
 The property is proven for all 2819 consecutive pairs' list/tuple state (the 2933 event steps
 include 114 run-start steps): 2782 pairs round trip as whole snapshots, and in the 37 pairs
 that are deferred to task 6 the test applies and reverses the actions of every list/tuple
 object individually. The six task-4 golden programs
-are unchanged and still round trip in full. What is not proven yet is movement (5b), the
-pop/insert shapes (5c), and dict/set/object contents (task 6); 5a emits none of those state
-actions.
+are unchanged and still round trip in full. Swap movement is proven with the same property;
+what is not proven yet is shift (5b part 2), the pop/insert shapes (5c), and dict/set/object
+contents (task 6); this layer emits none of those state actions.
 
 Inverse pairs:
 
@@ -493,8 +501,8 @@ Inverse pairs:
 | `grow` `insert` (cell `i`) | `shrink` `delete` (cell `i`) |
 | `shrink` `pop` (the last cell) | `grow` `append` (the same cell) |
 | `shrink` `delete` (cell `i`) | `grow` `insert` (cell `i`) |
-| `move` `swap` | itself |
-| `move` `shift` (`a[i+1] = a[i]`, `i → i+1`) | `change` on cell `i+1` restoring its previous value; the source cell `i` is unchanged. (Task 5b; no `move` is emitted yet.) |
+| `move` `swap` | itself (one action per pair, targeted at the lower index) |
+| `move` `shift` (`a[i+1] = a[i]`, `i → i+1`) | `change` on cell `i+1` restoring its previous value; the source cell `i` is unchanged. (Task 5b part 2; no `move.shift` is emitted yet.) |
 | `call` (frame) | `disappear` (frame, `from` = the frame) |
 
 A shift-copy is not a rotation. `a[i+1] = a[i]` copies the source over the destination and
@@ -517,10 +525,11 @@ diffed and produce the conservative actions their `reason` explains.
 `applyState`, `reverseActions` and `stateActions` implement the contract for the kinds task 5a
 emits: `appear`, `disappear`, `change`, `call`, object lifecycle, cell changes,
 `grow.append`/`grow.insert` and `shrink.pop`/`shrink.delete`. Overlays are dropped by
-`reverseActions` and ignored by `applyState`, so they can never mutate the snapshot. `move`
-is in the vocabulary but is still refused by both functions until task 5b; a malformed
-`grow`/`shrink` target, a tuple cell mutation, or a middle `pop` is rejected rather than
-half-applied. `reverseActions(actions, state)` takes the optional after-state precisely so it
+`reverseActions` and ignored by `applyState`, so they can never mutate the snapshot.
+`move.swap` is applied as exactly one exchange of its index pair and reversed by itself;
+`move.shift` is still refused by both functions until 5b part 2. A malformed `move` pair, a
+malformed `grow`/`shrink` target, a tuple cell mutation, or a middle `pop` is rejected
+rather than half-applied. `reverseActions(actions, state)` takes the optional after-state precisely so it
 can reject a tuple-cell inverse; without it, the function cannot know a container's type.
 
 The suite runs the property on the six task-4 golden programs, on every list/tuple program
@@ -551,7 +560,7 @@ must update them deliberately.
 | 2 | safe index-expression evaluator + separate bounds resolver | **done** |
 | 3 | statement-shape parser (`lineShape.js`) | **done** |
 | 4 | diff core: snapshots, frames, calls, returns, print, error, variables, `applyState`/`reverseActions` | **done** |
-| 5 | list/tuple diff, movement inference, ambiguity fallbacks | **partly:** 5a (lifecycle, visible cell changes, append/delete, state-proven tail growth/shrink) done; 5b movement and 5c pop/insert shapes/truncation fallbacks planned |
+| 5 | list/tuple diff, movement inference, ambiguity fallbacks | **partly:** 5a (lifecycle, visible cell changes, append/delete, state-proven tail growth/shrink) and 5b swap done; 5b shift and 5c pop/insert shapes/truncation fallbacks planned |
 | 6 | dict/set/object diff | planned |
-| 7 | `apply.js` + whole-corpus reversibility property | partly: `applyState`/`reverseActions` and the property for variables, frames, console facts and task-5a list/tuple state landed; movement and dict/set/object state complete with tasks 5b/5c/6 |
+| 7 | `apply.js` + whole-corpus reversibility property | partly: `applyState`/`reverseActions` and the property for variables, frames, console facts and task-5a list/tuple state plus swap movement landed; shift and dict/set/object state complete with tasks 5b part 2/5c/6 |
 | 8 | golden action lists (20+ programs), determinism report, fixture wiring | partly: six task-4 goldens plus task-5a list/tuple, lifecycle, truncation and tail-growth goldens; the full set lands after 5b/5c |

@@ -100,6 +100,8 @@ function describe(action) {
       return `change ${action.path} ${brief(action.from)} -> ${brief(action.to)}${
         action.reason ? ` (${action.reason})` : ""
       }`;
+    case "move":
+      return `move.${action.motion} ${action.path} [${action.payload.indices.join(", ")}]`;
     case "grow":
       return `grow.${action.motion} ${action.path} ${brief(action.to)}${
         action.reason ? ` (${action.reason})` : ""
@@ -514,13 +516,23 @@ test("every transition is classified: supported, or explicitly deferred", () => 
       }
 
       for (const action of actions) {
-        if (action.kind === "move") failures.push(`${name} step ${next.step}: move belongs to 5b`);
+        if (action.kind === "move") {
+          if (action.motion !== "swap") {
+            failures.push(`${name} step ${next.step}: move.${action.motion} belongs to 5b part 2`);
+          }
+          const indices = action.payload?.indices;
+          if (!Array.isArray(indices) || indices.length !== 2) {
+            failures.push(`${name} step ${next.step}: a move must carry its index pair`);
+          } else if (action.target?.index !== Math.min(...indices)) {
+            failures.push(`${name} step ${next.step}: a move must target its lower index`);
+          }
+        }
         if (action.target?.kind === "entry" || action.target?.kind === "attribute") {
           failures.push(`${name} step ${next.step}: ${action.kind} ${action.target.kind} belongs to task 6`);
         }
         if (
           action.target?.kind === "cell" &&
-          ["change", "grow", "shrink"].includes(action.kind)
+          ["change", "move", "grow", "shrink"].includes(action.kind)
         ) {
           const entry = before.heap[action.target.objectId] ?? after.heap[action.target.objectId];
           if (entry?.type === "tuple") {
@@ -778,6 +790,78 @@ test("state-proven tail shrinkage removes every extra cell and reverses exactly"
   );
 });
 
+test("a verified swap is one move with its index pair, and reverses to itself", () => {
+  const variables = { a: { type: "ref", id: "o1" }, i: int(0), j: int(2) };
+  const before = snapshotOf(1, { o1: { type: "list", items: [int(10), int(20), int(30)] } });
+  const after = snapshotOf(2, { o1: { type: "list", items: [int(30), int(20), int(10)] } });
+  before.frames[0].variables = variables;
+  after.frames[0].variables = variables;
+  const actions = diffSteps(before, after, { source: "a[i], a[j] = a[j], a[i]\n" });
+  assert.deepEqual(actions.map(describe), ["move.swap o1[0] [0, 2]"]);
+  assert.equal(actions[0].motion, "swap");
+  assert.deepEqual(actions[0].payload.indices, [0, 2]);
+  assert.deepEqual(applyState(stateOf(before), actions), stateOf(after));
+
+  const inverse = reverseActions(actions, stateOf(after));
+  assert.deepEqual(inverse, actions, "a swap is its own inverse");
+  assert.deepEqual(applyState(stateOf(after), inverse), stateOf(before));
+});
+
+test("a swap the values do not prove stays conservative", () => {
+  const variables = { a: { type: "ref", id: "o1" }, i: int(0), j: int(2) };
+  const snap = (step, items) => {
+    const snapshot = snapshotOf(step, { o1: { type: "list", items } });
+    snapshot.frames[0].variables = variables;
+    return snapshot;
+  };
+  const source = "a[i], a[j] = a[j], a[i]\n";
+
+  const changed = diffSteps(
+    snap(1, [int(1), int(2), int(3)]),
+    snap(2, [int(1), int(2), int(9)]),
+    { source },
+  );
+  assert.deepEqual(changed.map(describe), ["change o1[2] 3 -> 9 (unknown-shape)"]);
+  assert.equal(changed.some((action) => action.kind === "move"), false);
+
+  const equal = diffSteps(
+    snap(1, [int(2), int(5), int(2)]),
+    snap(2, [int(2), int(5), int(2)]),
+    { source },
+  );
+  assert.deepEqual(equal.map(describe), ["highlight o1 duplicate-values"]);
+  assert.deepEqual(stateActions(equal), []);
+
+  const withoutJ = { a: { type: "ref", id: "o1" }, i: int(0) };
+  const noIndex = snapshotOf(1, { o1: { type: "list", items: [int(1), int(2), int(3)] } });
+  noIndex.frames[0].variables = withoutJ;
+  const afterSwap = snapshotOf(2, { o1: { type: "list", items: [int(3), int(2), int(1)] } });
+  afterSwap.frames[0].variables = withoutJ;
+  const unresolved = diffSteps(noIndex, afterSwap, { source });
+  assert.equal(unresolved.some((action) => action.kind === "move"), false);
+  assert.deepEqual(unresolved.map(describe), [
+    "change o1[0] 1 -> 3 (unknown-shape)",
+    "change o1[2] 3 -> 1 (unknown-shape)",
+  ]);
+});
+
+test("bubble and selection sort swaps are single moves with the written pair", () => {
+  for (const name of ["bubble-sort", "selection-sort"]) {
+    const swapping = recognitionProgram(name);
+    const moves = [];
+    for (let index = 0; index < swapping.trace.length; index += 1) {
+      moves.push(...actionsAt(swapping, index).filter((action) => action.kind === "move"));
+    }
+    assert.ok(moves.length > 0, `${name} really swaps`);
+    for (const move of moves) {
+      assert.equal(move.motion, "swap");
+      assert.equal(move.payload.indices.length, 2);
+      assert.equal(move.target.index, Math.min(...move.payload.indices));
+    }
+    for (let index = 0; index < swapping.trace.length; index += 1) roundTrip(swapping, index);
+  }
+});
+
 test("an unknown non-tail structural change is highlighted, not guessed", () => {
   const before = snapshotOf(1, { o1: { type: "list", items: [int(1), int(2), int(3)] } });
   const after = snapshotOf(2, { o1: { type: "list", items: [int(1), int(3)] } });
@@ -991,36 +1075,61 @@ test("reverse drops overlays, inverts state actions, and inverts back", () => {
   }
 });
 
-test("applyState still refuses movement until task 5b", () => {
+test("a swap applies once, targets its lower index, and is its own inverse", () => {
   const { trace } = program("assign-only");
   const state = stateOf(snapshotAt(trace, 2));
-  const one = { type: "int", value: 1 };
-  const cell = { kind: "cell", objectId: "o1", index: 0 };
-  const move = createAction("move", {
+  const asList = (items) => ({ frames: [], heap: { o1: { type: "list", items } } });
+  const before = asList([int(1), int(2), int(3)]);
+  const after = asList([int(3), int(2), int(1)]);
+  const swap = createAction("move", {
     step: 0,
-    target: { ...cell, index: 1 },
+    target: { kind: "cell", objectId: "o1", index: 0 },
     motion: "swap",
+    payload: { indices: [0, 2] },
   });
-  assert.ok(STATE_KINDS.includes(move.kind));
-  assert.throws(
-    () => applyState(state, [move]),
-    /cannot apply a move action yet/,
-    "move must be refused, never half-applied",
-  );
-  assert.throws(
-    () => reverseActions([move]),
-    /cannot reverse a move action yet/,
-  );
+  assert.ok(STATE_KINDS.includes(swap.kind));
+  assert.deepEqual(applyState(before, [swap]), after);
+  assert.deepEqual(reverseActions([swap], after), [swap], "a swap is its own inverse");
+  assert.deepEqual(applyState(after, reverseActions([swap], after)), before);
   // A silent skip would let a half-applied state pass for a correct one.
   assert.deepEqual(applyState(state, []), state);
-  // Grow and shrink are no longer refused: they are the task 5a state actions.
-  assert.deepEqual(
-    applyState(
-      { frames: [], heap: { o1: { type: "list", items: [] } } },
-      [createAction("grow", { step: 0, target: cell, motion: "append", to: one })],
-    ),
-    { frames: [], heap: { o1: { type: "list", items: [one] } } },
+
+  // Malformed pairs are refused rather than half-applied.
+  const move = (index, indices) =>
+    createAction("move", {
+      step: 0,
+      target: { kind: "cell", objectId: "o1", index },
+      motion: "swap",
+      payload: { indices },
+    });
+  assert.throws(() => applyState(before, [move(2, [0, 2])]), /lower/);
+  assert.throws(() => applyState(before, [move(0, [0, 0])]), /itself/);
+  assert.throws(() => applyState(before, [move(0, [0, 5])]), /outside/);
+  assert.throws(
+    () =>
+      applyState(before, [
+        createAction("move", {
+          step: 0,
+          target: { kind: "cell", objectId: "o1", index: 0 },
+          motion: "swap",
+        }),
+      ]),
+    /index pair/,
   );
+  assert.throws(
+    () => applyState({ frames: [], heap: { o1: { type: "tuple", items: [int(1), int(2)] } } }, [swap]),
+    /tuple/,
+  );
+
+  // Shift arrives with 5b part 2.
+  const shift = createAction("move", {
+    step: 0,
+    target: { kind: "cell", objectId: "o1", index: 1 },
+    motion: "shift",
+    payload: { indices: [0, 1] },
+  });
+  assert.throws(() => applyState(before, [shift]), /not supported yet/);
+  assert.throws(() => reverseActions([shift], before), /move\.shift/);
 });
 
 test("diffSteps needs snapshots, and never mutates them", () => {

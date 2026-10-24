@@ -122,6 +122,32 @@ function isRemoval(oldEntry, newEntry, index) {
   return canonicalValue(withoutCell(oldEntry, index)) === canonicalValue(newEntry.items);
 }
 
+/**
+ * The swap a recognized swap statement describes, when the snapshots agree.
+ * Returns null without evidence, or "ambiguous" when the two cells hold equal
+ * values so the swap cannot be seen (docs/animation.md section 8).
+ */
+function swapEvidence(context, older, newer, id) {
+  const parsed = context?.shape;
+  if (parsed?.kind !== "swap" || parsed.targets.length !== 2) return null;
+  const left = resolveCellRef(parsed.targets[0], context.heap, context.variables);
+  const right = resolveCellRef(parsed.targets[1], context.heap, context.variables);
+  if (left === null || right === null) return null;
+  if (left.objectId !== id || right.objectId !== id) return null;
+  const { index: i } = left;
+  const { index: j } = right;
+  if (i === j || i >= older.items.length || j >= older.items.length) return null;
+  if (canonicalValue(newer.items[i]) !== canonicalValue(older.items[j])) return null;
+  if (canonicalValue(newer.items[j]) !== canonicalValue(older.items[i])) return null;
+  for (let index = 0; index < older.items.length; index += 1) {
+    if (index === i || index === j) continue;
+    if (canonicalValue(older.items[index]) !== canonicalValue(newer.items[index])) return null;
+  }
+  return canonicalValue(older.items[i]) === canonicalValue(older.items[j])
+    ? "ambiguous"
+    : { i, j };
+}
+
 /** The object a reference names, following attributes and ref-valued cells. */
 function followReference(entry, access) {
   if (access?.kind === "attr") {
@@ -194,13 +220,8 @@ function isShapeCell(context, ref, objectId, index) {
 function cellChangeReason(context, objectId, index) {
   const shape = context?.shape;
   if (!shape || shape.kind === "unknown") return FALLBACK_REASON.unknownShape;
-  if (shape.kind === "swap") {
-    return [...shape.targets, ...shape.sources].some((ref) =>
-      isShapeCell(context, ref, objectId, index),
-    )
-      ? null
-      : FALLBACK_REASON.unknownShape;
-  }
+  // A verified swap becomes one move; any cell change left over is a fallback.
+  if (shape.kind === "swap") return FALLBACK_REASON.unknownShape;
   if (shape.kind === "shift" || shape.kind === "subscript-assign" || shape.kind === "augmented") {
     return isShapeCell(context, shape.targets[0], objectId, index)
       ? null
@@ -353,6 +374,30 @@ function collectionActions(before, after, step, context) {
     const newerLength = newer.items.length;
 
     if (olderLength === newerLength) {
+      const swap = swapEvidence(shape, older, newer, id);
+      if (swap === "ambiguous") {
+        overlays.push(
+          createAction("highlight", {
+            step,
+            target: { kind: "object", objectId: id },
+            reason: FALLBACK_REASON.duplicateValues,
+          }),
+        );
+        continue;
+      }
+      if (swap !== null) {
+        // One action per pair, keyed on the lower index for a stable id; the
+        // payload keeps the source order the statement wrote.
+        structural.push(
+          createAction("move", {
+            step,
+            target: { kind: "cell", objectId: id, index: Math.min(swap.i, swap.j) },
+            motion: "swap",
+            payload: { indices: [swap.i, swap.j] },
+          }),
+        );
+        continue;
+      }
       for (let index = 0; index < olderLength; index += 1) {
         if (canonicalValue(older.items[index]) !== canonicalValue(newer.items[index])) {
           cells.push(
@@ -694,9 +739,28 @@ export function reverseActions(actions, state = null) {
         reversed.push(createAction("grow", { ...common, motion, to: action.from }));
         break;
       }
+      case "move": {
+        if (action.motion !== "swap") {
+          throw new TypeError(`cannot reverse a move.${String(action.motion)} action yet`);
+        }
+        const indices = action.payload?.indices;
+        if (!Array.isArray(indices) || indices.length !== 2) {
+          throw new TypeError("a move.swap needs its index pair in payload.indices");
+        }
+        // A swap is its own inverse; the pair is applied exactly once.
+        reversed.push(
+          createAction("move", {
+            step: action.step,
+            target: action.target,
+            motion: "swap",
+            payload: { indices: [...indices] },
+          }),
+        );
+        break;
+      }
       default:
-        // move arrives with task 5b; guessing its inverse here would be worse
-        // than refusing.
+        // Every state kind in the vocabulary is handled above; a new kind must
+        // teach apply/reverse before it can be emitted.
         throw new TypeError(`cannot reverse a ${action.kind} action yet`);
     }
   }
@@ -786,6 +850,34 @@ export function applyState(state, actions) {
           throw new TypeError("a disappear action must target a variable or an object");
         }
         delete frame.variables[target.name];
+        break;
+      }
+      case "move": {
+        if (target.kind !== "cell") throw new TypeError("a move action must target a cell");
+        const entry = current.heap[target.objectId];
+        if (!entry) throw new TypeError(`object ${target.objectId} is not in the heap`);
+        if (entry.type === "tuple") throw new TypeError("cannot move tuple cells");
+        if (entry.type !== "list") throw new TypeError("a move action must target a list");
+        if (action.motion !== "swap") {
+          throw new TypeError(`a move.${String(action.motion)} action is not supported yet`);
+        }
+        const indices = action.payload?.indices;
+        if (
+          !Array.isArray(indices) ||
+          indices.length !== 2 ||
+          !indices.every((index) => Number.isInteger(index) && index >= 0)
+        ) {
+          throw new TypeError("a move.swap needs its index pair in payload.indices");
+        }
+        const [i, j] = indices;
+        if (i === j) throw new TypeError("a move.swap cannot swap a cell with itself");
+        if (i >= entry.items.length || j >= entry.items.length) {
+          throw new TypeError(`cells ${i} and ${j} are outside ${target.objectId}`);
+        }
+        if (target.index !== Math.min(i, j)) {
+          throw new TypeError("a move.swap targets the lower of its two indices");
+        }
+        [entry.items[i], entry.items[j]] = [entry.items[j], entry.items[i]];
         break;
       }
       case "grow":

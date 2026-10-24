@@ -1,12 +1,12 @@
 # Animation visualizer: progress
 
-**Current phase:** 1 (Diff engine) — tasks 1–4 and task 5a of 8 done. Tasks 5b, 5c and 6–8
-await approval, one at a time.
+**Current phase:** 1 (Diff engine) — tasks 1–4, 5a and 5b-swap of 8 done. Task 5b-shift,
+5c and 6–8 await approval, one at a time.
 **Last updated:** 2026-10-24
 
 ## Phase checklist
 - [x] 0 Audit
-- [ ] 1 Diff engine (tasks 1–4 and 5a of 8 done)
+- [ ] 1 Diff engine (tasks 1–4, 5a and 5b-swap of 8 done)
 - [ ] 2 Two-panel page + generic stage
 - [ ] 3 List motion
 - [ ] 4 Frames, recursion, objects
@@ -24,7 +24,8 @@ await approval, one at a time.
 | 1.3 Statement-shape parser (`lineShape.js`) + tests | done | `abe932e` + `c9156f6` |
 | 1.4 Diff core: snapshots, frames, calls, returns, print, error, variables, apply/reverse, six goldens | done | `6979804` |
 | 1.4b Docs/test cleanup before task 5: deferral wording, error `phase`, exact coverage assertions | done | `c6b7b8f` |
-| 1.5a List/tuple state diff: heap copying, lifecycle, cell changes, append/delete, state-proven tail growth/shrink, explicit supported/deferred classification | done | this commit |
+| 1.5a List/tuple state diff: heap copying, lifecycle, cell changes, append/delete, state-proven tail growth/shrink, explicit supported/deferred classification | done | `75820cb` |
+| 1.5b-swap Swap movement: one verified `move.swap` per pair, apply/reverse, duplicate-value and evidence fallbacks | done | this commit |
 
 ## Decisions made
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the
@@ -104,10 +105,31 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await approval to start Phase 1 task 5b: movement inference (`swap`/`shift`) with source-shape
-plus snapshot evidence, and the conservative fallbacks when the evidence is incomplete.
-Task 5c (pop/insert shapes and truncation fallbacks) and tasks 6–8 are unchanged in the
-approved plan.
+Await approval to start Phase 1 task 5b part 2: shift movement (`swap` is done) with the
+overwritten destination carried so its inverse is a `change`, and the conservative
+fallbacks unchanged. Task 5c (pop/insert shapes and truncation fallbacks) and tasks 6–8 are
+unchanged in the approved plan.
+
+## Task 1.5b-swap notes (movement, swap only)
+- `diff.js` emits exactly one `move.swap` per verified pair. Evidence requires the
+  recognized swap shape, both indices resolving to the same list object, the snapshots
+  exchanging exactly those two cells, and no other cell changing. The action targets the
+  lower index (stable id) and carries `payload.indices` in the order the statement wrote
+  them; applying it exchanges both values exactly once.
+- Equal values at the two cells prove nothing visible: the step gets one object `highlight`
+  with `reason: "duplicate-values"` and no state action. Unresolved indices, non-matching
+  values, truncated lists and unknown shapes stay on the existing `change`/`highlight`
+  fallbacks; a leftover swap cell change now always says `unknown-shape`.
+- `applyState` rejects malformed pairs (missing indices, same cell, out of range, target not
+  the lower index, tuple, non-list). `reverseActions` returns the same swap action, so both
+  directions apply once. `move.shift` is still refused until 5b part 2.
+- Tests pin a synthetic verified swap, the conservative cases (unproven values, equal
+  values, unresolved index), real bubble/selection swaps, and malformed pairs. The
+  exhaustive property accepts `move.swap`, requires its index pair and lower-index target,
+  and still rejects `move.shift`. Classification counts are unchanged: 2933 event steps,
+  2896 supported, 2819 pairs (2782 supported), 37 deferred.
+- JS test count is **603**. No change to the tracer, trace format, action vocabulary,
+  `lineShape.js`, UI or dependencies.
 
 ## Task 1.5a notes (list/tuple state, not movement)
 - `stateOf` now deep-copies the heap (entries and `items` arrays) as well as the frames, so
@@ -116,8 +138,9 @@ approved plan.
 - `diff.js` compares list/tuple entries by object id. It supports object lifecycle
   (`appear`/`disappear` on the object), equal-length cell `change`s, recognized
   `append`/`del` (`grow.append`, `shrink.delete`), and state-proven tail growth/shrink
-  (`grow.append`/`shrink.pop` with `reason: "unknown-shape"`). Sort and reverse currently
-  appear as cell changes with that reason; movement is task 5b.
+  (`grow.append`/`shrink.pop` with `reason: "unknown-shape"`). Sort and reverse appear as
+  cell changes with that reason, because those lines carry no movement shape; swap movement
+  landed in 5b part 1.
 - Tuples are lifecycle-only. A tuple whose cells differ gets one `highlight` on the object
   with `reason: "unsupported"` and no cell action; `applyState` and
   `reverseActions(actions, state)` reject a tuple cell mutation.
@@ -127,8 +150,8 @@ approved plan.
   change gets `highlight` `unknown-shape`/`unsupported`, never a guessed move.
 - `applyState` accepts `grow.append`/`insert` and `shrink.pop`/`delete`; `append` is
   tail-only, `pop` is last-cell-only, and both motions invert bijectively. `reverseActions`
-  takes the optional after-state to reject tuple-cell inverses. `move` is still refused
-  until task 5b.
+  takes the optional after-state to reject tuple-cell inverses. `move.swap` is applied in
+  5b part 1; `move.shift` is still refused until part 2.
 - Round trip measured with the exact section-3 state: 2933 event steps over 114 programs
   (114 run starts + 2819 consecutive pairs). **2896 event steps supported** forward and
   backward, of which **2782 are consecutive pairs**; **37 consecutive pairs deferred to
@@ -142,9 +165,8 @@ approved plan.
   structure, middle `del`, all four grow/shrink motions and invalid cell actions.
 - `docs/animation.md` section 12 now corrects the `move.shift` inverse: a shift-copy
   overwrites the destination, so its inverse is a `change` restoring the destination's
-  previous value, not a reverse shift. This is documented now; the `move` itself remains
-  task 5b.
-- JS test count is **600**. Tracer, trace format, action vocabulary, `lineShape.js`,
+  previous value, not a reverse shift. Swap is now implemented; shift remains 5b part 2.
+- JS test count was 600 at this commit. Tracer, trace format, action vocabulary, `lineShape.js`,
   `evaluate.js`, corpus, UI, old visualizer and dependencies are unchanged.
 
 ## Task 1.4b notes (docs/tests only, no behavior change)
