@@ -855,6 +855,87 @@ test("insert and pop handle empty and single-cell lists", () => {
   assert.deepEqual(applyState(stateOf(empty), reverseActions(popped, stateOf(empty))), stateOf(one));
 });
 
+test("insert and append resolve nested attribute and subscript receivers", () => {
+  const cases = [
+    {
+      name: "attribute insert",
+      source: "self.data.insert(0, 9)\n",
+      variables: { self: { type: "ref", id: "o1" } },
+      beforeHeap: {
+        o1: { type: "object", class: "Box", attrs: [{ name: "data", value: { type: "ref", id: "o2" } }] },
+        o2: { type: "list", items: [int(1), int(2)] },
+      },
+      afterHeap: {
+        o1: { type: "object", class: "Box", attrs: [{ name: "data", value: { type: "ref", id: "o2" } }] },
+        o2: { type: "list", items: [int(9), int(1), int(2)] },
+      },
+      expected: "grow.insert o2[0] 9",
+      kind: "grow",
+      motion: "insert",
+      index: 0,
+      value: int(9),
+    },
+    {
+      name: "subscript append",
+      source: "rows[0].append(2)\n",
+      variables: { rows: { type: "ref", id: "o1" } },
+      beforeHeap: {
+        o1: { type: "list", items: [{ type: "ref", id: "o2" }] },
+        o2: { type: "list", items: [int(1)] },
+      },
+      afterHeap: {
+        o1: { type: "list", items: [{ type: "ref", id: "o2" }] },
+        o2: { type: "list", items: [int(1), int(2)] },
+      },
+      expected: "grow.append o2[1] 2",
+      kind: "grow",
+      motion: "append",
+      index: 1,
+      value: int(2),
+    },
+    {
+      name: "subscript pop",
+      source: "rows[0].pop()\n",
+      variables: { rows: { type: "ref", id: "o1" } },
+      beforeHeap: {
+        o1: { type: "list", items: [{ type: "ref", id: "o2" }] },
+        o2: { type: "list", items: [int(1), int(2)] },
+      },
+      afterHeap: {
+        o1: { type: "list", items: [{ type: "ref", id: "o2" }] },
+        o2: { type: "list", items: [int(1)] },
+      },
+      expected: "shrink.pop o2[1] 2",
+      kind: "shrink",
+      motion: "pop",
+      index: 1,
+      value: int(2),
+    },
+  ];
+
+  for (const { name, source, variables, beforeHeap, afterHeap, expected, kind, motion, index, value } of cases) {
+    const before = snapshotOf(1, beforeHeap);
+    const after = snapshotOf(2, afterHeap);
+    before.frames[0].variables = variables;
+    after.frames[0].variables = variables;
+    const actions = diffSteps(before, after, { source });
+    assert.deepEqual(actions.map(describe), [expected], name);
+    assert.equal(actions.length, 1, name);
+    const [action] = actions;
+    assert.equal(action.kind, kind, name);
+    assert.equal(action.motion, motion, name);
+    assert.equal(action.target.kind, "cell", name);
+    assert.equal(action.target.objectId, "o2", name);
+    assert.equal(action.target.index, index, name);
+    assert.equal(action.payload, null, name);
+    if (kind === "grow") assert.deepEqual(action.to, value, name);
+    else assert.deepEqual(action.from, value, name);
+    assert.deepEqual(applyState(stateOf(before), actions), stateOf(after), `${name} forward`);
+    const inverse = reverseActions(actions, stateOf(after));
+    assert.deepEqual(applyState(stateOf(after), inverse), stateOf(before), `${name} backward`);
+  }
+});
+
 test("tuple cells are lifecycle only; a mutation is refused explicitly", () => {
   const tuple = program("tuple-unpack");
   assert.deepEqual(actionsAt(tuple, 2).map(describe), [
@@ -1089,6 +1170,37 @@ test("nested insert and pop stay conservative until the state proves a tail chan
   assert.deepEqual(inserted.map(describe), ["highlight o1 unknown-shape"]);
 });
 
+test("a mutation made while printing is shown only at the next state step", () => {
+  const variables = { a: { type: "ref", id: "o1" } };
+  const first = snapshotOf(0, { o1: { type: "list", items: [int(1), int(2), int(3)] } });
+  first.frames[0].variables = variables;
+  const output = { event: "output", step: 1, text: "3\n", frame_id: 1, line: 1 };
+  const next = snapshotOf(2, { o1: { type: "list", items: [int(1), int(2)] } }, 2);
+  next.frames[0].variables = variables;
+  const trace = [first, output, next];
+  const source = "print(a.pop())\nx = 1\n";
+
+  // The output event carries the state it printed from, so it has no state
+  // action for the pop that happened while the line was evaluated.
+  const atOutput = diffSteps(snapshotAt(trace, 0), snapshotAt(trace, 1), { source });
+  assert.deepEqual(stateActions(atOutput), []);
+  assert.deepEqual(atOutput.map((action) => action.kind), ["print"]);
+  assert.deepEqual(stateOf(snapshotAt(trace, 1)), stateOf(first));
+
+  // The pop becomes visible only when the next line's snapshot records it. The
+  // call is not the whole statement, so the tail change is the conservative
+  // unknown-shape fallback, never an invented insert or intermediate state.
+  const atNext = diffSteps(snapshotAt(trace, 1), snapshotAt(trace, 2), { source });
+  assert.deepEqual(atNext.map(describe), ["shrink.pop o1[2] 3 (unknown-shape)"]);
+  assert.deepEqual(stateActions(atNext), atNext);
+  assert.equal(atNext.some((action) => action.kind === "grow" || action.kind === "change"), false);
+  assert.deepEqual(applyState(stateOf(snapshotAt(trace, 1)), atNext), stateOf(next));
+  assert.deepEqual(
+    applyState(stateOf(next), reverseActions(atNext, stateOf(next))),
+    stateOf(snapshotAt(trace, 1)),
+  );
+});
+
 test("insert and pop evidence that disagrees falls back conservatively", () => {
   const variables = { a: { type: "ref", id: "o1" }, i: int(0) };
   const snap = (step, items) => {
@@ -1144,6 +1256,41 @@ test("a verified swap is one move with its index pair, and reverses to itself", 
 
   const inverse = reverseActions(actions, stateOf(after));
   assert.deepEqual(inverse, actions, "a swap is its own inverse");
+  assert.deepEqual(applyState(stateOf(after), inverse), stateOf(before));
+});
+
+test("a swap written high-first still targets the lower cell and round trips", () => {
+  const variables = { a: { type: "ref", id: "o1" }, i: int(0), j: int(2) };
+  const before = snapshotOf(1, { o1: { type: "list", items: [int(10), int(20), int(30)] } });
+  const after = snapshotOf(2, { o1: { type: "list", items: [int(30), int(20), int(10)] } });
+  before.frames[0].variables = variables;
+  after.frames[0].variables = variables;
+  const actions = diffSteps(before, after, { source: "a[j], a[i] = a[i], a[j]\n" });
+  assert.deepEqual(actions.map(describe), ["move.swap o1[0] [2, 0]"]);
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].target.objectId, "o1");
+  assert.equal(actions[0].target.index, 0);
+  assert.deepEqual(actions[0].payload.indices, [2, 0]);
+  assert.deepEqual(applyState(stateOf(before), actions), stateOf(after));
+  const inverse = reverseActions(actions, stateOf(after));
+  assert.deepEqual(inverse, actions);
+  assert.deepEqual(applyState(stateOf(after), inverse), stateOf(before));
+});
+
+test("a swap with negative indices resolves both cells and round trips", () => {
+  const variables = { a: { type: "ref", id: "o1" }, i: int(-1) };
+  const before = snapshotOf(1, { o1: { type: "list", items: [int(10), int(20), int(30)] } });
+  const after = snapshotOf(2, { o1: { type: "list", items: [int(30), int(20), int(10)] } });
+  before.frames[0].variables = variables;
+  after.frames[0].variables = variables;
+  const actions = diffSteps(before, after, { source: "a[i], a[0] = a[0], a[i]\n" });
+  assert.deepEqual(actions.map(describe), ["move.swap o1[0] [2, 0]"]);
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].target.objectId, "o1");
+  assert.equal(actions[0].target.index, 0);
+  assert.deepEqual(actions[0].payload.indices, [2, 0]);
+  assert.deepEqual(applyState(stateOf(before), actions), stateOf(after));
+  const inverse = reverseActions(actions, stateOf(after));
   assert.deepEqual(applyState(stateOf(after), inverse), stateOf(before));
 });
 
