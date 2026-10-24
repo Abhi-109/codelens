@@ -140,8 +140,24 @@ the Phase 1 plan is waiting for approval, not for clarification.
 Motion-first Stage 1 is committed. Stage 2 (recursion stack, return/output overlays, current
 line) awaits approval and has not started. Nothing is pushed.
 
-## Motion-first Stage 1 notes (numeric bars)
-- `src/visualizer/motion/bars.js` is the pure projection. It returns `null` unless every slot
+## Motion-first Stage 4 notes (canvas scale, Commit A)
+- The visual problems were layout, not projection: `.motion-objects` was
+  `repeat(auto-fill, minmax(240px, 1fr))`, which reserves four or five columns for a single
+  list and pins it to the first ~250 px, and `.motion-bars` was capped at
+  `clamp(128px, 24vh, 220px)`. Both are gone.
+- Objects are now a wrapping flex row that fills the stage. A numeric object gets
+  `is-bars`, spans 100% of the row, stretches to the stage height, and drops the card border and
+  surface so the stage is the only frame. Other collections keep their card at a 300 px basis.
+- Bars fill the width with a 44 px floor and a 110 px ceiling, so short arrays centre as a group
+  and long arrays scroll horizontally instead of collapsing. Labels are 13 px values and 11 px
+  indices, and the baseline uses `--border-strong`.
+- Calls are a compact wrapping strip of function name, call line and variable chips instead of
+  bordered cards above the data. Every frame keeps its stable key and the current frame keeps
+  its emphasis, so recursion depth is still visible.
+- No projection, key, action, timing or reduced-motion change. `SWAP_LIFT`, durations, cursor
+  and reverse playback are untouched.
+
+## Motion-first Stage 1 notes (numeric bars)- `src/visualizer/motion/bars.js` is the pure projection. It returns `null` unless every slot
   is `int`/`float` with a finite value, so empty, mixed, boolean, reference and unsupported
   collections keep the existing cells. The domain always contains zero (`min(0, …)` /
   `max(0, …)`), and one `from`/`size`/`zero` formula covers positives, negatives, mixed signs,

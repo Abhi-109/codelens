@@ -67,45 +67,48 @@
 .motion-frames {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  align-items: center;
+  gap: 4px var(--space-2);
   flex: none;
+  min-width: 0;
 }
 
+/* Calls are context, not the subject: one compact strip instead of bordered
+ * cards that push the data down. Depth stays visible because every frame is
+ * still its own keyed entry; recursion wraps onto another line. */
 .motion-frame {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 180px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
   max-width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
+  padding: 1px 0;
+  border: 0;
+  background: transparent;
 }
 
-.motion-frame.is-current {
-  border-color: var(--accent-border);
-}
-
-.motion-frame.is-highlighted {
-  border-color: var(--accent);
-  background: var(--accent-bg);
+.motion-frame.is-highlighted .motion-fn {
+  color: var(--accent);
 }
 
 .motion-frame-head {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
+  gap: 6px;
   min-width: 0;
 }
 
 .motion-fn {
   overflow: hidden;
   font: 600 12px/1.4 var(--mono);
-  color: var(--text-h);
+  color: var(--text);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.motion-frame.is-current .motion-fn {
+  color: var(--text-h);
 }
 
 .motion-frame-line {
@@ -117,7 +120,7 @@
 .motion-vars {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px;
 }
 
 .motion-var {
@@ -125,12 +128,12 @@
   align-items: baseline;
   gap: 5px;
   max-width: 100%;
-  padding: 2px 7px;
+  padding: 0 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
-  background: var(--code-bg);
+  background: var(--surface);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10.5px;
 }
 
 .motion-var-name {
@@ -159,22 +162,44 @@
   color: var(--text);
 }
 
+/* One row that stretches: the numeric array is the row's full width and the
+ * stage's full height, while any other collection keeps a normal card. */
 .motion-objects {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  align-content: stretch;
   gap: var(--space-3);
-  align-items: start;
+  min-height: 0;
 }
 
 .motion-object {
   display: flex;
+  flex: 0 1 300px;
   flex-direction: column;
   gap: 8px;
-  min-width: 0;
+  min-width: 220px;
+  max-width: 100%;
   padding: 9px 10px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
+}
+
+/* The plotted array is the subject, so it loses the card around it and takes
+ * the whole width. */
+.motion-object.is-bars {
+  flex: 1 1 100%;
+  align-self: stretch;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.motion-object.is-bars .motion-object-head {
+  padding: 0 2px;
 }
 
 .motion-object.is-highlighted {
@@ -224,23 +249,28 @@
 
 /* A numeric list or tuple: one column per recorded value. The fill is placed
  * with fractions of the plot (--from, --size) and the baseline with --zero, so
- * positives grow up, negatives hang down, and equal or zero values stay valid. */
+ * positives grow up, negatives hang down, and equal or zero values stay valid.
+ * The row grows with the canvas; columns stop widening past a readable size and
+ * long arrays scroll instead of shrinking into hairlines. */
 .motion-bars {
   display: flex;
+  flex: 1;
   align-items: stretch;
-  gap: 4px;
-  height: clamp(128px, 24vh, 220px);
+  justify-content: safe center;
+  gap: 6px;
+  min-height: 160px;
   /* Room above the plot for the tallest bar's value label. */
-  padding: 18px 2px 0;
+  padding: 22px 2px 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
 
 .motion-bar {
   display: flex;
-  flex: 1 1 34px;
+  flex: 1 1 44px;
   flex-direction: column;
-  min-width: 34px;
+  min-width: 44px;
+  max-width: 110px;
   border-radius: var(--radius-sm);
 }
 
@@ -251,7 +281,7 @@
 .motion-bar-index {
   flex: none;
   overflow: hidden;
-  font: 10.5px/16px var(--mono);
+  font: 11px/18px var(--mono);
   color: var(--text);
   text-align: center;
   text-overflow: ellipsis;
@@ -266,7 +296,7 @@
   left: 0;
   overflow: hidden;
   transform: translateY(-100%);
-  font: 10.5px/16px var(--mono);
+  font: 600 13px/18px var(--mono);
   color: var(--text-h);
   text-align: center;
   text-overflow: ellipsis;
@@ -282,10 +312,10 @@
 .motion-bar-plot::before {
   content: "";
   position: absolute;
-  right: -2px;
+  right: -3px;
   bottom: calc(var(--zero) * 100%);
-  left: -2px;
-  border-top: 1px solid var(--border);
+  left: -3px;
+  border-top: 1px solid var(--border-strong);
 }
 
 .motion-bar-fill {
@@ -417,13 +447,9 @@
     padding: var(--space-3);
   }
 
-  .motion-objects {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .motion-frame {
-    min-width: 0;
+  .motion-object {
     flex: 1 1 100%;
+    min-width: 0;
   }
 }
 

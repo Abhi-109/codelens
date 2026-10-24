@@ -131,6 +131,7 @@ function ObjectCard({ object, registerNode, registerSlot }) {
       ref={registerNode}
       className={classNames(
         "motion-object",
+        object.bars && "is-bars",
         object.highlighted && "is-highlighted",
         object.entering && "is-entering",
       )}
