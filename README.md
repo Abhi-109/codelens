@@ -213,8 +213,9 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 111 Python tests: the tracer, the flowchart model, the static
                       # program profile and the corpus
-npm run test:js       # 555 JS tests: the animation diff vocabulary and safe index
-                      # evaluator, the call tree and control flow model and layout, the
+npm run test:js       # 575 JS tests: the animation diff vocabulary, the safe index
+                      # evaluator and the statement-shape parser, the call tree and
+                      # control flow model and layout, the
                       # graph, the teaching layer, the
                       # corpus, the trace index, the program
                       # profile parser and recognition engine, the adapter registry,
@@ -297,7 +298,9 @@ codelens/
 │   │   ├── actions.js      # vocabulary, effects, targets, deterministic ids
 │   │   ├── actions.test.mjs
 │   │   ├── evaluate.js     # safe index expressions + separate bounds resolution
-│   │   └── evaluate.test.mjs
+│   │   ├── evaluate.test.mjs
+│   │   ├── lineShape.js    # which statement shape a source line has, from syntax only
+│   │   └── lineShape.test.mjs
 │   ├── visualizer/
 │   │   ├── session/             # one execution session: run, cursor, playback, selected call
 │   │   ├── Inspector.jsx        # six tabbed sections, full ARIA tab pattern
