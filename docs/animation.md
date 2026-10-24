@@ -179,6 +179,41 @@ With either missing, or with more than one minimal-movement explanation, the ste
 The smallest movement that is consistent wins only when the shape and the values leave
 exactly one candidate. "Smallest" never overrides ambiguity.
 
+### Safe index evaluation *(done: task 2)*
+
+`evaluateExpression(text, env)` resolves the index expressions an executed line contains.
+Its grammar is deliberately tiny:
+
+```
+expression := term (("+" | "-") term)*
+term       := factor (("*" | "//") factor)*
+factor     := "-" INT | INT | NAME | "(" expression ")"
+```
+
+* names are ASCII identifiers, matched only against the caller-supplied `env` and only
+  its **own** properties; a name that is missing, inherited (`toString`, `__proto__`), or a
+  global (`Math`, `window`) does not resolve. The environment maps a name to a JavaScript
+  safe integer; the diff converts a frame variable to one only when it is a trace `int`
+  inside the safe range, so booleans, floats, big integers and references are not indices;
+* integer literals may carry a leading `-`; a unary minus anywhere else (`-i`, `-(1)`) is
+  outside the grammar;
+* `//` is Python's floor division (`-7 // 2 === -4`). Arithmetic is done with `BigInt`, so
+  a product is never silently rounded; a result outside the safe-integer range is refused
+  rather than approximated;
+* everything else is refused: calls (`f(1)`), attributes (`a.b`), subscripts (`a[0]`),
+  strings, floats (`1.5`, `1e3`), `/`, `**`, `%`, comparisons, `and`/`or`/`not`, and any
+  character outside the list above. Refusal is **not** an error: the result is `null`;
+* the evaluator never throws (it catches getter failures and stack pressure), is pure, and
+  reads no module state; limits are 200 characters and 24 nested parentheses;
+* there is no dynamic code execution: no `eval` call and no `Function` constructor, and a
+  test reads this file to keep it that way.
+
+**Bounds are a separate step.** `resolveIndex(index, length)` uses Python's rule: a negative
+index counts from the end, `length + index` must land inside `[0, length)`, and anything
+else is `null`. Evaluation never receives a length, so `"-1"` evaluates to `-1` and only
+`resolveIndex(-1, 3)` turns it into cell 2. If either step returns `null`, the stage shows
+no marker; it does not guess one.
+
 ## 9. Collections *(planned: tasks 5 and 6)*
 
 * **list / tuple** — cells by index; grow/shrink at the ends or at an inserted position once
@@ -284,7 +319,7 @@ actions their `reason` explains.
 | Task | Contents | Status |
 |---|---|---|
 | 1 | vocabulary, effects, canonical targets, deterministic ids, overlay reset helper | **done** |
-| 2 | safe index-expression evaluator | planned |
+| 2 | safe index-expression evaluator + separate bounds resolver | **done** |
 | 3 | statement-shape parser (`lineShape.js`) | planned |
 | 4 | diff core: frames, calls, returns, print, error, variables | planned |
 | 5 | list/tuple diff, movement inference, ambiguity fallbacks | planned |

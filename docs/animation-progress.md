@@ -1,12 +1,12 @@
 # Animation visualizer: progress
 
-**Current phase:** 1 (Diff engine) — task 1 of 8 done. Tasks 2–8 await approval, one at a
+**Current phase:** 1 (Diff engine) — tasks 1–2 of 8 done. Tasks 3–8 await approval, one at a
 time.
 **Last updated:** 2026-10-24
 
 ## Phase checklist
 - [x] 0 Audit
-- [ ] 1 Diff engine (task 1 of 8 done)
+- [ ] 1 Diff engine (tasks 1–2 of 8 done)
 - [ ] 2 Two-panel page + generic stage
 - [ ] 3 List motion
 - [ ] 4 Frames, recursion, objects
@@ -19,7 +19,8 @@ time.
 |---|---|---|
 | 0.1 Audit the real tracer, trace data, reuse surface and baseline; write `docs/animation-audit.md` | done | `fd988ad` |
 | 0.2 Record the owner's Phase 0 decisions; correct the stale corpus count in the spec | done | `334d210` |
-| 1.1 Action vocabulary, canonical targets, deterministic ids, overlay reset helper, `docs/animation.md` skeleton | done | `8e4e4b9` + this commit |
+| 1.1 Action vocabulary, canonical targets, deterministic ids, overlay reset helper, `docs/animation.md` skeleton | done | `8e4e4b9` + `0900dc3` |
+| 1.2 Safe index-expression evaluator + separate bounds resolver | done | `044140e` + this commit |
 
 ## Decisions made
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the
@@ -92,6 +93,6 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await approval to start Phase 1 task 2: `src/animation/evaluate.js`, the safe
-index-expression evaluator (names, integer literals, `+ - * //`, parentheses) and its
-tests. Tasks 3–8 are unchanged in the approved plan.
+Await approval to start Phase 1 task 3: `src/animation/lineShape.js`, the statement-shape
+parser (swap, shift, insert/delete, subscripts, augmented assign, `del`, attribute assign,
+unknown), with its tests. Tasks 4–8 are unchanged in the approved plan.
