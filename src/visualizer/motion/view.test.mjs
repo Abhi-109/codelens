@@ -480,3 +480,144 @@ test("non-numeric collections keep their existing cell representation", () => {
   assert.ok(entries);
   assert.equal(entries.bars, null);
 });
+
+const moveOf = (plan, motion) =>
+  plan.operations.find(
+    (operation) => operation.op === MOTION_OPERATION.move && operation.motion === motion,
+  );
+
+test("a verified swap reports the real indices and the values that move", () => {
+  const { p, index } = findPlan("bubble-sort", (candidate) => Boolean(moveOf(candidate, "swap")));
+  const plan = planAt(p, index);
+  const view = motionView(plan);
+  const swap = moveOf(plan, "swap");
+  const [left, right] = swap.action.payload.indices;
+  const before = plan.previousState.heap[swap.action.target.objectId].items;
+
+  assert.equal(view.feedback.kind, "swap");
+  assert.ok(view.feedback.text.startsWith(`swap [${left}]`), view.feedback.text);
+  assert.ok(view.feedback.text.includes(`↔ [${right}]`), view.feedback.text);
+  assert.ok(view.feedback.text.includes(showValue(before[left], plan.previousState.heap)));
+  assert.ok(view.feedback.text.includes(showValue(before[right], plan.previousState.heap)));
+
+  // Backward playback replays the same verified pair, so it is still a swap.
+  const backwardPlan = planMotion(p.trace, index - 1, {
+    source: p.source,
+    previousIndex: index,
+  });
+  assert.equal(backwardPlan.transition, "backward");
+  const backward = motionView(backwardPlan);
+  const backSwap = moveOf(backwardPlan, "swap");
+  assert.ok(backSwap, "the inverse of a swap is the same swap");
+  assert.deepEqual(backSwap.action.payload.indices, [left, right]);
+  assert.equal(backward.feedback.kind, "swap");
+  assert.ok(backward.feedback.text.startsWith(`swap [${left}]`), backward.feedback.text);
+  assert.ok(backward.feedback.text.includes(`↔ [${right}]`), backward.feedback.text);
+});
+
+test("shifts, appends and removals use the recorded index and value", () => {
+  const shifted = findPlan("insertion-sort", (candidate) => Boolean(moveOf(candidate, "shift")));
+  const shift = moveOf(shifted.plan, "shift");
+  const [origin, destination] = shift.action.payload.indices;
+  const shiftView = motionView(shifted.plan);
+  assert.equal(shiftView.feedback.kind, "shift");
+  assert.equal(
+    shiftView.feedback.text,
+    `shift [${origin}] ${showValue(shift.action.to, shifted.plan.previousState.heap)} → [${destination}]`,
+  );
+
+  const appended = findPlan("list-basics", (candidate) =>
+    candidate.operations.some(
+      (operation) => operation.op === MOTION_OPERATION.enter && operation.action?.kind === "grow",
+    ),
+  );
+  const grow = appended.plan.operations.find((operation) => operation.action?.kind === "grow");
+  assert.equal(motionView(appended.plan).feedback.kind, "insert");
+  assert.ok(
+    motionView(appended.plan).feedback.text.startsWith(`append [${grow.action.target.index}]`),
+    motionView(appended.plan).feedback.text,
+  );
+
+  const removed = findPlan("list-mutation", (candidate) =>
+    candidate.operations.some(
+      (operation) => operation.op === MOTION_OPERATION.exit && operation.action?.kind === "shrink",
+    ),
+  );
+  const shrink = removed.plan.operations.find((operation) => operation.action?.kind === "shrink");
+  assert.equal(motionView(removed.plan).feedback.kind, "remove");
+  assert.ok(
+    motionView(removed.plan).feedback.text.startsWith(`remove [${shrink.action.target.index}]`),
+    motionView(removed.plan).feedback.text,
+  );
+});
+
+test("value changes, calls and returns say exactly what the trace proves", () => {
+  const cellChange = findPlan("list-mutation", (candidate) =>
+    candidate.operations.some(
+      (operation) => operation.op === MOTION_OPERATION.value && operation.target?.kind === "cell",
+    ),
+  );
+  const cellOp = cellChange.plan.operations.find(
+    (operation) => operation.op === MOTION_OPERATION.value && operation.target?.kind === "cell",
+  );
+  const cellView = motionView(cellChange.plan);
+  assert.equal(cellView.feedback.kind, "change");
+  assert.ok(cellView.feedback.text.startsWith(`[${cellOp.target.index}] `), cellView.feedback.text);
+  assert.ok(cellView.feedback.text.includes("→"), cellView.feedback.text);
+
+  const variableChange = findPlan("bubble-sort", (candidate) =>
+    candidate.operations.some(
+      (operation) =>
+        operation.op === MOTION_OPERATION.value && operation.target?.kind === "variable",
+    ),
+  );
+  const variableOp = variableChange.plan.operations.find(
+    (operation) =>
+      operation.op === MOTION_OPERATION.value && operation.target?.kind === "variable",
+  );
+  assert.equal(motionView(variableChange.plan).feedback.kind, "change");
+  assert.ok(
+    motionView(variableChange.plan).feedback.text.startsWith(`${variableOp.target.name} `),
+    motionView(variableChange.plan).feedback.text,
+  );
+
+  const called = findPlan("function-basic", (candidate) =>
+    candidate.operations.some(
+      (operation) => operation.op === MOTION_OPERATION.enter && operation.action?.kind === "call",
+    ),
+  );
+  const callOp = called.plan.operations.find((operation) => operation.action?.kind === "call");
+  assert.equal(motionView(called.plan).feedback.kind, "call");
+  assert.equal(motionView(called.plan).feedback.text, `call ${callOp.action.payload.function}`);
+
+  const returned = findPlan("function-basic", (candidate) =>
+    candidate.operations.some((operation) => operation.action?.kind === "return"),
+  );
+  assert.equal(motionView(returned.plan).feedback.kind, "return");
+  assert.ok(motionView(returned.plan).feedback.text.startsWith("return"));
+});
+
+test("a step that changed nothing says so, and no change is ever called a swap", () => {
+  const held = findPlan(
+    "bubble-sort",
+    (candidate) => candidate.index > 0 && candidate.operations.length === 0,
+  );
+  const view = motionView(held.plan);
+  assert.equal(view.feedback.kind, "neutral");
+  assert.equal(view.feedback.text, "no recorded change");
+
+  for (const name of MATRIX) {
+    const p = program(name);
+    for (let index = 0; index < p.trace.length; index += 1) {
+      const plan = planAt(p, index);
+      if (!plan) continue;
+      const feedback = motionView(plan).feedback;
+      assert.ok(feedback && typeof feedback.text === "string", `${name} ${index} has feedback`);
+      if (feedback.kind !== "swap") continue;
+      assert.ok(
+        moveOf(plan, "swap"),
+        `${name} step ${index} claims a swap only with a verified swap action`,
+      );
+    }
+  }
+});

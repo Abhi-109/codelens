@@ -425,7 +425,11 @@ export default function MotionStage({ plan }) {
     <div className="motion-stage" ref={stageRef}>
       <div className="motion-stage-head">
         <span className="motion-kicker">Live state</span>
-        {view.event ? <span className="motion-event">{view.event}</span> : null}
+        {view.feedback ? (
+          <span className={`motion-event is-${view.feedback.kind}`} title={view.feedback.text}>
+            {view.feedback.text}
+          </span>
+        ) : null}
       </div>
 
       {view.frames.length > 0 ? (

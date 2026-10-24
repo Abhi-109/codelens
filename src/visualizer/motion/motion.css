@@ -64,6 +64,23 @@
   white-space: nowrap;
 }
 
+/* A verified mutation earns the accent; a step that changed nothing does not. */
+.motion-event.is-swap,
+.motion-event.is-shift,
+.motion-event.is-insert,
+.motion-event.is-remove,
+.motion-event.is-change {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--text-h);
+}
+
+.motion-event.is-neutral {
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
 .motion-frames {
   display: flex;
   flex-wrap: wrap;

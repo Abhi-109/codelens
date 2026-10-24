@@ -8,6 +8,7 @@
 // snapshot's data. That split is what lets an exit fade without the canvas
 // briefly showing a made-up intermediate value.
 
+import { showValue } from "../../tracer/values.js";
 import { numericBars } from "./bars.js";
 import { MOTION_OPERATION, motionNodes } from "./plan.js";
 
@@ -94,6 +95,123 @@ function objectView(object, flags) {
 }
 
 /**
+ * One truthful line about what this step did, built only from the verified
+ * actions and the snapshots both ends of the transition already carry.
+ *
+ * It never calls a change a swap: a swap is reported only when the diff proved
+ * one (a `move` with the recorded index pair). A step that changed nothing in
+ * the data says so instead of borrowing an event name.
+ *
+ * @param {Object|null} plan a plan from `planMotion`
+ * @returns {{kind: string, text: string}|null}
+ */
+export function operationFeedback(plan) {
+  if (!plan) return null;
+  const operations = Array.isArray(plan.operations) ? plan.operations : [];
+  // `from` values exist in the state the animation starts from; `to` values in
+  // the target state. Reading each from its own heap keeps a newly created
+  // object printable instead of "(not shown at this step)".
+  const before = plan.previousState?.heap ?? plan.state?.heap ?? {};
+  const after = plan.state?.heap ?? before;
+  const fromText = (value) => (value ? showValue(value, before) : "?");
+  const toText = (value) => (value ? showValue(value, after) : "?");
+  const find = (predicate) => operations.find(predicate) ?? null;
+
+  const swap = find(
+    (operation) =>
+      operation.op === MOTION_OPERATION.move &&
+      operation.motion === "swap" &&
+      operation.action?.payload?.indices?.length === 2,
+  );
+  if (swap) {
+    const [left, right] = swap.action.payload.indices;
+    const items = plan.previousState?.heap?.[swap.action.target.objectId]?.items;
+    return {
+      kind: "swap",
+      text: items
+        ? `swap [${left}] ${fromText(items[left])} ↔ [${right}] ${fromText(items[right])}`
+        : `swap [${left}] ↔ [${right}]`,
+    };
+  }
+
+  const shift = find(
+    (operation) => operation.op === MOTION_OPERATION.move && operation.motion === "shift",
+  );
+  if (shift) {
+    const [origin, destination] = shift.action.payload.indices;
+    return {
+      kind: "shift",
+      text: `shift [${origin}] ${toText(shift.action.to)} → [${destination}]`,
+    };
+  }
+
+  const grew = find(
+    (operation) => operation.op === MOTION_OPERATION.enter && operation.action?.kind === "grow",
+  );
+  if (grew) {
+    const verb = grew.action.motion === "append" ? "append" : "insert";
+    return {
+      kind: "insert",
+      text: `${verb} [${grew.action.target.index}] ${toText(grew.action.to)}`,
+    };
+  }
+
+  const shrank = find(
+    (operation) => operation.op === MOTION_OPERATION.exit && operation.action?.kind === "shrink",
+  );
+  if (shrank) {
+    const verb = shrank.action.motion === "pop" ? "pop" : "remove";
+    return {
+      kind: "remove",
+      text: `${verb} [${shrank.action.target.index}] ${fromText(shrank.action.from)}`,
+    };
+  }
+
+  const changed = find((operation) => operation.op === MOTION_OPERATION.value);
+  if (changed) {
+    const target = changed.action?.target ?? {};
+    const from = fromText(changed.action?.from);
+    const to = toText(changed.action?.to);
+    if (target.kind === "cell") {
+      return { kind: "change", text: `[${target.index}] ${from} → ${to}` };
+    }
+    if (target.kind === "variable") {
+      return { kind: "change", text: `${target.name} ${from} → ${to}` };
+    }
+    if (target.kind === "attribute") {
+      return { kind: "change", text: `${target.name} ${from} → ${to}` };
+    }
+    if (target.kind === "entry") {
+      return { kind: "change", text: `${showValue(target.key, after)} ${from} → ${to}` };
+    }
+    return { kind: "change", text: `${from} → ${to}` };
+  }
+
+  const called = find(
+    (operation) => operation.op === MOTION_OPERATION.enter && operation.action?.kind === "call",
+  );
+  if (called) {
+    return { kind: "call", text: `call ${called.action.payload?.function ?? "function"}` };
+  }
+
+  const returned = find((operation) => operation.action?.kind === "return");
+  if (returned) {
+    const value = returned.action.payload?.value;
+    return { kind: "return", text: value ? `return ${toText(value)}` : "return" };
+  }
+
+  const frameLeft = find(
+    (operation) => operation.op === MOTION_OPERATION.exit && operation.target?.kind === "frame",
+  );
+  if (frameLeft) {
+    const name = frameLeft.action?.from?.function;
+    return { kind: "return", text: name ? `return from ${name}` : "call ends" };
+  }
+
+  return { kind: "neutral", text: "no recorded change" };
+}
+
+/**
  * The drawable model for one plan.
  *
  * `ghosts` are only the elements that left the target state. They carry the
@@ -127,6 +245,7 @@ export function motionView(plan) {
     animate: plan.animate,
     durationMs: plan.durationMs,
     mode: plan.mode,
+    feedback: operationFeedback(plan),
     frames: plan.nodes.frames.map((frame) => frameView(frame, flags)),
     objects: plan.nodes.objects.map((object) => objectView(object, flags)),
     ghosts,

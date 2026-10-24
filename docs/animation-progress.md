@@ -137,8 +137,34 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Motion-first Stage 1 is committed. Stage 2 (recursion stack, return/output overlays, current
-line) awaits approval and has not started. Nothing is pushed.
+Motion-first Stage 1, the canvas-scale commit and the operation-feedback commit are in.
+Stage 2 (recursion stack, return/output overlays, current line) awaits approval and has not
+started. Nothing is pushed.
+
+## Motion-first Stage 4 notes (verified operation feedback, Commit B)
+- `view.js` exports `operationFeedback(plan)`; `motionView` adds it as `feedback`. It is derived
+  only from the plan's verified operations and the two snapshots (`state`, `previousState`):
+  swap (payload index pair plus the values in the state the animation starts from), shift
+  (origin → destination plus the copied value), insert/append (index and value), remove/pop
+  (index and value), cell/variable/attribute/entry value change (`old → new`), `call f`,
+  `return value`, and a neutral `no recorded change` when nothing in the data changed.
+- Precedence is swap → shift → insert → remove → change → call → return → neutral, so a step
+  that both calls and binds arguments is reported as the call, and a step with a verified swap
+  never falls through to a generic change.
+- No comparison is reported: the vocabulary has no comparison action, and a `change` is only
+  called a swap when the diff proved one.
+- Backward playback reports the same swap pair, because a swap is its own inverse and
+  `reverseActions` restores the payload. Backward shifts arrive as `change` actions, which is
+  what the reversed action actually is.
+- The stage head now renders this text in place of the raw trace event name; mutation kinds take
+  the accent chip, neutral steps render as plain text. The cursor, keys, durations, seeking,
+  reset and reduced motion are unchanged.
+- Tests in `view.test.mjs` use real fixtures for every kind: bubble-sort swap forward and
+  backward, insertion-sort shift, list-basics append, list-mutation delete and cell change, a
+  variable change, a function-basic call and return, and a real no-op step. JS suite is
+  **658 tests**.
+- Known limit: the corpus has no `list.insert` or `list.pop` fixture, so the `insert`/`pop`
+  wording itself is not covered by a real-trace test (append and delete are).
 
 ## Motion-first Stage 4 notes (canvas scale, Commit A)
 - The visual problems were layout, not projection: `.motion-objects` was
