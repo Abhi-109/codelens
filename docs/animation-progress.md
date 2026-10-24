@@ -115,12 +115,34 @@ the Phase 1 plan is waiting for approval, not for clarification.
   steps that the animation needs.
 - Sets are sorted by the tracer, so the diff must never look at their positions: elements
   appear and disappear only (decided 2026-10-24).
+- Deferred dict/set/object content and non-sequence lifecycle changes may currently produce
+  no action for that change. The classification test counts them instead of claiming a
+  fallback, and an empty diff is not proof that the whole state is unchanged.
 - Pre-existing build warning: the main JS chunk is 662 KB (> Vite's 500 KB advisory). Not a
   gate failure; do not add a dependency to fix it.
 
 ## Next action
 Await approval to start Phase 1 task 6: dict/set/object diff. Task 5c (insert/pop and
 truncation/delayed-call fallbacks) is done; tasks 7–8 are unchanged in the approved plan.
+
+## Task 1.5 audit-fix notes (docs and tests only)
+- `docs/animation.md` §9–§12 now states that dict/set/object content and non-sequence
+  lifecycle changes are deferred to task 6 and may produce no action for the deferred
+  change. It no longer claims every unmodelled change yields a reasoned action, that an
+  empty result proves the whole state unchanged, that the suite prints a report, or that
+  every non-round-tripping transition carries a highlight. The per-program report belongs to
+  task 8.
+- The classification test now applies and reverses the frame/variable actions of every
+  deferred transition and compares exact `frames` with `isDeepStrictEqual`. It checks every
+  list/tuple object on either side, including lifecycle, before any deferral handling;
+  deferred non-sequence objects are counted as task 6 rather than claimed to round-trip.
+- Four focused tests pin existing behavior: a swap written high-first, a negative-index
+  swap, insert/append/pop through attribute and subscript receivers, and the two-step timing
+  of `print(a.pop())` (no state action at the output step; one conservative `shrink.pop` at
+  the next state step).
+- Counts unchanged: 2933 event steps, 2819 pairs (2782 supported), 37 deferred (`task-6`).
+  JS test count is **622**. No runtime file, tracer, trace format, action vocabulary, UI or
+  dependency changed.
 
 ## Task 1.5c notes (insert/pop shapes)
 - `diff.js` imports the existing `evaluateExpression` and carries the frame's integer

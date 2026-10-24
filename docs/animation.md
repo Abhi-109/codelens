@@ -12,9 +12,11 @@ never a move.
 **The layer is partial on purpose, and this document does not claim it is complete.**
 List and tuple lifecycle, visible cell changes, append/insert/pop/delete, state-proven tail
 growth/shrink, truncation fallbacks, and swap/shift movement now produce exactly reversible
-state actions. Dict, set and object contents are task 6. A supported list transition must not
-be silently ignored: it either round-trips or carries a highlight with a reason and is
-classified as deferred. Section 11 records the remaining gap and the tasks that close it;
+state actions. Dict, set and object contents are task 6 and are currently deferred: a
+transition that changes only their contents or lifecycle may produce no action for that
+change. A list transition is never silently skipped: its list/tuple part either round-trips
+or carries a highlight with a reason. This does not imply that every non-sequence change
+produces an action. Section 11 records the remaining gap and the tasks that close it;
 section 12 states exactly what the proof covers.
 
 ## 1. What the layer is
@@ -375,8 +377,9 @@ Task 5a compares each heap entry by object id and supports the list/tuple half o
   deferred, because the hidden positions cannot be restored.
 * **unsupported list structure** — a structural change the shape and snapshots do not
   prove gets a `highlight` on the object with `reason: "unknown-shape"` or `"unsupported"`;
-  it is never guessed as a move. An empty action list still means "the compared state did
-  not change", not "skipped".
+  it is never guessed as a move. For the list/tuple comparison, an empty action list means
+  no list/tuple change was detected, not that the step was skipped. It is not proof that the
+  whole state did not change: dict/set/object changes are deferred (section 11).
 * **dict / set / object** — task 6. Task 5a emits no entry or attribute action for them and
   classifies those transitions deferred (section 11). A dict or set on an insert/pop-looking
   source line therefore never produces a list-cell action.
@@ -426,8 +429,9 @@ changes, append/insert/pop/delete, state-proven tail growth/shrink and truncatio
 all exactly reversible, plus verified swap/shift movement. Dict, set and object contents are
 task 6. Until it lands, a transition that changes only dict, set or object contents still
 yields no state action and is counted as deferred (section 11). A list transition is never
-silently skipped: it either round-trips or carries a highlight with a reason and is
-classified as deferred.
+silently skipped: its list/tuple part either round-trips or carries a highlight with a
+reason. That does not mean every non-sequence change generates an action; deferred
+dict/set/object changes may have none.
 
 The module's surface, all pure and free of I/O, clocks and randomness:
 
@@ -455,13 +459,18 @@ Fallback reasons are a closed set:
 
 Rules:
 
-* no step is dropped. A step with no visible change legitimately yields `[]`; a step that
-  cannot be modelled yields a conservative action carrying a reason, never silence;
+* no step is dropped. A step with no visible change may legitimately yield `[]`. Most
+  changes this layer cannot model yield a conservative action carrying a reason, but that is
+  not an absolute rule: dictionary, set and object content changes, and applicable
+  non-sequence lifecycle changes, are deferred to task 6 and may currently produce no action
+  for the deferred change. Deferral is not a fallback action and is not claimed as one;
 * every fallback action explains itself in `reason` (and optionally `payload.note`);
-* the Phase 1 test suite prints a per-program report of the corpus, the recognition
-  fixture and the animation fixture: transitions, state actions, overlays, and fallbacks
-  by reason. A case is only allowed to use a fallback if the report names it;
-* an empty result means "the compared state did not change" — it never means "skipped".
+* the task-5 suite asserts the classification and exact counts for the corpus and
+  recognition fixtures — event steps, supported steps, deferred steps and fallback reasons.
+  It does not print a per-program report; that report belongs to task 8;
+* an empty result means this diff detected no change it models. For a list/tuple comparison
+  it means no list/tuple change; for the whole state it is **not** proof that nothing
+  changed while dict/set/object changes remain deferred. It never means "skipped".
 
 **Tasks 5a–5c close the list/tuple half of the gap; dict, set and object contents remain task 6.**
 The task-5 suite classifies **every** event step of the corpus and recognition fixtures:
@@ -469,11 +478,14 @@ The task-5 suite classifies **every** event step of the corpus and recognition f
 state pairs. 2896 event steps round trip forward and backward. All 37 deferred steps are
 consecutive pairs, so 2782 of the 2819 pairs round trip and 37 are deferred to task 6. The
 deferred set is exactly dict/set/object content and non-sequence lifecycle changes; no list
-transition is deferred for lack of an action. The
-test also applies and reverses the actions of every list/tuple object inside a deferred
-transition, so the sequence part is proven even where a dict, set or object change makes the
-whole snapshots unequal. A transition fails the suite if it neither round-trips nor carries a
-highlight that explains itself.
+transition is deferred for lack of an action. For every deferred pair the test applies and
+reverses the frame and variable actions and compares the exact `frames` state. It also
+applies and reverses the actions of every list/tuple object that exists on either side,
+including one that appears or disappears, so sequence lifecycle is proven even where a dict,
+set or object change makes the whole snapshots unequal. Deferred dict/set/object objects are
+counted as deferred, not claimed to round-trip individually. A list/tuple object that does
+not round trip must carry a highlight that explains it; a non-sequence object is deferred
+without needing one.
 
 The fixtures do not contain an insert/pop source, so genuine insert/pop trace coverage remains
 deferred. Synthetic snapshot pairs pin those shapes instead: literal and variable insertion
@@ -510,17 +522,21 @@ applyState(stateOf(B), reverse(stateActions(actions))) ≡ stateOf(A)
 The comparison is a deep equality of the exact state object in section 3 — every frame's
 variables, the stack's frame ids/functions/call_lines, and the whole heap including
 `more`, `class` and ordering. It is **not** normalised, sorted or filtered to make a test
-pass. If a transition cannot satisfy it, the diff is wrong and must change, not the test.
+pass. If a supported transition cannot satisfy it, the diff is wrong and must change, not the
+test. A transition explicitly deferred under section 11 is not yet a counterexample, but its
+frame/variable and list/tuple parts must still satisfy the property.
 
 **Tasks 5a–5c's proof covers list and tuple state, insert/pop shapes and swap/shift movement; task 6 remains.**
 The property is proven for all 2819 consecutive pairs' list/tuple state (the 2933 event steps
-include 114 run-start steps): 2782 pairs round trip as whole snapshots, and in the 37 pairs
-that are deferred to task 6 the test applies and reverses the actions of every list/tuple
-object individually. The six task-4 golden programs are unchanged and still round trip in
-full. Movement and insert/pop are proven with the same property; the remaining unproven state
-is dict/set/object contents (task 6). Genuine insert/pop trace coverage is deferred because
-the current fixtures contain no such source; synthetic snapshot pairs prove the shape rules
-and the exact inverse pairs.
+include 114 run-start steps): 2782 pairs round trip as whole snapshots. In the 37 pairs
+deferred to task 6, the test asserts the frame and variable actions round trip exactly, then
+applies and reverses the actions of every list/tuple object on either side — including
+lifecycle appearances and disappearances — individually. Deferred dict/set/object entries
+are counted, not independently round-tripped. The six task-4 golden programs are unchanged
+and still round trip in full. Movement and insert/pop are proven with the same property; the
+remaining unproven state is dict/set/object contents (task 6). Genuine insert/pop trace
+coverage is deferred because the current fixtures contain no such source; synthetic snapshot
+pairs prove the shape rules and the exact inverse pairs.
 
 Inverse pairs:
 
@@ -549,8 +565,9 @@ property, so a passing reversibility test can never hide a stuck flash or a stal
 After task 6, the suite must run the property over **every** program in the corpus,
 the recognition fixture and the animation fixture, and over **every** consecutive state pair
 — not a sample. Task 5a already runs the same partition over every program and every pair,
-and proves the list/tuple side of each pair; programs that cannot be modelled are still
-diffed and produce the conservative actions their `reason` explains.
+and proves the list/tuple side of each pair; programs that cannot be fully modelled are still
+diffed, their frame/variable and list/tuple actions remain exact, and the deferred
+dict/set/object change may produce no action until task 6.
 
 ### Tasks 5a–5c status of the property
 
@@ -571,9 +588,10 @@ The suite runs the property on the six task-4 golden programs, on every list/tup
 of the fixtures, and on **every** event step of the corpus and recognition fixtures — 2933
 over 114 programs, including 114 run starts and 2819 consecutive pairs. All 2896 supported
 event steps round trip forward and backward; that is every run start plus 2782 pairs. The 37
-deferred consecutive pairs are counted and classified as task 6, and their list/tuple objects
-are checked individually. The comparison is strict deep equality of the state object of
-section 3:
+deferred consecutive pairs are counted and classified as task 6; the test checks their frame
+and variable state exactly and checks every list/tuple object on either side individually,
+including lifecycle, while their deferred non-sequence objects are counted rather than
+round-tripped. The comparison is strict deep equality of the state object of section 3:
 object key order is not part of the state, and nothing is normalised, sorted or filtered.
 The fixture counts are pinned in the test, not used as thresholds, so a regenerated fixture
 must update them deliberately.
