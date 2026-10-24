@@ -137,9 +137,28 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Motion-first Stage 1, the canvas-scale commit and the operation-feedback commit are in.
-Stage 2 (recursion stack, return/output overlays, current line) awaits approval and has not
-started. Nothing is pushed.
+The array-cell redesign is in progress: R1 (cells, bars removed) is committed, R2 (verified
+operation highlighting) and R3 (motion verification) follow in this series. Comparison
+visualisation still has no trace data and awaits a separate architectural decision.
+Nothing is pushed.
+
+## Motion-first Stage 5 notes (array cells, R1)
+- The numeric bars are gone: `src/visualizer/motion/bars.js`, `numericBars`, the `bars` field on
+  an object view, the `BarRow` component, and the `.motion-bars` / `.motion-bar*` / `is-bars`
+  styles are all deleted. A list and a tuple now share one representation.
+- A sequence is a single non-wrapping row of equal boxes. Each box holds the value, and the
+  index sits directly below it; `flex: 1 1 0` keeps boxes equal while they fit, `56–160 px`
+  bounds keep one long value readable, and `overflow-x: auto` scrolls a long sequence instead
+  of wrapping it. An empty sequence draws no boxes and keeps the object card's empty note.
+- Values keep `showValue` text, the `data-type` colours, the `ref` badge and stable
+  `cell:<objectId>:<index>` keys, so the existing verified swap/shift FLIP still finds the
+  same node. The full value is now also in the cell's `title`.
+- Tests: six in `view.test.mjs`. Real traces cover positional keys, text and value types for
+  bubble-sort, a nested reference in `alias-dict-in-list`, duplicate values in
+  `bubble-duplicates`, and a verified swap exchanging values between the same two positional
+  cells. Booleans, None and nested labels are checked on the projection because no fixture
+  stores them inside a list. JS suite is **659 tests**.
+- The old Stage 1 numeric-bar note below is historical and no longer describes the canvas.
 
 ## Motion-first Stage 4 notes (verified operation feedback, Commit B)
 - `view.js` exports `operationFeedback(plan)`; `motionView` adds it as `feedback`. It is derived
@@ -183,7 +202,8 @@ started. Nothing is pushed.
 - No projection, key, action, timing or reduced-motion change. `SWAP_LIFT`, durations, cursor
   and reverse playback are untouched.
 
-## Motion-first Stage 1 notes (numeric bars)- `src/visualizer/motion/bars.js` is the pure projection. It returns `null` unless every slot
+## Motion-first Stage 1 notes (numeric bars, superseded by Stage 5)
+- `src/visualizer/motion/bars.js` is the pure projection. It returns `null` unless every slot
   is `int`/`float` with a finite value, so empty, mixed, boolean, reference and unsupported
   collections keep the existing cells. The domain always contains zero (`min(0, …)` /
   `max(0, …)`), and one `from`/`size`/`zero` formula covers positives, negatives, mixed signs,

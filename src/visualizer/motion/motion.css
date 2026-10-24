@@ -179,8 +179,7 @@
   color: var(--text);
 }
 
-/* One row that stretches: the numeric array is the row's full width and the
- * stage's full height, while any other collection keeps a normal card. */
+/* A row of value cards; a long sequence stays on one line and scrolls. */
 .motion-objects {
   display: flex;
   flex: 1;
@@ -202,21 +201,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
-}
-
-/* The plotted array is the subject, so it loses the card around it and takes
- * the whole width. */
-.motion-object.is-bars {
-  flex: 1 1 100%;
-  align-self: stretch;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.motion-object.is-bars .motion-object-head {
-  padding: 0 2px;
 }
 
 .motion-object.is-highlighted {
@@ -264,94 +248,67 @@
   flex-wrap: nowrap;
 }
 
-/* A numeric list or tuple: one column per recorded value. The fill is placed
- * with fractions of the plot (--from, --size) and the baseline with --zero, so
- * positives grow up, negatives hang down, and equal or zero values stay valid.
- * The row grows with the canvas; columns stop widening past a readable size and
- * long arrays scroll instead of shrinking into hairlines. */
-.motion-bars {
-  display: flex;
-  flex: 1;
+/* A list or tuple: one row of equal boxes, each value over its own index. It
+ * never wraps, so indices stay in order; a sequence wider than the pane
+ * scrolls. `flex: 1 1 0` keeps the boxes equal while they fit, and min/max keep
+ * a single long value readable instead of squeezing its neighbours. */
+.motion-slots.slots-list,
+.motion-slots.slots-tuple {
+  flex-wrap: nowrap;
   align-items: stretch;
   justify-content: safe center;
   gap: 6px;
-  min-height: 160px;
-  /* Room above the plot for the tallest bar's value label. */
-  padding: 22px 2px 0;
   overflow-x: auto;
   overflow-y: hidden;
+  padding-bottom: 2px;
 }
 
-.motion-bar {
+.motion-slot.motion-cell {
   display: flex;
-  flex: 1 1 44px;
+  flex: 1 1 0;
   flex-direction: column;
-  min-width: 44px;
-  max-width: 110px;
+  align-items: stretch;
+  gap: 0;
+  min-width: 56px;
+  max-width: 160px;
+  padding: 0;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  background: var(--code-bg);
 }
 
-.motion-bar.is-changed {
-  background: var(--accent-bg);
+.motion-cell-value {
+  display: block;
+  min-width: 0;
+  padding: 7px 8px 6px;
+  text-align: center;
 }
 
-.motion-bar-index {
-  flex: none;
+.motion-cell-value .motion-value {
+  display: block;
+}
+
+.motion-cell-index {
+  padding: 0 6px 4px;
   overflow: hidden;
-  font: 11px/18px var(--mono);
+  font: 10px/1.4 var(--mono);
   color: var(--text);
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Sits on the bar's own top edge, so the number reads as that column's value. */
-.motion-bar-value {
-  position: absolute;
-  right: 0;
-  bottom: calc((var(--from) + var(--size)) * 100%);
-  left: 0;
-  overflow: hidden;
-  transform: translateY(-100%);
-  font: 600 13px/18px var(--mono);
-  color: var(--text-h);
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* The cell's own border and fill are declared above, so the shared slot states
+ * need restating at cell specificity to keep the change flash and the verified
+ * highlight visible. */
+.motion-slot.motion-cell.is-changed {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
 }
 
-.motion-bar-plot {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-}
-
-.motion-bar-plot::before {
-  content: "";
-  position: absolute;
-  right: -3px;
-  bottom: calc(var(--zero) * 100%);
-  left: -3px;
-  border-top: 1px solid var(--border-strong);
-}
-
-.motion-bar-fill {
-  position: absolute;
-  right: 0;
-  bottom: calc(var(--from) * 100%);
-  left: 0;
-  height: calc(var(--size) * 100%);
-  border-radius: 3px 3px 0 0;
-  background: var(--accent-fill);
-}
-
-.motion-bar.is-negative .motion-bar-fill {
-  border-radius: 0 0 3px 3px;
-}
-
-.motion-bar.is-highlighted .motion-bar-fill {
-  background: var(--accent);
-  outline: 1px solid var(--accent-border);
+.motion-slot.motion-cell.is-highlighted {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-border);
 }
 
 .motion-slot {

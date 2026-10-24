@@ -80,47 +80,19 @@ function Slot({ slot, registerNode }) {
       )}
       data-key={slot.key}
     >
-      {keyed ? (
-        <span className="motion-slot-key">{slot.label}</span>
-      ) : slot.kind === "cell" ? (
-        <span className="motion-slot-key">[{slot.index}]</span>
-      ) : null}
-      <Value node={slot} />
-    </div>
-  );
-}
-
-/**
- * A numeric list or tuple as bars. The registered node is still the slot's own
- * column and still carries the slot key, so the existing verified swap/shift
- * FLIP finds the same element the cell view would have moved.
- */
-function BarRow({ object, registerSlot }) {
-  return (
-    <div className="motion-bars" style={{ "--zero": object.bars.zero }}>
-      {object.bars.cells.map((cell) => (
-        <span
-          key={cell.key}
-          ref={(node) => registerSlot(cell.key, node)}
-          className={classNames(
-            "motion-bar",
-            cell.negative && "is-negative",
-            cell.changed && "is-changed",
-            cell.highlighted && "is-highlighted",
-            cell.entering && "is-entering",
-          )}
-          data-key={cell.key}
-          style={{ "--from": cell.from, "--size": cell.size }}
-        >
-          <span className="motion-bar-plot">
-            <span className="motion-bar-fill" />
-            <span className="motion-bar-value" title={cell.text}>
-              {cell.text}
-            </span>
+      {slot.kind === "cell" ? (
+        <>
+          <span className="motion-cell-value" title={slot.text}>
+            <Value node={slot} />
           </span>
-          <span className="motion-bar-index">[{cell.index}]</span>
-        </span>
-      ))}
+          <span className="motion-cell-index">{slot.index}</span>
+        </>
+      ) : (
+        <>
+          {keyed ? <span className="motion-slot-key">{slot.label}</span> : null}
+          <Value node={slot} />
+        </>
+      )}
     </div>
   );
 }
@@ -131,7 +103,6 @@ function ObjectCard({ object, registerNode, registerSlot }) {
       ref={registerNode}
       className={classNames(
         "motion-object",
-        object.bars && "is-bars",
         object.highlighted && "is-highlighted",
         object.entering && "is-entering",
       )}
@@ -143,9 +114,7 @@ function ObjectCard({ object, registerNode, registerSlot }) {
         </span>
         <span className="motion-object-type">{object.objectType}</span>
       </header>
-      {object.bars ? (
-        <BarRow object={object} registerSlot={registerSlot} />
-      ) : object.slots.length > 0 ? (
+      {object.slots.length > 0 ? (
         <div className={classNames("motion-slots", `slots-${object.type}`)}>
           {object.slots.map((slot) => (
             <Slot
