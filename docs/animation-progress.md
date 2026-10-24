@@ -1,7 +1,7 @@
 # Animation visualizer: progress
 
 **Current phase:** 1 (Diff engine) — tasks 1–4, 5a–5c and 6 of 8 done.
-**Current milestone:** Task 7 universal motion renderer — Stages 1–2 done; Stages 3–4 await
+**Current milestone:** Task 7 universal motion renderer — Stages 1–3 done; Stage 4 await
 approval one stage at a time. The diff engine's remaining `apply.js`/golden work is
 separately scoped.
 **Last updated:** 2026-10-24
@@ -9,8 +9,8 @@ separately scoped.
 ## Phase checklist
 - [x] 0 Audit
 - [ ] 1 Diff engine (tasks 1–4, 5a–5c and 6 of 8 done)
-- [ ] 2 Two-panel page + generic stage
-- [ ] 3 List motion
+- [x] 2 Two-panel page + generic stage
+- [x] 3 List motion
 - [ ] 4 Frames, recursion, objects
 - [ ] 5 Skins
 - [ ] 6 Hardening
@@ -137,8 +137,48 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await approval to start Task 7 Stage 3. Stage 2 is complete and committed locally; the
-two-panel layout has not been touched and Stage 3 has not started.
+Await approval to start Task 7 Stage 4. Stage 3 (the two-panel workspace) is complete and
+committed locally; Stage 4 has not started and nothing has been pushed.
+
+## Task 7 Stage 3 notes (two-panel workspace, inspector drawer)
+- The redesign brief called this Stage B. `.layout` is now three tracks — `var(--col-left, 34%)`,
+  a 7px splitter, `minmax(0, 1fr)` — instead of five. The two extra tracks (`--col-mid` and a
+  368px inspector column) were never filled by anything, which is why the stage lost about
+  375px at desktop widths and why the stale 1199px tab rules fired there.
+- Only the left splitter remains. `codelens.columns` stores `{ left }` in the 28–42% range; a
+  saved pixel `right` is ignored rather than reinterpreted as a boundary of a different unit.
+- The six inspector sections are mounted once, inside the right panel, as one native
+  `<details class="inspect-drawer">` under the stage. It is open by default and starts folded
+  in Motion; the inspector stays mounted, so the chosen section and its scroll survive a fold.
+  This is the approved Task 7 amendment in spec §2 (2026-10-24), not the original "no tabs"
+  sentence: the inspector is reachable inside the single right panel instead of in a third
+  column, capped at 320px/36vh so the stage keeps the room above it.
+- Motion is the canvas now: `.motion-stage` uses `--code-bg` and an inset hairline instead of a
+  border, because `MotionStage.jsx` measures ghosts from that element's border box. A slot no
+  longer draws a frame or a background of its own — only a changed slot does — and the
+  `--shadow-sm` on frames/objects is gone, so the object card is the only nested card. Objects
+  auto-fill at 240px instead of 210px, so two structures sit side by side in the wider panel.
+- `RunStoryCard` takes `compact`; in Motion the run map starts folded but is still a
+  `<details>` the reader can open, and changing canvas re-applies the default. The map itself,
+  and every mode that shows it, are unchanged.
+- Mobile: the ≤899px bar is the two-pane switcher again — Code and Visual Animation, with
+  `data-pane="visual"` replacing the old `graph`/`side` pair. The 1199px block is deleted, so
+  the desktop keeps both panels side by side down to 900px. The bar's `display: flex` moved
+  into the 899px block; without it the base `display: none` won and the switcher disappeared on
+  phones. ARIA ids follow the new pane ids.
+- shadcn was inspected through the MCP and **nothing was installed**: no registry is configured
+  (`components.json`, `src/lib`, Tailwind and TS are all absent) and every candidate is a
+  `.tsx` + Tailwind component, so each would need a rewrite against the token CSS plus a
+  dependency. The existing CSS-grid splitter, ARIA tab strips and native `<details>` do the
+  same jobs.
+- Six files changed: `src/App.css`, `src/visualizer/workspace.css`, `src/App.jsx`,
+  `src/visualizer/RunStoryCard.jsx`, `src/visualizer/motion/motion.css` and this file. No
+  tracer, trace-format, action-vocabulary, diff, `MotionStage`, state-management, dependency or
+  default-canvas change; the six modes, playback, cursor and both themes are untouched.
+- Gates at this commit: tracer **111 tests OK**, JS suite **648 pass / 0 fail**, oxlint clean,
+  `vite build` succeeds (707.52 kB main chunk, the known advisory). No browser check was
+  possible here, so the grid, the drawer and the phone switcher are verified in CSS and JSX
+  only, not rendered.
 
 ## Task 7 Stage 2 notes (real action integration)
 - `src/visualizer/motion/view.js` turns a Stage 1 plan into the DOM-free renderer model:

@@ -106,15 +106,19 @@ function Part({ section, order, current, index, onJump }) {
  * @param {Object|null} props.story a buildRunStory result
  * @param {number} props.index the current trace step
  * @param {(index: number) => void} [props.onJump]
+ * @param {boolean} [props.compact] start folded, when something else owns the room
  */
-export default function RunStoryCard({ story, index, onJump }) {
+export default function RunStoryCard({ story, index, onJump, compact = false }) {
   const sections = story?.sections ?? [];
   if (sections.length === 0) return null;
   const current = sectionAt(story, index);
   const position = current ? sections.indexOf(current) + 1 : 0;
 
+  // Folded only while the stage is what you came to watch. `open` is left
+  // uncontrolled so a reader can still open it, and it stays open until the
+  // canvas changes - switching to a different canvas re-applies the default.
   return (
-    <details className="run-story" open>
+    <details className="run-story" open={compact ? undefined : true}>
       <summary className="run-story-head">
         <span className="run-story-heading">What this run does</span>
         <span className="run-story-count">

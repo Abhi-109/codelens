@@ -63,14 +63,14 @@
   border-color: var(--danger);
 }
 
-/* Columns are sized in percentages so the splitter can remember them. The wide
-   layout is three columns; narrower windows fold the panes into tabs. */
+/* Two panels: the code, then the stage. The split is a percentage so the
+   splitter can remember it; narrower windows fold them into tabs. */
 .layout {
   display: grid;
   flex: 1;
   min-height: 0;
   gap: 0;
-  grid-template-columns: var(--col-left, 30%) 8px var(--col-mid, 44%) 8px minmax(0, 1fr);
+  grid-template-columns: var(--col-left, 34%) 7px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -79,7 +79,7 @@
   user-select: none;
 }
 
-/* Wide: code | graph | the six-section inspector, each a full-height column. */
+/* Wide: the code, then the stage, each a full-height column. */
 [data-pane="code"] {
   grid-area: 1 / 1 / 2 / 2;
 }
@@ -88,19 +88,11 @@
   grid-area: 1 / 2 / 2 / 3;
 }
 
-[data-pane="graph"] {
+[data-pane="visual"] {
   grid-area: 1 / 3 / 2 / 4;
 }
 
-[data-split="mid"] {
-  grid-area: 1 / 4 / 2 / 5;
-}
-
-[data-pane="side"] {
-  grid-area: 1 / 5 / 2 / 6;
-}
-
-/* The tab bar only exists once the columns stop fitting side by side. */
+/* The tab bar only exists once the panels stop fitting side by side. */
 .tabs {
   display: none;
   align-items: flex-end;
@@ -907,10 +899,6 @@
 }
 
 /* --- The inspector: one card, six sections, one step between them -------- */
-
-.side-pane {
-  flex: 1;
-}
 
 .inspector {
   display: flex;
@@ -3250,42 +3238,6 @@ h3 {
 
 /* Only the pane the tab names is drawn; the other is off screen entirely, so
    neither wastes room and neither has to share a viewport with the other. */
-@media (max-width: 1199px) {
-  .layout:not([data-tab="graph"]) [data-pane="graph"],
-  .layout:not([data-tab="inspector"]) [data-pane="side"] {
-    display: none;
-  }
-
-  /* Two columns: the code, and the tabbed pane beside it. */
-  .layout {
-    grid-template-columns: var(--col-left, 32%) 8px minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  [data-pane="code"] {
-    grid-area: 1 / 1 / 3 / 2;
-  }
-
-  [data-split="left"] {
-    grid-area: 1 / 2 / 3 / 3;
-  }
-
-  .tabs {
-    display: flex;
-    grid-area: 1 / 3 / 2 / 4;
-  }
-
-  [data-pane="graph"],
-  [data-pane="side"] {
-    grid-area: 2 / 3 / 3 / 4;
-  }
-
-  [data-split="mid"] {
-    display: none;
-  }
-}
-
-/* Phones: one column, the tab bar and then whichever pane it names. */
 @media (max-width: 899px) {
   .layout {
     grid-template-columns: minmax(0, 1fr);
@@ -3301,8 +3253,7 @@ h3 {
   }
 
   [data-pane="code"],
-  [data-pane="graph"],
-  [data-pane="side"] {
+  [data-pane="visual"] {
     grid-area: 2 / 1 / 3 / 2;
   }
 
@@ -3311,12 +3262,11 @@ h3 {
   }
 
   .layout:not([data-tab="code"]) [data-pane="code"],
-  .layout:not([data-tab="graph"]) [data-pane="graph"],
-  .layout:not([data-tab="inspector"]) [data-pane="side"] {
+  .layout:not([data-tab="visual"]) [data-pane="visual"] {
     display: none;
   }
 
-  /* Three tabs on a phone: let them scroll sideways rather than wrap. */
+  /* Two tabs on a phone: let them scroll sideways rather than wrap. */
   .tabs {
     overflow-x: auto;
     flex-wrap: nowrap;
@@ -3324,7 +3274,7 @@ h3 {
 
   /* Drawings cap at half the viewport so their tools stay reachable; the
      timeline is a table and uses the rest of the pane instead. */
-  [data-pane="graph"] .viz-canvas:not(.tl-root) {
+  [data-pane="visual"] .viz-canvas:not(.tl-root) {
     max-height: 50vh;
   }
 
@@ -3339,7 +3289,7 @@ h3 {
     margin-left: auto;
   }
 
-  [data-pane="graph"] .flow-head h3 {
+  [data-pane="visual"] .flow-head h3 {
     min-width: 0;
     font-size: 13px;
     overflow: hidden;
@@ -3348,11 +3298,11 @@ h3 {
   }
 
   /* Which call you are inside is on the card in front of you. */
-  [data-pane="graph"] .flow-head .flow-of {
+  [data-pane="visual"] .flow-head .flow-of {
     display: none;
   }
 
-  [data-pane="graph"] .flow-view {
+  [data-pane="visual"] .flow-view {
     flex: none;
     font-size: 11px;
   }
@@ -3361,7 +3311,7 @@ h3 {
      arrived cut in half ("Expa") with an affordance nobody could see, and
      "How to read this" sat off the right edge entirely. Two rows of 10.5px
      buttons is a few pixels of height and every control stays reachable. */
-  [data-pane="graph"] .viz-tools {
+  [data-pane="visual"] .viz-tools {
     gap: 4px;
     font-size: 10.5px;
   }
@@ -3375,7 +3325,7 @@ h3 {
   }
 
   /* Never let the drawing collapse to a sliver: one box must fit. */
-  [data-pane="graph"] .viz-view {
+  [data-pane="visual"] .viz-view {
     min-height: 130px;
   }
 }

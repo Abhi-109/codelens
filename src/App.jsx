@@ -102,24 +102,18 @@ const EXAMPLES = [
 
 const START_EXAMPLE = 3; // Recursion — the best demo of the execution graph.
 
-// The code column is a percentage, so it scales with the window; the inspector
-// is a fixed pixel width, because a tabbed panel has a comfortable size and
-// giving it a share of a narrow window is what made it feel cramped.
+// One splitter, one percentage: the code keeps about a third of the window and
+// the stage takes everything else.
 const COLS_KEY = "codelens.columns";
-const DEFAULT_COLUMNS = { left: 30, right: 368 };
-const MIN_LEFT = 20;
-const MAX_LEFT = 46;
-const MIN_RIGHT = 320;
-const MAX_RIGHT = 480;
+const DEFAULT_COLUMNS = { left: 34 };
+const MIN_LEFT = 28;
+const MAX_LEFT = 42;
 
-// Below 1200px the canvas and the inspector take turns, chosen by this bar;
-// from 1200px up all three columns are on screen together and it is hidden.
-// "Code" is only reachable as a tab on phones, where the code column would
-// otherwise have no room of its own.
+// Below 900px the two panels take turns, chosen by this bar; above it they are
+// side by side and the bar is hidden.
 const PANES = [
   { id: "code", label: "Code", phoneOnly: true },
-  { id: "graph", label: "Visualize" },
-  { id: "inspector", label: "Inspector" },
+  { id: "visual", label: "Visual Animation" },
 ];
 
 const clamp = (value, lo, hi) => Math.min(Math.max(value, lo), hi);
@@ -164,12 +158,9 @@ function loadColumns() {
   try {
     const raw = JSON.parse(localStorage.getItem(COLS_KEY));
     if (raw && Number.isFinite(raw.left)) {
-      return {
-        left: clamp(raw.left, MIN_LEFT, MAX_LEFT),
-        // A split saved before the inspector had its own width is discarded
-        // rather than reinterpreted as a column of a different unit.
-        right: Number.isFinite(raw.right) ? clamp(raw.right, MIN_RIGHT, MAX_RIGHT) : DEFAULT_COLUMNS.right,
-      };
+      // A split saved before the inspector column was removed keeps its `left`;
+      // the old pixel `right` is simply not read any more.
+      return { left: clamp(raw.left, MIN_LEFT, MAX_LEFT) };
     }
   } catch {
     // localStorage can be missing or blocked; fall back to the defaults.
@@ -295,7 +286,7 @@ function Workspace() {
   const [inputsText, setInputsText] = useState("");
   const [dismissed, setDismissed] = useState(() => new Set());
   // On a phone the Run button lives behind the Code tab, so start there.
-  const [pane, setPane] = useState(() => (window.innerWidth < 900 ? "code" : "graph"));
+  const [pane, setPane] = useState(() => (window.innerWidth < 900 ? "code" : "visual"));
   const [motionPlan, setMotionPlan] = useState(null);
   const reducedMotion = useReducedMotion();
 
@@ -663,10 +654,6 @@ function Workspace() {
     if (drag.which === "left") {
       const delta = ((event.clientX - drag.x) / drag.width) * 100;
       setColumns((c) => ({ ...c, left: clamp(drag.left + delta, MIN_LEFT, MAX_LEFT) }));
-    } else {
-      // Dragging the right-hand divider left makes the inspector wider.
-      const right = clamp(drag.right - (event.clientX - drag.x), MIN_RIGHT, MAX_RIGHT);
-      setColumns((c) => ({ ...c, right }));
     }
   }
 
@@ -814,7 +801,7 @@ function Workspace() {
         className={`layout${resizing ? " resizing" : ""}`}
         ref={layoutRef}
         data-tab={pane}
-        style={{ "--col-left": `${columns.left}%`, "--col-right": `${columns.right}px` }}
+        style={{ "--col-left": `${columns.left}%` }}
       >
         <section className="pane code-pane" data-pane="code" id="pane-code">
           <div className="pane-head">
@@ -928,7 +915,7 @@ function Workspace() {
           })}
         </div>
 
-        <section className="pane graph-pane" data-pane="graph" id="pane-graph">
+        <section className="pane visual-pane" data-pane="visual" id="pane-visual">
           <VisualizationPane
             viz={viz}
             onVizChange={setViz}
@@ -942,7 +929,12 @@ function Workspace() {
               ) : null
             }
           >
-            <RunStoryCard story={runStory} index={index} onJump={jumpTo} />
+            <RunStoryCard
+              story={runStory}
+              index={index}
+              onJump={jumpTo}
+              compact={viz === "motion"}
+            />
             {viz === "scene" ? (
               <AdaptiveView
                 adaptive={adaptive}
@@ -1012,17 +1004,14 @@ function Workspace() {
               />
             )}
           </VisualizationPane>
-        </section>
 
-        <Splitter
-          name="mid"
-          onGrab={grabSplitter("mid")}
-          onMove={moveSplitter}
-          onRelease={releaseSplitter}
-        />
-
-        <section className="pane side-pane" data-pane="side" id="pane-inspector">
-          <Inspector ctx={inspectorCtx} />
+          {/* The six inspector sections live in one drawer under the stage, not
+              in a third column. It opens by default, except in Motion, where
+              the animation is what you came to watch. */}
+          <details className="inspect-drawer" open={viz === "motion" ? undefined : true}>
+            <summary>Inspect</summary>
+            <Inspector ctx={inspectorCtx} />
+          </details>
         </section>
       </main>
 
