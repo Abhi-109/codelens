@@ -1289,6 +1289,289 @@ test("set truncation and class changes stay deferred", () => {
   assert.deepEqual(stateActions(classChanged), []);
 });
 
+test("object attributes add, change and remove exactly", () => {
+  const attribute = (name, value) => ({ name, value: int(value) });
+  const snap = (step, attrs, className = "Box") =>
+    snapshotOf(step, { o1: { type: "object", class: className, attrs } });
+  const fields = (actions) =>
+    actions.map((action) => ({
+      kind: action.kind,
+      name: action.target.name ?? null,
+      index: action.payload?.index ?? null,
+      from: action.from?.value ?? null,
+      to: action.to?.value ?? null,
+    }));
+  const check = (before, after) => {
+    const actions = diffSteps(before, after);
+    assert.deepEqual(applyState(stateOf(before), actions), stateOf(after));
+    assert.deepEqual(applyState(stateOf(after), reverseActions(actions, stateOf(after))), stateOf(before));
+    return actions;
+  };
+
+  const added = check(
+    snap(1, [attribute("x", 1)]),
+    snap(2, [attribute("x", 1), attribute("y", 2)]),
+  );
+  assert.deepEqual(fields(added), [
+    { kind: "appear", name: "y", index: 1, from: null, to: 2 },
+  ]);
+  assert.equal(added[0].target.kind, "attribute");
+
+  const changed = check(snap(1, [attribute("x", 1)]), snap(2, [attribute("x", 9)]));
+  assert.deepEqual(fields(changed), [
+    { kind: "change", name: "x", index: null, from: 1, to: 9 },
+  ]);
+
+  const removed = check(
+    snap(1, [attribute("x", 1), attribute("y", 2)]),
+    snap(2, [attribute("x", 1)]),
+  );
+  assert.deepEqual(fields(removed), [
+    { kind: "disappear", name: "y", index: 1, from: 2, to: null },
+  ]);
+
+  const mixed = check(
+    snap(1, [attribute("x", 1), attribute("y", 2)]),
+    snap(2, [attribute("x", 9), attribute("z", 3)]),
+  );
+  assert.deepEqual(fields(mixed), [
+    { kind: "disappear", name: "y", index: 1, from: 2, to: null },
+    { kind: "change", name: "x", index: null, from: 1, to: 9 },
+    { kind: "appear", name: "z", index: 1, from: null, to: 3 },
+  ]);
+
+  assert.deepEqual(diffSteps(snap(1, []), snap(2, [])), []);
+  const filled = check(snap(1, []), snap(2, [attribute("x", 1)]));
+  assert.deepEqual(fields(filled), [
+    { kind: "appear", name: "x", index: 0, from: null, to: 1 },
+  ]);
+});
+
+test("object reordering and attribute-cap additions stay deferred", () => {
+  const attribute = (name, value) => ({ name, value: int(value) });
+  const snap = (step, attrs, className = "Box") =>
+    snapshotOf(step, { o1: { type: "object", class: className, attrs } });
+
+  const reordered = diffSteps(
+    snap(1, [attribute("x", 1), attribute("y", 2)]),
+    snap(2, [attribute("y", 2), attribute("x", 1)]),
+  );
+  assert.deepEqual(
+    reordered.map((action) => [action.kind, action.target.kind, action.reason]),
+    [["highlight", "object", "unsupported"]],
+  );
+  assert.deepEqual(stateActions(reordered), []);
+
+  const classChanged = diffSteps(
+    snap(1, [attribute("x", 1)], "A"),
+    snap(2, [attribute("x", 1)], "B"),
+  );
+  assert.deepEqual(
+    classChanged.map((action) => [action.kind, action.target.kind, action.reason]),
+    [["highlight", "object", "unsupported"]],
+  );
+  assert.deepEqual(stateActions(classChanged), []);
+
+  const atCap = Array.from({ length: 30 }, (_, index) => attribute(`a${index}`, index));
+  const capAddition = diffSteps(
+    snap(1, atCap),
+    snap(2, [...atCap.slice(0, 29), attribute("new", 99)]),
+  );
+  assert.deepEqual(
+    capAddition.map((action) => [action.kind, action.target.kind, action.reason]),
+    [["highlight", "object", "unsupported"]],
+  );
+  assert.deepEqual(stateActions(capAddition), []);
+
+  const capChange = diffSteps(
+    snap(1, atCap),
+    snap(2, atCap.map((entry, index) => (index === 0 ? attribute("a0", 99) : entry))),
+  );
+  assert.deepEqual(
+    capChange.map((action) => [action.kind, action.target.name, action.reason]),
+    [["change", "a0", null]],
+  );
+  assert.deepEqual(applyState(stateOf(snap(1, atCap)), capChange), stateOf(snap(2, atCap.map((entry, index) => (index === 0 ? attribute("a0", 99) : entry)))));
+  assert.deepEqual(
+    applyState(
+      stateOf(snap(2, atCap.map((entry, index) => (index === 0 ? attribute("a0", 99) : entry)))),
+      reverseActions(capChange, stateOf(snap(2, atCap.map((entry, index) => (index === 0 ? attribute("a0", 99) : entry))))),
+    ),
+    stateOf(snap(1, atCap)),
+  );
+});
+
+test("dictionary, set and object lifecycle use whole-entry actions", () => {
+  const cases = [
+    { name: "dict", entry: { type: "dict", entries: [{ key: { type: "str", value: "a" }, value: int(1) }] } },
+    { name: "set", entry: { type: "set", items: [int(1), int(2)] } },
+    {
+      name: "object",
+      entry: { type: "object", class: "Box", attrs: [{ name: "x", value: int(1) }] },
+    },
+  ];
+  for (const { name, entry } of cases) {
+    const before = snapshotOf(1, {});
+    const after = snapshotOf(2, { o1: entry });
+    const appeared = diffSteps(before, after);
+    assert.deepEqual(
+      appeared.map((action) => [action.kind, action.target.kind, action.target.objectId]),
+      [["appear", "object", "o1"]],
+      name,
+    );
+    assert.deepEqual(appeared[0].to, entry, name);
+    assert.deepEqual(applyState(stateOf(before), appeared), stateOf(after), name);
+    assert.deepEqual(applyState(stateOf(after), reverseActions(appeared, stateOf(after))), stateOf(before), name);
+
+    const gone = diffSteps(after, snapshotOf(3, {}));
+    assert.deepEqual(
+      gone.map((action) => [action.kind, action.target.kind, action.target.objectId]),
+      [["disappear", "object", "o1"]],
+      name,
+    );
+    assert.deepEqual(gone[0].from, entry, name);
+    assert.deepEqual(applyState(stateOf(after), gone), stateOf(snapshotOf(3, {})), name);
+    assert.deepEqual(applyState(stateOf(snapshotOf(3, {})), reverseActions(gone, stateOf(snapshotOf(3, {})))), stateOf(after), name);
+  }
+});
+
+test("real dict, set and object transitions use keyed actions", () => {
+  const dictionary = program("dict-basics");
+  const added = actionsAt(dictionary, 3);
+  assert.deepEqual(
+    added.map((action) => [action.kind, action.target.kind, action.target.key.value, action.payload.index]),
+    [["appear", "entry", "Meera", 2]],
+  );
+  assert.deepEqual(added[0].to, int(11));
+  const changed = actionsAt(dictionary, 4);
+  assert.deepEqual(
+    changed.map((action) => [action.kind, action.target.kind, action.target.key.value]),
+    [["change", "entry", "Ravi"]],
+  );
+  assert.deepEqual(changed[0].from, int(13));
+  assert.deepEqual(changed[0].to, int(14));
+
+  const sets = program("set-basics");
+  const setAdded = actionsAt(sets, 3);
+  assert.deepEqual(
+    setAdded.map((action) => [action.kind, action.target.kind, action.target.key.value, action.payload.index]),
+    [["appear", "entry", 4, 3]],
+  );
+
+  const classes = program("class-basic");
+  const name = actionsAt(classes, 10);
+  assert.deepEqual(
+    name.map((action) => [action.kind, action.target.kind, action.target.name, action.payload.index]),
+    [["appear", "attribute", "name", 0]],
+  );
+  const tricks = actionsAt(classes, 11).find((action) => action.target.name === "tricks");
+  assert.ok(tricks, "the tricks attribute appears in the real trace");
+  assert.equal(tricks.kind, "appear");
+  assert.equal(tricks.target.kind, "attribute");
+  assert.equal(tricks.payload.index, 1);
+  assert.equal(
+    actionsAt(classes, 8).some(
+      (action) => action.kind === "appear" && action.target.kind === "object" && action.target.objectId === "o1",
+    ),
+    true,
+    "the object lifecycle appears in the real trace",
+  );
+
+  const combo = program("combo-class-loop-dict");
+  const points = actionsAt(combo, 16);
+  assert.deepEqual(
+    points.map((action) => [action.kind, action.target.kind, action.target.name]),
+    [["change", "attribute", "points"]],
+  );
+  assert.deepEqual(points[0].from, int(10));
+  assert.deepEqual(points[0].to, int(15));
+
+  for (const [entry, index] of [
+    [dictionary, 3],
+    [dictionary, 4],
+    [sets, 3],
+    [classes, 10],
+    [classes, 11],
+    [combo, 16],
+  ]) {
+    roundTrip(entry, index);
+  }
+});
+
+test("keyed actions have deterministic unique ids and invert twice", () => {
+  const text = (value) => ({ type: "str", value });
+  const before = snapshotOf(1, {
+    o1: { type: "dict", entries: [{ key: text("a"), value: int(1) }] },
+    o2: { type: "set", items: [int(1)] },
+    o3: { type: "object", class: "Box", attrs: [{ name: "x", value: int(1) }] },
+    o4: { type: "list", items: [int(1)] },
+  });
+  const after = snapshotOf(2, {
+    o1: {
+      type: "dict",
+      entries: [
+        { key: text("a"), value: int(1) },
+        { key: text("b"), value: int(2) },
+      ],
+    },
+    o2: { type: "set", items: [int(1), int(2)] },
+    o3: { type: "object", class: "Box", attrs: [{ name: "x", value: int(1) }, { name: "y", value: int(2) }] },
+    o4: { type: "list", items: [int(1), int(2)] },
+  });
+  const first = diffSteps(before, after);
+  const second = diffSteps(before, after);
+  assert.deepEqual(first.map((action) => action.id), second.map((action) => action.id));
+  assert.equal(new Set(first.map((action) => action.id)).size, first.length);
+  assert.deepEqual(applyState(stateOf(before), first), stateOf(after));
+  const restored = applyState(stateOf(after), reverseActions(first, stateOf(after)));
+  assert.deepEqual(restored, stateOf(before));
+  assert.deepEqual(applyState(restored, first), stateOf(after));
+});
+
+test("malformed keyed entry and attribute actions are refused", () => {
+  const key = { type: "str", value: "a" };
+  const entryState = { frames: [], heap: { o1: { type: "dict", entries: [{ key, value: int(1) }] } } };
+  const noIndex = createAction("appear", {
+    step: 1,
+    target: { kind: "entry", objectId: "o1", key: { type: "str", value: "b" } },
+    to: int(2),
+  });
+  assert.throws(() => applyState(entryState, [noIndex]), /payload index/);
+
+  const setChange = createAction("change", {
+    step: 1,
+    target: { kind: "entry", objectId: "o2", key: int(1) },
+    from: int(1),
+    to: int(2),
+  });
+  assert.throws(
+    () => applyState({ frames: [], heap: { o2: { type: "set", items: [int(1)] } } }, [setChange]),
+    /dictionary/,
+  );
+
+  const missingAttribute = createAction("change", {
+    step: 1,
+    target: { kind: "attribute", objectId: "o3", name: "y" },
+    from: int(1),
+    to: int(2),
+  });
+  assert.throws(
+    () =>
+      applyState(
+        { frames: [], heap: { o3: { type: "object", class: "Box", attrs: [] } } },
+        [missingAttribute],
+      ),
+    /not on/,
+  );
+
+  const missingEntry = createAction("disappear", {
+    step: 1,
+    target: { kind: "entry", objectId: "o1", key: { type: "str", value: "missing" } },
+    from: int(1),
+  });
+  assert.throws(() => applyState(entryState, [missingEntry]), /not present/);
+});
+
 test("state-proven tail growth is explicit and reversible", () => {
   const sort = recognitionProgram("merge-sort");
   assert.deepEqual(actionsAt(sort, 42).map(describe), [
