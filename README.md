@@ -258,6 +258,10 @@ codelens/
 │   ├── visualization-adapters.md # adapter contract, scene schema, validation rules
 │   ├── brand.md            # the mark, palette, asset files and usage rules
 │   ├── implementation-plan.md # the site build: audit, phases, and status
+│   ├── animation-spec.md   # the visualizer rebuild's source of truth
+│   ├── animation.md        # the action vocabulary and the diff rules
+│   ├── animation-audit.md  # Phase 0: what the tracer really records
+│   ├── animation-progress.md # phase status, decisions, open questions
 │   └── roadmap.md          # what is built, what is next
 ├── src/
 │   ├── main.jsx            # mounts the router and paints the stored theme

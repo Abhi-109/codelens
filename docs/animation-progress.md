@@ -1,12 +1,12 @@
 # Animation visualizer: progress
 
-**Current phase:** 0 (Audit) — complete and reviewed. Phase 1 (Diff engine) is planned and
-awaiting the owner's approval; no implementation code has been written.
+**Current phase:** 1 (Diff engine) — task 1 of 8 done. Tasks 2–8 await approval, one at a
+time.
 **Last updated:** 2026-10-24
 
 ## Phase checklist
 - [x] 0 Audit
-- [ ] 1 Diff engine
+- [ ] 1 Diff engine (task 1 of 8 done)
 - [ ] 2 Two-panel page + generic stage
 - [ ] 3 List motion
 - [ ] 4 Frames, recursion, objects
@@ -18,7 +18,8 @@ awaiting the owner's approval; no implementation code has been written.
 | Task | Status | Commit |
 |---|---|---|
 | 0.1 Audit the real tracer, trace data, reuse surface and baseline; write `docs/animation-audit.md` | done | `fd988ad` |
-| 0.2 Record the owner's Phase 0 decisions; correct the stale corpus count in the spec | done | (this commit) |
+| 0.2 Record the owner's Phase 0 decisions; correct the stale corpus count in the spec | done | `334d210` |
+| 1.1 Action vocabulary, canonical targets, deterministic ids, overlay reset helper, `docs/animation.md` skeleton | done | `8e4e4b9` + this commit |
 
 ## Decisions made
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the
@@ -53,6 +54,16 @@ awaiting the owner's approval; no implementation code has been written.
 - 2026-10-24 (owner) — **Sets are unordered.** Their elements appear and disappear as
   cells; they are never animated as ordered positions, never receive index markers and
   never produce `move`/`shift` actions.
+- 2026-10-24 (owner) — **Phase 1 approved with conditions**, all recorded here and in
+  `docs/animation.md`: (1) `tracer-poc/dump_animation.py` is approved to generate a small
+  real-trace fixture for linked list and chaining hash table, without touching the tracer,
+  the corpus or the recognition fixture; (2) the reversibility contract separates
+  snapshot-state mutations, transient overlays and event metadata, and tests forward/
+  reverse state equivalence and the transient reset on backward playback and seek; (3)
+  movement needs both source-shape and state evidence, otherwise a conservative
+  `change`/`highlight`; (4) no trace is excluded silently — fallbacks are reported with a
+  reason; (5) existing tests and the old visualizer are preserved, with no new dependency,
+  tracer change, trace-format change or out-of-scope edit.
 
 ## Open questions for the owner
 None open. All four Phase 0 questions were answered on 2026-10-24 and are recorded above;
@@ -81,5 +92,6 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await explicit approval of the Phase 1 plan (diff engine in `src/animation/`); on approval,
-start with `src/animation/actions.js` and its vocabulary tests, then the safe evaluator.
+Await approval to start Phase 1 task 2: `src/animation/evaluate.js`, the safe
+index-expression evaluator (names, integer literals, `+ - * //`, parentheses) and its
+tests. Tasks 3–8 are unchanged in the approved plan.
