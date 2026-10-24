@@ -230,7 +230,8 @@
   align-items: stretch;
   gap: 4px;
   height: clamp(128px, 24vh, 220px);
-  padding: 0 2px;
+  /* Room above the plot for the tallest bar's value label. */
+  padding: 18px 2px 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -247,7 +248,6 @@
   background: var(--accent-bg);
 }
 
-.motion-bar-value,
 .motion-bar-index {
   flex: none;
   overflow: hidden;
@@ -258,8 +258,19 @@
   white-space: nowrap;
 }
 
+/* Sits on the bar's own top edge, so the number reads as that column's value. */
 .motion-bar-value {
+  position: absolute;
+  right: 0;
+  bottom: calc((var(--from) + var(--size)) * 100%);
+  left: 0;
+  overflow: hidden;
+  transform: translateY(-100%);
+  font: 10.5px/16px var(--mono);
   color: var(--text-h);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .motion-bar-plot {

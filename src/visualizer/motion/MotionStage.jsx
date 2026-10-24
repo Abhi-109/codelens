@@ -112,11 +112,11 @@ function BarRow({ object, registerSlot }) {
           data-key={cell.key}
           style={{ "--from": cell.from, "--size": cell.size }}
         >
-          <span className="motion-bar-value" title={cell.text}>
-            {cell.text}
-          </span>
           <span className="motion-bar-plot">
             <span className="motion-bar-fill" />
+            <span className="motion-bar-value" title={cell.text}>
+              {cell.text}
+            </span>
           </span>
           <span className="motion-bar-index">[{cell.index}]</span>
         </span>

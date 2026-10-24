@@ -165,6 +165,10 @@ line) awaits approval and has not started. Nothing is pushed.
 - Known limits: a removed cell still ghosts as the small `[i] value` chip rather than a bar;
   very wide values truncate visually and keep the full text in `title`; no browser validation
   was performed for this stage.
+- Browser follow-up: the value label now sits on its own bar's top edge (inside the plot)
+  instead of in one row above the tallest bar, where short bars' numbers floated far from
+  their column. Covers positives, negatives (label above the baseline) and zero, with 18 px
+  reserved above the plot for the tallest bar's label.
 
 ## Task 7 Stage 3 notes (two-panel workspace, inspector drawer)
 - The redesign brief called this Stage B. `.layout` is now three tracks — `var(--col-left, 34%)`,
