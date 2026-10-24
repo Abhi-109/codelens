@@ -685,6 +685,143 @@ test("list lifecycle, append and aliasing are explicit and reversible", () => {
   assert.deepEqual(actionsAt(classes, 15).map(describe), ['grow.append o2[0] "sit"']);
 });
 
+test("a verified insert is one grow.insert at the Python-normalized index", () => {
+  const cases = [
+    { source: "a.insert(0, 9)\n", at: 0 },
+    { source: "a.insert(i, 9)\n", i: 1, at: 1 },
+    { source: "a.insert(i, 9)\n", i: 3, at: 3 },
+    { source: "a.insert(-1, 9)\n", at: 2 },
+    { source: "a.insert(i, 9)\n", i: -4, at: 0 },
+    { source: "a.insert(99, 9)\n", at: 3 },
+    { source: "a.insert(i, 9)\n", i: 99, at: 3 },
+  ];
+  for (const { source, i, at } of cases) {
+    const variables = { a: { type: "ref", id: "o1" } };
+    if (i !== undefined) variables.i = int(i);
+    const before = snapshotOf(1, { o1: { type: "list", items: [int(1), int(2), int(3)] } });
+    const items = [int(1), int(2), int(3)];
+    items.splice(at, 0, int(9));
+    const after = snapshotOf(2, { o1: { type: "list", items } });
+    before.frames[0].variables = variables;
+    after.frames[0].variables = variables;
+    const actions = diffSteps(before, after, { source });
+    assert.deepEqual(actions.map(describe), [`grow.insert o1[${at}] 9`], source);
+    assert.equal(actions.length, 1, source);
+    assert.equal(actions[0].reason, null, source);
+    assert.equal(actions[0].target.index, at, source);
+    assert.deepEqual(actions[0].to, int(9), source);
+    assert.deepEqual(applyState(stateOf(before), actions), stateOf(after), source);
+    const inverse = reverseActions(actions, stateOf(after));
+    assert.deepEqual(inverse.map(describe), [`shrink.delete o1[${at}] 9`], source);
+    assert.deepEqual(applyState(stateOf(after), inverse), stateOf(before), source);
+  }
+});
+
+test("duplicate insert values follow the source index, not value matching", () => {
+  const before = snapshotOf(1, {
+    o1: { type: "list", items: [int(1), int(2), int(1)] },
+  });
+  const after = snapshotOf(2, {
+    o1: { type: "list", items: [int(1), int(2), int(2), int(1)] },
+  });
+  for (const i of [1, 2]) {
+    const variables = { a: { type: "ref", id: "o1" }, i: int(i) };
+    before.frames[0].variables = variables;
+    after.frames[0].variables = variables;
+    const actions = diffSteps(before, after, { source: "a.insert(i, 2)\n" });
+    assert.deepEqual(actions.map(describe), [`grow.insert o1[${i}] 2`]);
+    assert.deepEqual(applyState(stateOf(before), actions), stateOf(after));
+    assert.deepEqual(
+      applyState(stateOf(after), reverseActions(actions, stateOf(after))),
+      stateOf(before),
+    );
+  }
+});
+
+test("an insert through an alias is one action on the shared object", () => {
+  const variables = {
+    a: { type: "ref", id: "o1" },
+    b: { type: "ref", id: "o1" },
+    i: int(1),
+  };
+  const before = snapshotOf(1, { o1: { type: "list", items: [int(1), int(2)] } });
+  const after = snapshotOf(2, { o1: { type: "list", items: [int(1), int(9), int(2)] } });
+  before.frames[0].variables = variables;
+  after.frames[0].variables = variables;
+  const actions = diffSteps(before, after, { source: "b.insert(i, 9)\n" });
+  assert.deepEqual(actions.map(describe), ["grow.insert o1[1] 9"]);
+  assert.equal(actions.length, 1);
+  assert.deepEqual(applyState(stateOf(before), actions), stateOf(after));
+  assert.deepEqual(applyState(stateOf(after), reverseActions(actions, stateOf(after))), stateOf(before));
+});
+
+test("a verified bare pop is a tail shrink.pop and reverses to append", () => {
+  const variables = { a: { type: "ref", id: "o1" } };
+  const before = snapshotOf(1, { o1: { type: "list", items: [int(1), int(2), int(3)] } });
+  const after = snapshotOf(2, { o1: { type: "list", items: [int(1), int(2)] } });
+  before.frames[0].variables = variables;
+  after.frames[0].variables = variables;
+  const actions = diffSteps(before, after, { source: "a.pop()\n" });
+  assert.deepEqual(actions.map(describe), ["shrink.pop o1[2] 3"]);
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].motion, "pop");
+  assert.equal(actions[0].target.index, 2);
+  assert.deepEqual(actions[0].from, int(3));
+  assert.equal(actions[0].reason, null);
+  assert.deepEqual(applyState(stateOf(before), actions), stateOf(after));
+  const inverse = reverseActions(actions, stateOf(after));
+  assert.deepEqual(inverse.map(describe), ["grow.append o1[2] 3"]);
+  assert.deepEqual(applyState(stateOf(after), inverse), stateOf(before));
+});
+
+test("an explicit pop is a shrink.delete even at the last cell", () => {
+  const cases = [
+    { source: "a.pop(0)\n", at: 0 },
+    { source: "a.pop(i)\n", i: 1, at: 1 },
+    { source: "a.pop(i)\n", i: 2, at: 2 },
+    { source: "a.pop(i)\n", i: -1, at: 2 },
+    { source: "a.pop(i)\n", i: -3, at: 0 },
+  ];
+  for (const { source, i, at } of cases) {
+    const variables = { a: { type: "ref", id: "o1" } };
+    if (i !== undefined) variables.i = int(i);
+    const before = snapshotOf(1, { o1: { type: "list", items: [int(1), int(2), int(3)] } });
+    const after = snapshotOf(2, {
+      o1: { type: "list", items: [int(1), int(2), int(3)].filter((_, index) => index !== at) },
+    });
+    before.frames[0].variables = variables;
+    after.frames[0].variables = variables;
+    const actions = diffSteps(before, after, { source });
+    assert.deepEqual(actions.map(describe), [`shrink.delete o1[${at}] ${at + 1}`], source);
+    assert.equal(actions.length, 1, source);
+    assert.equal(actions[0].motion, "delete", source);
+    assert.equal(actions[0].target.index, at, source);
+    assert.deepEqual(actions[0].from, int(at + 1), source);
+    assert.equal(actions[0].reason, null, source);
+    assert.deepEqual(applyState(stateOf(before), actions), stateOf(after), source);
+    const inverse = reverseActions(actions, stateOf(after));
+    assert.deepEqual(inverse.map(describe), [`grow.insert o1[${at}] ${at + 1}`], source);
+    assert.deepEqual(applyState(stateOf(after), inverse), stateOf(before), source);
+  }
+});
+
+test("insert and pop handle empty and single-cell lists", () => {
+  const variables = { a: { type: "ref", id: "o1" } };
+  const empty = snapshotOf(1, { o1: { type: "list", items: [] } });
+  const one = snapshotOf(2, { o1: { type: "list", items: [int(7)] } });
+  empty.frames[0].variables = variables;
+  one.frames[0].variables = variables;
+  const inserted = diffSteps(empty, one, { source: "a.insert(0, 7)\n" });
+  assert.deepEqual(inserted.map(describe), ["grow.insert o1[0] 7"]);
+  assert.deepEqual(applyState(stateOf(empty), inserted), stateOf(one));
+  assert.deepEqual(applyState(stateOf(one), reverseActions(inserted, stateOf(one))), stateOf(empty));
+
+  const popped = diffSteps(one, empty, { source: "a.pop(0)\n" });
+  assert.deepEqual(popped.map(describe), ["shrink.delete o1[0] 7"]);
+  assert.deepEqual(applyState(stateOf(one), popped), stateOf(empty));
+  assert.deepEqual(applyState(stateOf(empty), reverseActions(popped, stateOf(empty))), stateOf(one));
+});
+
 test("tuple cells are lifecycle only; a mutation is refused explicitly", () => {
   const tuple = program("tuple-unpack");
   assert.deepEqual(actionsAt(tuple, 2).map(describe), [
@@ -713,6 +850,25 @@ test("tuple cells are lifecycle only; a mutation is refused explicitly", () => {
   });
   assert.throws(() => applyState(stateOf(before), [mutation]), /tuple/);
   assert.throws(() => reverseActions([mutation], stateOf(before)), /tuple/);
+
+  for (const [source, items] of [
+    ["a.insert(1, 9)\n", [int(1), int(9), int(2)]],
+    ["a.pop()\n", [int(1)]],
+  ]) {
+    const tupleBefore = snapshotOf(1, {
+      o1: { type: "tuple", items: [int(1), int(2)] },
+    });
+    const tupleAfter = snapshotOf(2, { o1: { type: "tuple", items } });
+    const variables = { a: { type: "ref", id: "o1" } };
+    tupleBefore.frames[0].variables = variables;
+    tupleAfter.frames[0].variables = variables;
+    const tupleActions = diffSteps(tupleBefore, tupleAfter, { source });
+    assert.deepEqual(
+      tupleActions.map((action) => [action.kind, action.reason]),
+      [["highlight", "unsupported"]],
+    );
+    assert.equal(tupleActions.some((action) => action.target.kind === "cell"), false);
+  }
 });
 
 test("truncated lists use visible changes and an explicit truncated fallback", () => {
@@ -753,6 +909,61 @@ test("truncated lists use visible changes and an explicit truncated fallback", (
   const visibleActions = diffSteps(before, visible);
   assert.deepEqual(visibleActions.map(describe), ["change o1[1] 2 -> 3 (truncated)"]);
   assert.deepEqual(applyState(stateOf(before), visibleActions), stateOf(visible));
+});
+
+test("insert and pop on a truncated list never claim cell growth or shrinkage", () => {
+  const variables = { a: { type: "ref", id: "o1" } };
+  const snap = (step, items) => {
+    const snapshot = snapshotOf(step, { o1: { type: "list", items, more: 5 } });
+    snapshot.frames[0].variables = variables;
+    return snapshot;
+  };
+  const before = snap(1, [int(1), int(2)]);
+  const inserted = diffSteps(before, snap(2, [int(1), int(9), int(2)]), {
+    source: "a.insert(1, 9)\n",
+  });
+  assert.deepEqual(inserted.map(describe), [
+    "change o1[1] 2 -> 9 (truncated)",
+    "highlight o1 truncated",
+  ]);
+  assert.equal(inserted.some((action) => ["grow", "shrink"].includes(action.kind)), false);
+  assert.ok(inserted.every((action) => action.reason === "truncated"));
+
+  const popped = diffSteps(before, snap(2, [int(1)]), { source: "a.pop()\n" });
+  assert.deepEqual(popped.map(describe), ["highlight o1 truncated"]);
+  assert.equal(popped.some((action) => ["grow", "shrink"].includes(action.kind)), false);
+  assert.equal(popped.some((action) => action.target.kind === "cell"), false);
+});
+
+test("insert and pop never claim list cells on dictionaries or sets", () => {
+  const variables = { a: { type: "ref", id: "o1" } };
+  const cases = [
+    {
+      before: { type: "dict", entries: [{ key: { type: "str", value: "k" }, value: int(1) }] },
+      after: {
+        type: "dict",
+        entries: [
+          { key: { type: "str", value: "k" }, value: int(1) },
+          { key: { type: "str", value: "x" }, value: int(9) },
+        ],
+      },
+      source: "a.insert(0, 9)\n",
+    },
+    {
+      before: { type: "set", items: [int(1)] },
+      after: { type: "set", items: [int(1), int(9)] },
+      source: "a.pop()\n",
+    },
+  ];
+  for (const { before, after, source } of cases) {
+    const older = snapshotOf(1, { o1: before });
+    const newer = snapshotOf(2, { o1: after });
+    older.frames[0].variables = variables;
+    newer.frames[0].variables = variables;
+    const actions = diffSteps(older, newer, { source });
+    assert.equal(actions.some((action) => action.target.kind === "cell"), false, source);
+    assert.equal(actions.some((action) => ["grow", "shrink"].includes(action.kind)), false, source);
+  }
 });
 
 test("list objects appear and disappear with their recorded heap entries", () => {
@@ -804,6 +1015,86 @@ test("state-proven tail shrinkage removes every extra cell and reverses exactly"
     popped.map(describe),
     "the removal and its inverse invert back",
   );
+});
+
+test("nested insert and pop stay conservative until the state proves a tail change", () => {
+  const variables = { a: { type: "ref", id: "o1" }, x: int(0) };
+  const snap = (step, items, frameVariables = variables) => {
+    const snapshot = snapshotOf(step, { o1: { type: "list", items } });
+    snapshot.frames[0].variables = frameVariables;
+    return snapshot;
+  };
+
+  const printed = diffSteps(
+    snap(1, [int(1), int(2), int(3)]),
+    snap(2, [int(1), int(2)]),
+    { source: "print(a.pop())\n" },
+  );
+  assert.deepEqual(printed.map(describe), ["shrink.pop o1[2] 3 (unknown-shape)"]);
+  assert.equal(printed.some((action) => action.reason === null), false);
+
+  const assigned = diffSteps(
+    snap(1, [int(1), int(2), int(3)]),
+    snap(2, [int(1), int(2)], { a: { type: "ref", id: "o1" }, x: int(3) }),
+    { source: "x = a.pop()\n" },
+  );
+  assert.ok(assigned.some((action) => describe(action) === "shrink.pop o1[2] 3 (unknown-shape)"));
+  assert.equal(assigned.some((action) => action.kind === "shrink" && action.reason === null), false);
+
+  const middle = diffSteps(
+    snap(1, [int(1), int(2), int(3)]),
+    snap(2, [int(2), int(3)]),
+    { source: "print(a.pop(0))\n" },
+  );
+  assert.deepEqual(middle.map(describe), ["highlight o1 unknown-shape"]);
+
+  const inserted = diffSteps(
+    snap(1, [int(1), int(2), int(3)]),
+    snap(2, [int(1), int(9), int(2), int(3)]),
+    { source: "print(a.insert(1, 9))\n" },
+  );
+  assert.deepEqual(inserted.map(describe), ["highlight o1 unknown-shape"]);
+});
+
+test("insert and pop evidence that disagrees falls back conservatively", () => {
+  const variables = { a: { type: "ref", id: "o1" }, i: int(0) };
+  const snap = (step, items) => {
+    const snapshot = snapshotOf(step, { o1: { type: "list", items } });
+    snapshot.frames[0].variables = variables;
+    return snapshot;
+  };
+
+  const mismatchInsert = diffSteps(
+    snap(1, [int(1), int(2), int(3)]),
+    snap(2, [int(1), int(9), int(2), int(3)]),
+    { source: "a.insert(0, 9)\n" },
+  );
+  assert.deepEqual(mismatchInsert.map(describe), ["highlight o1 unknown-shape"]);
+  assert.equal(mismatchInsert.some((action) => action.kind === "grow"), false);
+
+  const mismatchPop = diffSteps(
+    snap(1, [int(1), int(2), int(3)]),
+    snap(2, [int(2), int(3)]),
+    { source: "a.pop(2)\n" },
+  );
+  assert.deepEqual(mismatchPop.map(describe), ["highlight o1 unknown-shape"]);
+  assert.equal(mismatchPop.some((action) => action.kind === "shrink"), false);
+
+  const unresolvedInsert = diffSteps(
+    snap(1, [int(1), int(2), int(3)]),
+    snap(2, [int(1), int(2), int(3), int(9)]),
+    { source: "a.insert(missing, 9)\n" },
+  );
+  assert.deepEqual(unresolvedInsert.map(describe), ["grow.append o1[3] 9 (unknown-shape)"]);
+  assert.equal(unresolvedInsert.some((action) => action.motion === "insert"), false);
+
+  const unresolvedPop = diffSteps(
+    snap(1, [int(1), int(2), int(3)]),
+    snap(2, [int(1), int(2)]),
+    { source: "a.pop(missing)\n" },
+  );
+  assert.deepEqual(unresolvedPop.map(describe), ["shrink.pop o1[2] 3 (unknown-shape)"]);
+  assert.equal(unresolvedPop.some((action) => action.motion === "delete"), false);
 });
 
 test("a verified swap is one move with its index pair, and reverses to itself", () => {
@@ -1119,6 +1410,95 @@ test("grow and shrink motions round trip, and invalid cell actions are refused",
         ],
       ),
     /target a list/,
+  );
+  assert.throws(
+    () =>
+      applyState(two, [
+        createAction("grow", {
+          step: 1,
+          target: { kind: "cell", objectId: "o1", index: 3 },
+          motion: "insert",
+          to: int(3),
+        }),
+      ]),
+    /outside/,
+  );
+  assert.throws(
+    () =>
+      applyState(two, [
+        createAction("grow", {
+          step: 1,
+          target: { kind: "cell", objectId: "o1", index: 0 },
+          motion: "insert",
+        }),
+      ]),
+    /new value/,
+  );
+  assert.throws(
+    () =>
+      applyState(two, [
+        createAction("shrink", {
+          step: 1,
+          target: { kind: "cell", objectId: "o1", index: 2 },
+          motion: "delete",
+          from: int(3),
+        }),
+      ]),
+    /outside/,
+  );
+  assert.throws(
+    () =>
+      applyState(two, [
+        createAction("shrink", {
+          step: 1,
+          target: { kind: "cell", objectId: "o1", index: 0 },
+          motion: "delete",
+        }),
+      ]),
+    /removed value/,
+  );
+  assert.throws(
+    () =>
+      applyState(
+        { frames: [], heap: { o1: { type: "tuple", items: [int(1), int(2)] } } },
+        [
+          createAction("grow", {
+            step: 1,
+            target: { kind: "cell", objectId: "o1", index: 1 },
+            motion: "insert",
+            to: int(3),
+          }),
+        ],
+      ),
+    /tuple/,
+  );
+  assert.throws(
+    () =>
+      reverseActions(
+        [
+          createAction("grow", {
+            step: 1,
+            target: { kind: "cell", objectId: "o1", index: 0 },
+            motion: "insert",
+          }),
+        ],
+        two,
+      ),
+    /new value/,
+  );
+  assert.throws(
+    () =>
+      reverseActions(
+        [
+          createAction("shrink", {
+            step: 1,
+            target: { kind: "cell", objectId: "o1", index: 0 },
+            motion: "delete",
+          }),
+        ],
+        two,
+      ),
+    /removed value/,
   );
 });
 

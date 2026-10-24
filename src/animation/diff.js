@@ -1,9 +1,9 @@
 // The diff core: one transition of a format-2 trace becomes a list of actions.
 //
-// Tasks 5a and 5b cover list/tuple state: object lifecycle, cell changes,
-// append/delete, state-proven tail growth/shrinkage and verified swap/shift
-// movement. Pop/insert shapes and truncation fallbacks belong to task 5c; dict,
-// set and object contents belong to task 6. A transition this module cannot model honestly
+// Tasks 5a–5c cover list/tuple state: object lifecycle, cell changes,
+// append/insert/pop/delete, state-proven tail growth/shrinkage, verified
+// swap/shift movement and truncation fallbacks. Dict, set and object contents
+// belong to task 6. A transition this module cannot model honestly
 // carries a highlight with a reason, or is classified as deferred by the tests;
 // it is never silently skipped.
 //
@@ -27,7 +27,7 @@
 // so a print step shows the state it printed from instead of an empty program.
 
 import { FALLBACK_REASON, canonicalValue, createAction, isStateAction } from "./actions.js";
-import { resolveIndex } from "./evaluate.js";
+import { evaluateExpression, resolveIndex } from "./evaluate.js";
 import { lineShape } from "./lineShape.js";
 
 /**
@@ -252,7 +252,7 @@ function shapeContext(prev, source) {
   for (const [name, value] of Object.entries(variables)) {
     if (value?.type === "int" && Number.isSafeInteger(value.value)) env[name] = value.value;
   }
-  return { shape: lineShape(source, prev.line, { env }), variables, heap: prev.heap ?? {} };
+  return { shape: lineShape(source, prev.line, { env }), variables, heap: prev.heap ?? {}, env };
 }
 
 function isShapeCell(context, ref, objectId, index) {
@@ -282,6 +282,68 @@ function appendObjectId(context) {
 function deleteCell(context) {
   if (context?.shape?.kind !== "del") return null;
   return resolveCellRef(context.shape.targets[0], context.heap, context.variables);
+}
+
+/**
+ * The insertion position Python's `list.insert` would use: negative indices
+ * count from the end, then the result is clamped to 0..length.
+ */
+function insertionIndex(text, length, env) {
+  const index = evaluateExpression(text, env);
+  if (index === null) return null;
+  const at = index < 0 ? length + index : index;
+  if (at < 0) return 0;
+  if (at > length) return length;
+  return at;
+}
+
+/**
+ * The cell an insert statement added, when the resolved receiver, source index
+ * and snapshots all agree. The source index disambiguates duplicate values.
+ */
+function insertEvidence(context, older, newer, id) {
+  const parsed = context?.shape;
+  if (
+    parsed?.kind !== "insert" ||
+    parsed.targets.length !== 1 ||
+    parsed.args?.length !== 2
+  ) {
+    return null;
+  }
+  if (resolveObjectId(parsed.targets[0], context.heap, context.variables) !== id) return null;
+  if (older.type !== "list" || newer.type !== "list") return null;
+  if (newer.items.length !== older.items.length + 1) return null;
+  const index = insertionIndex(parsed.args[0], older.items.length, context.env);
+  if (index === null) return null;
+  for (let at = 0; at < index; at += 1) {
+    if (canonicalValue(older.items[at]) !== canonicalValue(newer.items[at])) return null;
+  }
+  for (let at = index; at < older.items.length; at += 1) {
+    if (canonicalValue(older.items[at]) !== canonicalValue(newer.items[at + 1])) return null;
+  }
+  return index;
+}
+
+/**
+ * The cell a pop statement removed. Bare `pop()` is a tail `pop`; an explicit
+ * index is a `delete`, even when it resolves to the last cell.
+ */
+function popEvidence(context, older, newer, id) {
+  const parsed = context?.shape;
+  if (parsed?.kind !== "pop" || parsed.targets.length !== 1 || !Array.isArray(parsed.args)) {
+    return null;
+  }
+  if (resolveObjectId(parsed.targets[0], context.heap, context.variables) !== id) return null;
+  if (older.type !== "list" || newer.type !== "list") return null;
+  if (newer.items.length !== older.items.length - 1) return null;
+  if (parsed.args.length === 0) {
+    const index = older.items.length - 1;
+    return isRemoval(older, newer, index) ? { index, motion: "pop" } : null;
+  }
+  if (parsed.args.length !== 1) return null;
+  const index = resolveIndex(evaluateExpression(parsed.args[0], context.env), older.items.length);
+  if (index === null) return null;
+  return isRemoval(older, newer, index) ? { index, motion: "delete" } : null;
 }
 
 function findFrame(state, frameId) {
@@ -483,6 +545,18 @@ function collectionActions(before, after, step, context) {
     }
 
     if (newerLength > olderLength) {
+      const inserted = insertEvidence(shape, older, newer, id);
+      if (inserted !== null) {
+        structural.push(
+          createAction("grow", {
+            step,
+            target: { kind: "cell", objectId: id, index: inserted },
+            motion: "insert",
+            to: newer.items[inserted],
+          }),
+        );
+        continue;
+      }
       const appended = appendObjectId(shape);
       if (
         appended === id &&
@@ -521,8 +595,18 @@ function collectionActions(before, after, step, context) {
       continue;
     }
 
-    const deleted = deleteCell(shape);
-    if (deleted !== null && deleted.objectId === id && isRemoval(older, newer, deleted.index)) {
+    const popped = popEvidence(shape, older, newer, id);
+    const deleted = popped === null ? deleteCell(shape) : null;
+    if (popped !== null) {
+      structural.push(
+        createAction("shrink", {
+          step,
+          target: { kind: "cell", objectId: id, index: popped.index },
+          motion: popped.motion,
+          from: older.items[popped.index],
+        }),
+      );
+    } else if (deleted !== null && deleted.objectId === id && isRemoval(older, newer, deleted.index)) {
       structural.push(
         createAction("shrink", {
           step,
@@ -635,9 +719,9 @@ export function diffSteps(prev, next, context = {}) {
     }
   }
 
-  // List/tuple state: object lifecycle, cell changes, append/delete and
-  // state-proven tail growth/shrinkage. Dictionaries, sets and object contents
-  // stay task 6's job.
+  // List/tuple state: object lifecycle, cell changes, append/insert/pop/delete,
+  // state-proven tail growth/shrinkage and verified movement. Dictionaries,
+  // sets and object contents stay task 6's job.
   const collections = collectionActions(before, after, step, {
     prev,
     source: options.source,

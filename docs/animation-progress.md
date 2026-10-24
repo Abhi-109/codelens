@@ -1,12 +1,12 @@
 # Animation visualizer: progress
 
-**Current phase:** 1 (Diff engine) — tasks 1–4, 5a and 5b of 8 done. Task 5c and 6–8 await
+**Current phase:** 1 (Diff engine) — tasks 1–4 and 5a–5c of 8 done. Tasks 6–8 await
 approval, one at a time.
 **Last updated:** 2026-10-24
 
 ## Phase checklist
 - [x] 0 Audit
-- [ ] 1 Diff engine (tasks 1–4, 5a and 5b of 8 done)
+- [ ] 1 Diff engine (tasks 1–4 and 5a–5c of 8 done)
 - [ ] 2 Two-panel page + generic stage
 - [ ] 3 List motion
 - [ ] 4 Frames, recursion, objects
@@ -26,7 +26,8 @@ approval, one at a time.
 | 1.4b Docs/test cleanup before task 5: deferral wording, error `phase`, exact coverage assertions | done | `c6b7b8f` |
 | 1.5a List/tuple state diff: heap copying, lifecycle, cell changes, append/delete, state-proven tail growth/shrink, explicit supported/deferred classification | done | `75820cb` |
 | 1.5b-swap Swap movement: one verified `move.swap` per pair, apply/reverse, duplicate-value and evidence fallbacks | done | `1c95b27` |
-| 1.5b-shift Shift movement: one verified adjacent `move.shift`, destination-only apply, `change` inverse, evidence fallbacks | done | this commit |
+| 1.5b-shift Shift movement: one verified adjacent `move.shift`, destination-only apply, `change` inverse, evidence fallbacks | done | `6c8e2c7` |
+| 1.5c Insert/pop shapes: verified `grow.insert`, bare `shrink.pop`, explicit `shrink.delete`, Python-normalized insert indices, conservative fallbacks | done | this commit |
 
 ## Decisions made
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the
@@ -73,11 +74,23 @@ approval, one at a time.
   tracer change, trace-format change or out-of-scope edit.
 - 2026-10-24 — **Task 5a keeps the grow/shrink inverse pairs bijective.**
   `grow.append` ↔ `shrink.pop` and `grow.insert` ↔ `shrink.delete`; `append` is tail-only and
-  `pop` removes only the last cell, so a middle `pop(i)` will be modelled as `delete` in 5c.
+  `pop` removes only the last cell, so a middle `pop(i)` is modelled as `delete`; task 5c
+  implements that.
   A truncated list whose `more` or visible length changes gets a `highlight` on the object
   with `reason: "truncated"` and is classified deferred; visible cells may still `change`
   with that reason. A tuple cell mutation is `unsupported` and rejected by
   `applyState`/`reverseActions(actions, state)`.
+- 2026-10-24 — **Task 5c keeps insert/pop evidence explicit and falls back conservatively.**
+  A recognized insert emits `grow.insert` only when the resolved receiver, Python-normalized
+  source index, length increase of one and exact prefix/suffix placement agree; negative
+  indices count from the end and are clamped to `0..len`, and duplicate values are
+  disambiguated by that source index. Bare `pop()` emits `shrink.pop` only when the last cell
+  is removed; every explicit `pop(i)` emits `shrink.delete` at the resolved index, including
+  the last cell. Delayed/nested calls stay `unknown`: a state-proven tail change uses the
+  existing `unknown-shape` append/pop fallback, anything else is a highlight, and no
+  intermediate mutation is invented. Truncated lists and tuple targets never claim an
+  insert/delete. The corpus has no insert/pop source, so synthetic snapshot pairs provide the
+  coverage and genuine insert/pop trace coverage remains deferred.
 
 ## Open questions for the owner
 None open. All four Phase 0 questions were answered on 2026-10-24 and are recorded above;
@@ -106,8 +119,36 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await approval to start Phase 1 task 5c: pop/insert shapes and truncation fallbacks.
-Movement (`swap` and `shift`) is done; tasks 6–8 are unchanged in the approved plan.
+Await approval to start Phase 1 task 6: dict/set/object diff. Task 5c (insert/pop and
+truncation/delayed-call fallbacks) is done; tasks 7–8 are unchanged in the approved plan.
+
+## Task 1.5c notes (insert/pop shapes)
+- `diff.js` imports the existing `evaluateExpression` and carries the frame's integer
+  environment through `shapeContext`. Insert positions use Python's `list.insert` rules:
+  a negative index counts from the end, then the result is clamped to `0..length`. Both
+  literal and variable indices are evaluated, including negative and out-of-range values.
+- A recognized `insert` emits exactly one `grow.insert` only when the resolved receiver,
+  resolved index, `newer.length === older.length + 1`, and exact prefix/suffix placement all
+  agree. Duplicate values are disambiguated by the source index, not value matching; an alias
+  still yields one action keyed by object id.
+- A recognized bare `pop()` emits `shrink.pop` only when the last cell was removed. Every
+  explicit `pop(i)` emits `shrink.delete` at the resolved index, including the last cell;
+  its inverse is `grow.insert` at that same index.
+- Evidence mismatch or an unresolved index never invents an insert/delete. A state-proven
+  tail change uses the existing `unknown-shape` `grow.append`/`shrink.pop` fallback; other
+  structural changes are highlights. `print(a.pop())`, `x = a.pop()` and nested calls stay
+  `unknown` because `lineShape` requires the call to be the whole statement.
+- Truncated lists and tuple targets never claim an insert/delete; the truncation branch and
+  tuple branch run before the list structural inference. Malformed insert/delete actions,
+  out-of-range indices, missing `to`/`from` and tuple mutations are refused by apply/reverse.
+- Synthetic snapshot pairs cover normalized indices, duplicates, aliases, bare and explicit
+  pop (including last/only cells), empty lists, evidence mismatches, unresolved indices,
+  tuples, dictionaries, sets, truncation, delayed nested calls and malformed actions. The
+  corpus and recognition fixtures contain no insert/pop source, so genuine trace coverage
+  remains deferred.
+- Counts unchanged: 2933 event steps, 2896 supported, 2819 pairs (2782 supported), 37
+  deferred. JS test count is **618**. No change to the tracer, trace format, action
+  vocabulary, `lineShape.js`, `evaluate.js`, UI or dependencies.
 
 ## Task 1.5b-shift notes (movement, adjacent shifts)
 - `diff.js` emits one `move.shift` for an adjacent copy only when the shape, resolved
