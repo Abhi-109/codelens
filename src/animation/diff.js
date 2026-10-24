@@ -392,6 +392,167 @@ export function stateOf(snapshot) {
 }
 
 /**
+ * The tracer caps visible container items at 30. Dictionaries and sets record
+ * how many are hidden in `more`; object attributes do not, so an attribute
+ * that appears on an object already showing 30 of them could be a previously
+ * hidden attribute surfacing. That one case is deferred.
+ */
+const VISIBLE_ITEM_LIMIT = 30;
+
+const isDict = (entry) => entry?.type === "dict";
+const isSet = (entry) => entry?.type === "set";
+const isObjectEntry = (entry) => entry?.type === "object";
+
+/** Whether two key sequences are the same, compared as trace values. */
+function sameKeyOrder(left, right, keyOf) {
+  return (
+    left.length === right.length &&
+    left.every((item, index) => keyOf(item) === keyOf(right[index]))
+  );
+}
+
+/**
+ * The actions that turn an ordered keyed list (a dict's entries, a set's
+ * members or an object's attributes) into another. Returns null when the
+ * surviving keys change order without a membership change, which can only be
+ * a remove-and-reinsert whose author is not identifiable from snapshots.
+ *
+ * Removals are emitted by descending old index, additions by ascending new
+ * index, so applying them in order recreates the after order and reversing
+ * them restores the before order. Values are carried, never positions in the
+ * action id.
+ */
+function keyedActions(olderItems, newerItems, step, id, { keyOf, targetOf, valueOf, reason = null }) {
+  const olderByKey = new Map();
+  const newerByKey = new Map();
+  olderItems.forEach((item, index) => olderByKey.set(keyOf(item), { index, item }));
+  newerItems.forEach((item, index) => newerByKey.set(keyOf(item), { index, item }));
+
+  const survivingOlder = olderItems.filter((item) => newerByKey.has(keyOf(item)));
+  const survivingNewer = newerItems.filter((item) => olderByKey.has(keyOf(item)));
+  if (!sameKeyOrder(survivingOlder, survivingNewer, keyOf)) return null;
+
+  const actions = [];
+  const removed = [...olderByKey.entries()]
+    .filter(([key]) => !newerByKey.has(key))
+    .sort((left, right) => right[1].index - left[1].index);
+  const added = [...newerByKey.entries()]
+    .filter(([key]) => !olderByKey.has(key))
+    .sort((left, right) => left[1].index - right[1].index);
+
+  for (const [, { index, item }] of removed) {
+    actions.push(
+      createAction("disappear", {
+        step,
+        target: targetOf(item),
+        from: valueOf(item),
+        reason,
+        payload: { index },
+      }),
+    );
+  }
+  for (const [key, { item }] of newerByKey) {
+    const older = olderByKey.get(key);
+    if (!older) continue;
+    if (canonicalValue(valueOf(older.item)) === canonicalValue(valueOf(item))) continue;
+    actions.push(
+      createAction("change", {
+        step,
+        target: targetOf(item),
+        from: valueOf(older.item),
+        to: valueOf(item),
+        reason,
+      }),
+    );
+  }
+  for (const [, { index, item }] of added) {
+    actions.push(
+      createAction("appear", {
+        step,
+        target: targetOf(item),
+        to: valueOf(item),
+        reason,
+        payload: { index },
+      }),
+    );
+  }
+  return actions;
+}
+
+/** The visible entry/value changes of a dict, or the reason to defer it. */
+function dictActions(older, newer, step, id) {
+  const truncated = isTruncated(older) || isTruncated(newer) || older.more !== newer.more;
+  const options = {
+    keyOf: (entry) => canonicalValue(entry.key),
+    targetOf: (entry) => ({ kind: "entry", objectId: id, key: entry.key }),
+    valueOf: (entry) => entry.value,
+  };
+  if (truncated) {
+    const sameVisibleKeys =
+      older.entries.length === newer.entries.length &&
+      older.entries.every(
+        (entry, index) => canonicalValue(entry.key) === canonicalValue(newer.entries[index].key),
+      );
+    if (!sameVisibleKeys || older.more !== newer.more) {
+      return { reason: FALLBACK_REASON.truncated };
+    }
+    const state = keyedActions(older.entries, newer.entries, step, id, {
+      ...options,
+      reason: FALLBACK_REASON.truncated,
+    });
+    return state === null ? { reason: FALLBACK_REASON.truncated } : { state };
+  }
+  const state = keyedActions(older.entries, newer.entries, step, id, options);
+  return state === null ? { reason: FALLBACK_REASON.unsupported } : { state };
+}
+
+/**
+ * Set membership is unordered. Its sorted serialization is only what makes the
+ * trace byte-deterministic, so members are keyed by value and the index rides
+ * in the payload for exact restore ordering; no movement is ever claimed.
+ */
+function setActions(older, newer, step, id) {
+  const truncated = isTruncated(older) || isTruncated(newer) || older.more !== newer.more;
+  if (truncated) {
+    const same = canonicalValue(older.items) === canonicalValue(newer.items) && older.more === newer.more;
+    return same ? { state: [] } : { reason: FALLBACK_REASON.truncated };
+  }
+  const state = keyedActions(older.items, newer.items, step, id, {
+    keyOf: (item) => canonicalValue(item),
+    targetOf: (item) => ({ kind: "entry", objectId: id, key: item }),
+    valueOf: (item) => item,
+  });
+  return state === null ? { reason: FALLBACK_REASON.unsupported } : { state };
+}
+
+/** The visible attribute changes of an object, or the reason to defer it. */
+function objectActions(older, newer, step, id) {
+  if (older.class !== newer.class) return { reason: FALLBACK_REASON.unsupported };
+  const olderNames = new Set(older.attrs.map((attribute) => attribute.name));
+  const added = newer.attrs.some((attribute) => !olderNames.has(attribute.name));
+  // A new visible attribute on an object already at the visibility cap could
+  // be a hidden attribute that shifted into view; snapshots do not say.
+  if (added && older.attrs.length >= VISIBLE_ITEM_LIMIT) {
+    return { reason: FALLBACK_REASON.unsupported };
+  }
+  const state = keyedActions(older.attrs, newer.attrs, step, id, {
+    keyOf: (attribute) => attribute.name,
+    targetOf: (attribute) => ({ kind: "attribute", objectId: id, name: attribute.name }),
+    valueOf: (attribute) => attribute.value,
+  });
+  return state === null ? { reason: FALLBACK_REASON.unsupported } : { state };
+}
+
+/** Content of a dict, set or object entry that exists on both sides. */
+function nonSequenceActions(older, newer, step, id) {
+  if (older.class !== newer.class) return { reason: FALLBACK_REASON.unsupported };
+  if (isDict(older) && isDict(newer)) return dictActions(older, newer, step, id);
+  if (isSet(older) && isSet(newer)) return setActions(older, newer, step, id);
+  if (isObjectEntry(older) && isObjectEntry(newer)) return objectActions(older, newer, step, id);
+  return { reason: FALLBACK_REASON.unsupported };
+}
+
+/**
  * The list/tuple part of one transition. State actions first, then the
  * highlights that explain a truncated or unsupported container.
  */
@@ -409,15 +570,49 @@ function collectionActions(before, after, step, context) {
     const olderSequence = isSequence(older);
     const newerSequence = isSequence(newer);
 
-    if (olderSequence && !newerSequence) {
-      state.push(createAction("disappear", { step, target: { kind: "object", objectId: id }, from: older }));
+    if (olderSequence !== newerSequence) {
+      if (older && newer) {
+        // An object that changes kind cannot be replayed by cell actions.
+        overlays.push(
+          createAction("highlight", {
+            step,
+            target: { kind: "object", objectId: id },
+            reason: FALLBACK_REASON.unsupported,
+          }),
+        );
+        continue;
+      }
+      if (newerSequence) {
+        state.push(createAction("appear", { step, target: { kind: "object", objectId: id }, to: newer }));
+      } else {
+        state.push(createAction("disappear", { step, target: { kind: "object", objectId: id }, from: older }));
+      }
       continue;
     }
-    if (!olderSequence && newerSequence) {
-      state.push(createAction("appear", { step, target: { kind: "object", objectId: id }, to: newer }));
+    if (!olderSequence) {
+      if (!older && newer) {
+        state.push(createAction("appear", { step, target: { kind: "object", objectId: id }, to: newer }));
+        continue;
+      }
+      if (older && !newer) {
+        state.push(createAction("disappear", { step, target: { kind: "object", objectId: id }, from: older }));
+        continue;
+      }
+      if (!older || !newer) continue;
+      const content = nonSequenceActions(older, newer, step, id);
+      if (content.reason) {
+        overlays.push(
+          createAction("highlight", {
+            step,
+            target: { kind: "object", objectId: id },
+            reason: content.reason,
+          }),
+        );
+      } else {
+        state.push(...content.state);
+      }
       continue;
     }
-    if (!olderSequence || !newerSequence) continue;
     if (older.type !== newer.type) {
       overlays.push(
         createAction("highlight", {
@@ -842,9 +1037,13 @@ export function reverseActions(actions, state = null) {
       throw new TypeError("cannot reverse a tuple-cell mutation");
     }
     const common = { step: action.step, target: action.target, reason: action.reason ?? null };
+    const payload =
+      action.target?.kind === "entry" || action.target?.kind === "attribute"
+        ? action.payload
+        : null;
     switch (action.kind) {
       case "appear":
-        reversed.push(createAction("disappear", { ...common, from: action.to }));
+        reversed.push(createAction("disappear", { ...common, from: action.to, payload }));
         break;
       case "change":
         reversed.push(createAction("change", { ...common, from: action.to, to: action.from }));
@@ -868,7 +1067,7 @@ export function reverseActions(actions, state = null) {
             }),
           );
         } else {
-          reversed.push(createAction("appear", { ...common, to: action.from }));
+          reversed.push(createAction("appear", { ...common, to: action.from, payload }));
         }
         break;
       case "grow": {
@@ -946,6 +1145,28 @@ export function reverseActions(actions, state = null) {
   return reversed;
 }
 
+/** The index of a dict key or set member, or -1. */
+function keyedIndex(entry, key) {
+  if (entry.type === "dict") {
+    return entry.entries.findIndex((item) => canonicalValue(item.key) === canonicalValue(key));
+  }
+  return entry.items.findIndex((item) => canonicalValue(item) === canonicalValue(key));
+}
+
+/** The index of an object attribute, or -1. */
+function attributeIndex(entry, name) {
+  return entry.attrs.findIndex((attribute) => attribute.name === name);
+}
+
+/** A validated insertion position carried by an entry/attribute appearance. */
+function payloadIndex(action, length) {
+  const index = action.payload?.index;
+  if (!Number.isInteger(index) || index < 0 || index > length) {
+    throw new TypeError("an entry or attribute appearance needs a valid payload index");
+  }
+  return index;
+}
+
 /**
  * Apply state actions to a compared state, without mutating it.
  *
@@ -983,9 +1204,44 @@ export function applyState(state, actions) {
           current.heap[target.objectId] = copyEntry(action.to);
           break;
         }
+        if (target.kind === "entry") {
+          const entry = current.heap[target.objectId];
+          if (!entry || (!isDict(entry) && !isSet(entry))) {
+            throw new TypeError("an entry appearance must target a dict or set");
+          }
+          if (keyedIndex(entry, target.key) >= 0) {
+            throw new TypeError(`the key is already present in ${target.objectId}`);
+          }
+          const length = isDict(entry) ? entry.entries.length : entry.items.length;
+          const index = payloadIndex(action, length);
+          if (isDict(entry)) {
+            entry.entries.splice(index, 0, {
+              key: copyValue(target.key),
+              value: copyValue(action.to),
+            });
+          } else {
+            entry.items.splice(index, 0, copyValue(target.key));
+          }
+          break;
+        }
+        if (target.kind === "attribute") {
+          const entry = current.heap[target.objectId];
+          if (!isObjectEntry(entry) || !Array.isArray(entry.attrs)) {
+            throw new TypeError("an attribute appearance must target an object");
+          }
+          if (attributeIndex(entry, target.name) >= 0) {
+            throw new TypeError(`attribute ${target.name} already exists on ${target.objectId}`);
+          }
+          const index = payloadIndex(action, entry.attrs.length);
+          entry.attrs.splice(index, 0, {
+            name: target.name,
+            value: copyValue(action.to),
+          });
+          break;
+        }
         const frame = findFrame(current, target.frameId);
         if (!frame || target.kind !== "variable") {
-          throw new TypeError("an appear action must target a variable or an object");
+          throw new TypeError("an appear action must target a variable, object, entry or attribute");
         }
         frame.variables[target.name] = action.to;
         break;
@@ -1003,9 +1259,29 @@ export function applyState(state, actions) {
           entry.items[target.index] = copyValue(action.to);
           break;
         }
+        if (target.kind === "entry") {
+          const entry = current.heap[target.objectId];
+          if (!isDict(entry)) {
+            throw new TypeError("an entry change must target a dictionary");
+          }
+          const at = keyedIndex(entry, target.key);
+          if (at < 0) throw new TypeError(`the key is not present in ${target.objectId}`);
+          entry.entries[at].value = copyValue(action.to);
+          break;
+        }
+        if (target.kind === "attribute") {
+          const entry = current.heap[target.objectId];
+          if (!isObjectEntry(entry) || !Array.isArray(entry.attrs)) {
+            throw new TypeError("an attribute change must target an object");
+          }
+          const at = attributeIndex(entry, target.name);
+          if (at < 0) throw new TypeError(`attribute ${target.name} is not on ${target.objectId}`);
+          entry.attrs[at].value = copyValue(action.to);
+          break;
+        }
         const frame = findFrame(current, target.frameId);
         if (!frame || target.kind !== "variable" || !Object.hasOwn(frame.variables, target.name)) {
-          throw new TypeError("a change action must target a variable that exists or a cell");
+          throw new TypeError("a change action must target a variable, cell, entry or attribute");
         }
         frame.variables[target.name] = action.to;
         break;
@@ -1024,9 +1300,30 @@ export function applyState(state, actions) {
           delete current.heap[target.objectId];
           break;
         }
+        if (target.kind === "entry") {
+          const entry = current.heap[target.objectId];
+          if (!entry || (!isDict(entry) && !isSet(entry))) {
+            throw new TypeError("an entry disappearance must target a dict or set");
+          }
+          const at = keyedIndex(entry, target.key);
+          if (at < 0) throw new TypeError(`the key is not present in ${target.objectId}`);
+          if (isDict(entry)) entry.entries.splice(at, 1);
+          else entry.items.splice(at, 1);
+          break;
+        }
+        if (target.kind === "attribute") {
+          const entry = current.heap[target.objectId];
+          if (!isObjectEntry(entry) || !Array.isArray(entry.attrs)) {
+            throw new TypeError("an attribute disappearance must target an object");
+          }
+          const at = attributeIndex(entry, target.name);
+          if (at < 0) throw new TypeError(`attribute ${target.name} is not on ${target.objectId}`);
+          entry.attrs.splice(at, 1);
+          break;
+        }
         const frame = findFrame(current, target.frameId);
         if (!frame || target.kind !== "variable" || !Object.hasOwn(frame.variables, target.name)) {
-          throw new TypeError("a disappear action must target a variable or an object");
+          throw new TypeError("a disappear action must target a variable, object, entry or attribute");
         }
         delete frame.variables[target.name];
         break;

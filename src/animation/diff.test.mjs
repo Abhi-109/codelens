@@ -543,9 +543,6 @@ test("every transition is classified: supported, or explicitly deferred", () => 
             failures.push(`${name} step ${next.step}: unknown move motion ${action.motion}`);
           }
         }
-        if (action.target?.kind === "entry" || action.target?.kind === "attribute") {
-          failures.push(`${name} step ${next.step}: ${action.kind} ${action.target.kind} belongs to task 6`);
-        }
         if (
           action.target?.kind === "cell" &&
           ["change", "move", "grow", "shrink"].includes(action.kind)
@@ -649,15 +646,16 @@ test("every transition is classified: supported, or explicitly deferred", () => 
   assert.equal(programs.length, 114, "every program in the corpus and recognition fixtures");
   assert.equal(supported - supportedPairs, programs.length, "every run-start step is supported");
   assert.equal(supported + deferred, total, "every event step is classified");
-  // These are the fixtures' exact counts for task 5a, not a floor. Movement
-  // (5b), pop/insert and truncation fallbacks (5c), and dictionaries, sets and
-  // objects (task 6) will move steps between these groups.
+  // Task 6 models dict, set and object contents, so every fixture transition
+  // now round trips. These remain exact counts, not floors: a regression that
+  // defers a transition fails the test instead of quietly moving between
+  // groups.
   assert.equal(total, 2933, "the fixtures' exact event-step count, including 114 run starts");
   assert.equal(pairs, 2819, "consecutive state pairs: the event steps after the run starts");
-  assert.equal(supported, 2896, "event steps whose state actions round trip");
-  assert.equal(supportedPairs, 2782, "consecutive pairs whose state actions round trip");
-  assert.equal(deferred, 37, "consecutive pairs still owned by task 6");
-  assert.deepEqual(reasons, { "task-6": 37, truncated: 0, tuple: 0, "unsupported-list": 0 });
+  assert.equal(supported, 2933, "event steps whose state actions round trip");
+  assert.equal(supportedPairs, 2819, "consecutive pairs whose state actions round trip");
+  assert.equal(deferred, 0, "consecutive pairs still owned by task 6");
+  assert.deepEqual(reasons, { "task-6": 0, truncated: 0, tuple: 0, "unsupported-list": 0 });
 });
 
 test("list-mutation's sort, reverse, assignment and delete are explicit and reversible", () => {
