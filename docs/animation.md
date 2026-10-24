@@ -1,11 +1,11 @@
 # Animation diff: actions and rules
 
-**Status:** Phase 1 in progress. Task 1 (the vocabulary, canonical targets and
-deterministic ids, in `src/animation/actions.js`) is implemented and tested. Sections
-marked *(planned)* are the contract the rest of Phase 1 is held to; they describe code
-that does not exist yet. Nothing in this document lets the renderer invent an event: if a
-fact is not in the trace or the source, the action is a highlight or a change, never a
-move.
+**Status:** Phase 1 in progress. Tasks 1–4 are implemented and tested: the vocabulary
+(`actions.js`), the safe evaluator (`evaluate.js`), the statement-shape parser
+(`lineShape.js`) and the diff core (`diff.js`). Sections marked *(planned)* are the contract
+the rest of Phase 1 is held to; they describe code that does not exist yet. Nothing in this
+document lets the renderer invent an event: if a fact is not in the trace or the source, the
+action is a highlight or a change, never a move.
 
 ## 1. What the layer is
 
@@ -149,7 +149,7 @@ or two recomputations of the same step — produce the same path. Variable targe
 frame-qualified: `n` in the module frame and `n` in a recursive frame are different paths,
 which is what lets the same name animate in two cards without colliding.
 
-## 8. Evidence rules for movement *(planned: tasks 3 and 5)*
+## 8. Evidence rules for movement *(partly: shapes done in task 3, movement in task 5)*
 
 A movement action needs **both**:
 
@@ -301,20 +301,56 @@ and no statement is reported as a movement shape without the indices to prove ad
 * **truncation** — `more` means "there are cells we cannot see"; the diff never claims a
   position past the visible window.
 
-## 10. Calls, returns and the console *(planned: task 4)*
+## 10. Calls, returns and the console *(done: task 4)*
 
-* A `call` event adds the callee frame: one `call` action on the frame target, with the
-  bound arguments in `payload.args`. The frame is added once — there is no second `appear`
-  for it.
-* A `return` event keeps the returning frame on the stack (audit §4). Its `return` action
-  is an overlay carrying the value; the frame's removal is a `disappear` on the *next*
-  transition, where the snapshot actually shows it gone.
-* For `print(f(x))`, the return may carry `to: "console"` **only** when the trace proves the
-  relationship: recorded `output` events sit between the return and the next control event.
-  No landing variable is ever named. Otherwise `to` is `null` and the return animation is
-  the simple one.
-* `print` overlays mirror the output events up to the cursor. The console text is derived
-  from those events, so it is never stored in a snapshot and never replayed as state.
+`diffSteps(prev, next, { source, consoleAfterReturn })` compares two snapshots and returns
+that step's actions. The rules for the non-collection half of the state:
+
+* **Stack.** A frame present in both snapshots is matched by `frame_id`. A frame that is new
+  is one `call` action on its frame target, with `to` = the frame snapshot and
+  `payload.args` = the arguments bound at the call event (there is no second `appear` for
+  it). A frame that is gone is one `disappear` on the frame, carrying its last state in
+  `from`, which is what makes the removal reversible. Recursion therefore gets one action
+  per call, never one per function name.
+* **Variables.** Within a frame that survives the transition, a new name is `appear`, a gone
+  name is `disappear`, and a changed value is `change` with the exact trace values in
+  `from`/`to`. Values are compared with `canonicalValue`, so a change never depends on key
+  order. A frame's own `line` is cursor metadata and produces no action.
+* **Events without a snapshot.** `output`, `input`, `error` and the limit events record no
+  `frames`/`heap`. `snapshotAt(trace, i)` gives them the last recorded state, so a print step
+  shows the state it printed from and never looks like an empty program.
+* **Print.** Every `output` event is one `print` overlay on the console with the recorded
+  `text`. `input` adds no overlay: the tracer echoes it as the next `output` event, and
+  emitting both would print the line twice.
+* **Return.** A `return` event is a `return` overlay on the returning frame, carrying
+  `payload { function, value, to }` with `value` the recorded `return_value`. The frame is
+  still on the stack at that event, so its removal is the next transition's `disappear`,
+  where the snapshot actually shows it gone.
+* **Console destination.** `to: "console"` only when recorded `output` events follow the
+  return before the next control event — `consoleFollowsReturn(trace, i)` is that fact, and
+  the caller passes it as `context.consoleAfterReturn`. Without it `to` is `null`. No landing
+  variable is ever named.
+* **Error.** An `exception` event is one `error` overlay on the raising frame with
+  `{ type, message, line }`. `unwind` repeats the same exception and adds nothing. The final
+  `error` event is the run's recorded outcome: one `error` overlay on the console, which is
+  also where a compile error lands (it has no frame at all).
+* **Limits.** `step_limit`, `timeout` and `output_limit` add no action: the state did not
+  change, and the truncation banner is derived from the event's status, not from an action.
+
+Nothing here is claimed about list, dict, set or object contents: those are tasks 5 and 6,
+and task 4 emits **no action at all** for a heap transition (section 11).
+
+The module's surface, all pure and free of I/O, clocks and randomness:
+
+| Function | Job |
+|---|---|
+| `snapshotAt(trace, i)` | the event at `i` plus the state it is shown against |
+| `stateOf(snapshot)` | the compared state of section 3, with frames copied |
+| `diffSteps(prev, next, context)` | this step's state actions, then its overlays |
+| `stateActions(actions)` | the subset that changes the snapshot |
+| `applyState(state, actions)` | the state after those actions, without mutating the input |
+| `reverseActions(actions)` | the actions that undo the step; overlays dropped |
+| `consoleFollowsReturn(trace, i)` | the recorded fact behind `to: "console"` |
 
 ## 11. Reporting ambiguity and unsupported cases *(planned: tasks 5, 6 and 8)*
 
@@ -337,6 +373,14 @@ Rules:
   fixture and the animation fixture: transitions, state actions, overlays, and fallbacks
   by reason. A case is only allowed to use a fallback if the report names it;
 * an empty result means "the compared state did not change" — it never means "skipped".
+
+**Collections are not diffed until tasks 5 and 6.** Through task 4 a heap transition
+produces no action at all. That is a stated gap, not a hidden one: the vocabulary has no
+reason code for "deferred", and a highlight on every list step would be noise rather than
+information. The task-4 test counts the deferred transitions (279 of 2933 in the corpus and
+recognition fixtures) and fails if any of them ever gains a cell, entry, attribute or object
+action before the collection diff exists, so the gap cannot be forgotten or filled with a
+guess.
 
 ## 12. Reversibility contract
 
@@ -376,6 +420,21 @@ and the animation fixture, and over **every** consecutive state pair — not a s
 Programs that cannot be modelled are still diffed; they simply produce the conservative
 actions their `reason` explains.
 
+### Task 4 status of the property
+
+`applyState`, `reverseActions` and `stateActions` implement this contract for the kinds task
+4 emits (`appear`, `disappear`, `change`, `call`). Overlays are dropped by `reverseActions`
+and ignored by `applyState`, so they can never mutate the snapshot.
+
+The suite runs the property on the six golden programs in full and on **every** heap-stable
+transition of the corpus and recognition fixtures — 2654 of 2933, over 114 programs. The 279
+transitions that change the heap are counted and excluded until tasks 5–6, because the
+collection actions that would complete them do not exist yet. `applyState` refuses a state
+kind it cannot apply yet (`move`, `grow`, `shrink`) instead of skipping it, so a
+half-applied state can never pass for a correct one. The comparison is deep equality of the
+state object of section 3: object key order is not part of the state (the tracer sorts
+variable names anyway), and nothing else is normalised, sorted or filtered.
+
 ## 13. What the layer never does
 
 * run Python, compile Python, or evaluate user code;
@@ -392,8 +451,8 @@ actions their `reason` explains.
 | 1 | vocabulary, effects, canonical targets, deterministic ids, overlay reset helper | **done** |
 | 2 | safe index-expression evaluator + separate bounds resolver | **done** |
 | 3 | statement-shape parser (`lineShape.js`) | **done** |
-| 4 | diff core: frames, calls, returns, print, error, variables | planned |
+| 4 | diff core: snapshots, frames, calls, returns, print, error, variables, `applyState`/`reverseActions` | **done** |
 | 5 | list/tuple diff, movement inference, ambiguity fallbacks | planned |
 | 6 | dict/set/object diff | planned |
-| 7 | `apply.js` + whole-corpus reversibility property | planned |
-| 8 | golden action lists (20+ programs), determinism report, fixture wiring | planned |
+| 7 | `apply.js` + whole-corpus reversibility property | partly: `applyState`/`reverseActions` and the property for variables, frames and console facts landed in task 4; the whole-corpus property completes with tasks 5–6 |
+| 8 | golden action lists (20+ programs), determinism report, fixture wiring | partly: six golden programs, determinism and id stability in task 4 |

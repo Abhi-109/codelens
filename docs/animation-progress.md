@@ -1,12 +1,12 @@
 # Animation visualizer: progress
 
-**Current phase:** 1 (Diff engine) — tasks 1–3 of 8 done. Tasks 4–8 await approval, one at a
+**Current phase:** 1 (Diff engine) — tasks 1–4 of 8 done. Tasks 5–8 await approval, one at a
 time.
 **Last updated:** 2026-10-24
 
 ## Phase checklist
 - [x] 0 Audit
-- [ ] 1 Diff engine (tasks 1–3 of 8 done)
+- [ ] 1 Diff engine (tasks 1–4 of 8 done)
 - [ ] 2 Two-panel page + generic stage
 - [ ] 3 List motion
 - [ ] 4 Frames, recursion, objects
@@ -21,7 +21,8 @@ time.
 | 0.2 Record the owner's Phase 0 decisions; correct the stale corpus count in the spec | done | `334d210` |
 | 1.1 Action vocabulary, canonical targets, deterministic ids, overlay reset helper, `docs/animation.md` skeleton | done | `8e4e4b9` + `0900dc3` |
 | 1.2 Safe index-expression evaluator + separate bounds resolver | done | `044140e` + `9079d15` |
-| 1.3 Statement-shape parser (`lineShape.js`) + tests | done | this commit |
+| 1.3 Statement-shape parser (`lineShape.js`) + tests | done | `abe932e` + `c9156f6` |
+| 1.4 Diff core: snapshots, frames, calls, returns, print, error, variables, apply/reverse, six goldens | done | this commit |
 
 ## Decisions made
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the
@@ -94,9 +95,32 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await approval to start Phase 1 task 4: the diff core (`src/animation/diff.js`) — frames,
-calls, returns, print, error and variables, combining source evidence from `lineShape.js`
-with before/after snapshots. Tasks 5–8 are unchanged in the approved plan.
+Await approval to start Phase 1 task 5: the list/tuple diff — cells by index, `move`
+(swap/shift), `grow`/`shrink`, and the ambiguity fallbacks that reuse `lineShape.js`'s
+swap/shift shapes. Tasks 6–8 are unchanged in the approved plan.
+
+## Task 1.4 notes
+- `diff.js` diffs **state only**: the frame stack, each frame's variables, and the
+  console/return/error facts an event records. `call` adds a frame once (no second
+  `appear`); a returning frame stays until the next state-bearing event, where its
+  `disappear` carries the frame in `from`; `print`, `return` and `error` are overlays.
+- Events that record no snapshot (`output`, `input`, `error`, limit events) are shown
+  against the last recorded state via `snapshotAt`, so a print step does not look like an
+  empty program. `input` adds no overlay because the tracer echoes it as an `output`.
+- A return names the console only when `consoleFollowsReturn(trace, i)` proves recorded
+  output follows before the next control event; `unwind` repeats an exception that already
+  has its badge and adds nothing.
+- Round trip measured with the exact section-3 state: 2933 transitions over 114 programs,
+  **2654 heap-stable transitions** pass forward and backward; the 279 heap transitions are
+  counted and excluded until tasks 5–6, and the test fails if any of them gains a cell,
+  entry, attribute or object action before then. Six golden programs pin the action lists
+  (assign-only, if-elif-else, for-loop, function-print-return, error-division, recursion).
+- `applyState`/`reverseActions` refuse `move`/`grow`/`shrink` rather than skipping them, so
+  no half-applied state can pass for a correct one.
+- Decision: **no placeholder action for heap changes.** The reason set in `actions.js` is
+  closed and has no "deferred" code, and a highlight on every list step would be noise; the
+  gap is documented and counted instead. Adding the reason belongs to task 5, where the real
+  collection diff makes it unnecessary.
 
 ## Task 1.3 notes
 - `lineShape.js` recognizes syntax only: swap, shift, subscript assign, attribute assign,
