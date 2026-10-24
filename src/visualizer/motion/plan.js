@@ -111,6 +111,7 @@ function listSlots(objectId, object, heap) {
   return (object.items ?? []).map((value, index) => ({
     key: motionTargetKey({ kind: "cell", objectId, index }),
     kind: "cell",
+    container: "list",
     objectId,
     index,
     label: String(index),
@@ -122,6 +123,7 @@ function dictSlots(objectId, object, heap) {
   return (object.entries ?? []).map((entry) => ({
     key: motionTargetKey({ kind: "entry", objectId, key: entry.key }),
     kind: "entry",
+    container: "dict",
     objectId,
     rawKey: entry.key,
     label: showValue(entry.key, heap),
@@ -133,6 +135,7 @@ function setSlots(objectId, object, heap) {
   return (object.items ?? []).map((member) => ({
     key: motionTargetKey({ kind: "entry", objectId, key: member }),
     kind: "entry",
+    container: "set",
     objectId,
     rawKey: member,
     label: showValue(member, heap),
@@ -144,6 +147,7 @@ function attributeSlots(objectId, object, heap) {
   return (object.attrs ?? []).map((attribute) => ({
     key: motionTargetKey({ kind: "attribute", objectId, name: attribute.name }),
     kind: "attribute",
+    container: "object",
     objectId,
     name: attribute.name,
     label: attribute.name,

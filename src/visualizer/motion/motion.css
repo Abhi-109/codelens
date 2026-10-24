@@ -1,0 +1,350 @@
+/* The motion canvas: real data cards and cells, not a scripted demo.
+ * Every color comes from tokens.css. The only motion-specific properties here
+ * are the static step flags; the component owns the Web Animations transforms. */
+
+.motion-stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-1) var(--space-1) var(--space-4);
+  color: var(--text);
+}
+
+.motion-stage.motion-empty {
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--code-bg);
+  text-align: center;
+}
+
+.motion-stage.motion-empty p {
+  max-width: 34ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.motion-stage-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex: none;
+  min-height: 22px;
+}
+
+.motion-kicker {
+  font: 600 10px/1.4 var(--sans);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.motion-event {
+  overflow: hidden;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: 10.5px;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motion-frames {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.motion-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.motion-frame.is-current {
+  border-color: var(--accent-border);
+}
+
+.motion-frame.is-highlighted {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.motion-frame-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.motion-fn {
+  overflow: hidden;
+  font: 600 12px/1.4 var(--mono);
+  color: var(--text-h);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motion-frame-line {
+  flex: none;
+  font: 10.5px/1.4 var(--mono);
+  color: var(--text);
+}
+
+.motion-vars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.motion-var {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--code-bg);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.motion-var-name {
+  color: var(--text);
+}
+
+.motion-var.is-changed,
+.motion-slot.is-changed {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.motion-var.is-highlighted,
+.motion-slot.is-highlighted {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+
+.motion-frame-empty,
+.motion-object-empty,
+.motion-object-more,
+.motion-no-values {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.motion-objects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.motion-object {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.motion-object.is-highlighted {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+
+.motion-object-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.motion-object-label {
+  overflow: hidden;
+  font: 600 12px/1.4 var(--mono);
+  color: var(--text-h);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motion-object-type {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--code-bg);
+  font: 9.5px/1.5 var(--mono);
+  color: var(--text);
+  text-transform: lowercase;
+}
+
+.motion-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.motion-slots.slots-dict,
+.motion-slots.slots-object {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.motion-slot {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+.motion-slot-dict,
+.motion-slot-attribute {
+  justify-content: space-between;
+}
+
+.motion-slot-key {
+  flex: none;
+  color: var(--text);
+  font-size: 10px;
+}
+
+.motion-value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-h);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motion-value[data-type="str"] {
+  color: var(--teal);
+}
+
+.motion-value[data-type="ref"] {
+  color: var(--violet);
+}
+
+.motion-value[data-type="bool"] {
+  color: var(--copper);
+}
+
+.motion-value[data-type="none"] {
+  color: var(--slate);
+}
+
+.motion-ref {
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font-size: 9px;
+  vertical-align: 1px;
+}
+
+.motion-object-more {
+  margin-top: -2px;
+}
+
+/* Ghosts are positioned over the target layout from the previous measurement,
+   then faded out. They carry the removed node's recorded value only. */
+
+.motion-ghost-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.motion-ghost {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--raised);
+  box-shadow: var(--shadow-md);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.motion-ghost-name {
+  flex: none;
+  color: var(--text);
+}
+
+.motion-ghost-value {
+  overflow: hidden;
+  color: var(--text-h);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .motion-stage {
+    padding: var(--space-1) 0 var(--space-3);
+  }
+
+  .motion-objects {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .motion-frame {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-frame,
+  .motion-object,
+  .motion-slot,
+  .motion-var {
+    transition: none;
+  }
+
+  .motion-ghost-layer {
+    display: none;
+  }
+}

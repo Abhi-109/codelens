@@ -114,3 +114,4 @@ Rules:
 | 2026-10-24 | A return value may animate toward the console for `print(f(x))` when the trace proves the output follows the return; no landing variable is invented. Otherwise the return animation stays simpler. | owner |
 | 2026-10-24 | Sets are unordered bags of cells: their elements may appear and disappear, never move between ordered positions. | owner |
 | 2026-10-24 | Task 7 keeps exactly two primary panels, Code and Visual Animation. The existing inspector tabs and canvas switcher live inside the right panel as views, never as separate primary panels. This is the approved Task 7 layout; remaining `apply.js` and whole-corpus golden work is separately scoped. | owner |
+| 2026-10-24 | Task 7 Stage 2 adds `Motion` as an additional canvas in the existing switcher while the two-panel layout is still pending. It uses the shared event cursor and keeps every existing canvas and the default Adaptive view unchanged. | owner |

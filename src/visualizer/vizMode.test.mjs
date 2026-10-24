@@ -37,7 +37,7 @@ function storeWith(values = {}, { throws = false } = {}) {
 test("every offered canvas has a name and a plain-English blurb", () => {
   assert.deepEqual(
     VIZ_MODES,
-    ["scene", "tree", "flow", "combined", "timeline"],
+    ["scene", "tree", "flow", "combined", "timeline", "motion"],
     "Adaptive is the canvas a fresh run opens on",
   );
   assert.equal(DEFAULT_VIZ, "scene");

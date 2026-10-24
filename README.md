@@ -213,12 +213,14 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 111 Python tests: the tracer, the flowchart model, the static
                       # program profile and the corpus
-npm run test:js       # 640 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 648 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6
                       # dict/set/object contents and lifecycle), the pure motion
                       # plan (stable nodes, operations, seeks, reduced motion and
-                      # cancellation),
+                      # cancellation), the DOM-free motion view and its real-
+                      # action-to-render mapping (persistent keys, verified moves,
+                      # ghosts, highlights),
                       # the safe index evaluator and the
                       # statement-shape parser, the call tree and control flow model and
                       # layout, the
@@ -313,7 +315,12 @@ codelens/
 │   │   ├── session/             # one execution session: run, cursor, playback, selected call
 │   │   ├── motion/
 │   │   │   ├── plan.js          # cursor -> stable nodes + generic motion operations (pure)
-│   │   │   └── plan.test.mjs   # real traces, reversibility, seeks, timing, cancellation
+│   │   │   ├── plan.test.mjs   # real traces, reversibility, seeks, timing, cancellation
+│   │   │   ├── view.js          # plan -> drawable nodes, ghosts and step flags (pure)
+│   │   │   ├── view.test.mjs   # real-trace action-to-render mapping
+│   │   │   ├── MotionStage.jsx  # persistent data cards, FLIP moves, cancellation
+│   │   │   ├── motion.css       # the motion canvas styling, token-only
+│   │   │   └── useReducedMotion.js # the live prefers-reduced-motion preference
 │   │   ├── Inspector.jsx        # six tabbed sections, full ARIA tab pattern
 │   │   ├── PlaybackBar.jsx      # stepping, timeline, speed, Developer menu
 │   │   ├── panelBits.jsx        # shared panel pieces (components only)
@@ -341,7 +348,7 @@ codelens/
 │   │   ├── Canvas.jsx           # the shared surface: pan, zoom, fit, follow, expand
 │   │   ├── CallTree.jsx         # canvas 1: the calls this run made, nested
 │   │   ├── CombinedView.jsx     # canvas 3: the tree beside the stack or variables
-│   │   ├── VisualizationPane.jsx # one canvas toolbar: the five views and the tools slot
+│   │   ├── VisualizationPane.jsx # one canvas toolbar: the offered views and the tools slot
 │   │   ├── workspace.css        # the chrome layer: toolbar, split, tabs, playback bar
 │   │   └── SimpleFlow.jsx       # the v1 block outline, behind "Simple view"
 │   ├── flowchart/
@@ -430,8 +437,8 @@ in [docs/scope.md](docs/scope.md).
 
 Working end to end, and teaching: the tracer runs the bundled examples plus a
 60-program corpus covering 33 categories of Python, and the UI replays any of
-them on five canvases — Adaptive, call tree, control flow, combined and
-timeline — with a six-section inspector and plain-English explanations for every
+them on six canvases — Adaptive, call tree, control flow, combined, timeline and
+motion — with a six-section inspector and plain-English explanations for every
 kind of step. One workspace toolbar, one canvas toolbar and one playback bar
 replace the four competing control rows the page used to have; the drawing keeps
 the space, and the inspector is a single tabbed column. Runs

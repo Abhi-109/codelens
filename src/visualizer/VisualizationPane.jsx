@@ -4,7 +4,7 @@ import { VIZ_BLURBS, VIZ_LABELS, VIZ_MODES } from "./vizMode.js";
 /**
  * The canvas chooser and the drawing, in one pane.
  *
- * The toolbar is one row: a segmented control for the five canvases on the
+ * The toolbar is one row: a segmented control for the offered canvases on the
  * left, and an optional `tools` slot on the right for whatever that canvas
  * needs (the adaptive view's adapter menu). There is deliberately no heading
  * above it - the active tab says what the drawing is - and no second strip of

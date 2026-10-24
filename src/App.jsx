@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   buildFlowchart,
   buildFlowchartGraph,
@@ -17,6 +17,9 @@ import AdaptiveView, { AdaptiveTools } from "./visualizer/AdaptiveView.jsx";
 import { resolveAdaptiveView } from "./visualizer/adaptive.js";
 import CombinedView from "./visualizer/CombinedView.jsx";
 import Inspector from "./visualizer/Inspector.jsx";
+import MotionStage from "./visualizer/motion/MotionStage.jsx";
+import { planMotion } from "./visualizer/motion/plan.js";
+import { useReducedMotion } from "./visualizer/motion/useReducedMotion.js";
 import PlaybackBar from "./visualizer/PlaybackBar.jsx";
 import RunStoryCard from "./visualizer/RunStoryCard.jsx";
 import CallTree from "./visualizer/CallTree.jsx";
@@ -293,8 +296,14 @@ function Workspace() {
   const [dismissed, setDismissed] = useState(() => new Set());
   // On a phone the Run button lives behind the Code tab, so start there.
   const [pane, setPane] = useState(() => (window.innerWidth < 900 ? "code" : "graph"));
+  const [motionPlan, setMotionPlan] = useState(null);
+  const reducedMotion = useReducedMotion();
 
   const timer = useRef(null);
+  // The previous cursor position only matters when the index changes. Keeping
+  // it in a ref means an unrelated re-render cannot turn an in-flight adjacent
+  // transition into a "hold" and cancel its animation.
+  const motionFrom = useRef({ trace: null, index: null });
   // The gate rejects a run whose source was edited or whose successor started
   // while it was still waiting on the worker. The ref mirrors `source` so an
   // edit made during a run is visible to the async handler immediately.
@@ -348,6 +357,25 @@ function Workspace() {
   const trace = selectTrace(session);
   const traceIndex = selectTraceIndex(session);
   const shownSource = selectRunSource(session);
+  // Build the plan only when the cursor or its facts change, and do it before
+  // paint so the canvas never shows the previous step. The previous index is
+  // sampled here, in the effect, so a later unrelated render cannot rewrite the
+  // transition in progress.
+  useLayoutEffect(() => {
+    const previousIndex =
+      motionFrom.current.trace === trace ? motionFrom.current.index : null;
+    motionFrom.current = { trace, index };
+    setMotionPlan(
+      viz === "motion"
+        ? planMotion(trace, index, {
+            source: shownSource,
+            previousIndex,
+            reducedMotion,
+            speed,
+          })
+        : null,
+    );
+  }, [viz, trace, index, shownSource, reducedMotion, speed]);
   const graph = useMemo(() => buildExecutionGraph(trace, shownSource), [trace, shownSource]);
   const view = useMemo(
     () => selectStepView(session, { steps: graph.steps }),
@@ -953,6 +981,8 @@ function Workspace() {
                     : null
                 }
               />
+            ) : viz === "motion" ? (
+              <MotionStage plan={motionPlan} />
             ) : viz === "timeline" ? (
               <TimelinePane
                 trace={trace}

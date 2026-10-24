@@ -1,7 +1,7 @@
 # Animation visualizer: progress
 
 **Current phase:** 1 (Diff engine) — tasks 1–4, 5a–5c and 6 of 8 done.
-**Current milestone:** Task 7 universal motion renderer — Stage 1 done; Stages 2–4 await
+**Current milestone:** Task 7 universal motion renderer — Stages 1–2 done; Stages 3–4 await
 approval one stage at a time. The diff engine's remaining `apply.js`/golden work is
 separately scoped.
 **Last updated:** 2026-10-24
@@ -137,8 +137,41 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await approval to start Task 7 Stage 2: connect the verified motion plan to a real
-`MotionStage` canvas. Stage 1 is complete and committed; no layout refactor has started.
+Await approval to start Task 7 Stage 3. Stage 2 is complete and committed locally; the
+two-panel layout has not been touched and Stage 3 has not started.
+
+## Task 7 Stage 2 notes (real action integration)
+- `src/visualizer/motion/view.js` turns a Stage 1 plan into the DOM-free renderer model:
+  persistent frames, variables, object cards and slots, plus `entering`, `exiting`,
+  `changed`, `highlighted` and `moves` flags. Current nodes always carry the exact target
+  snapshot; exit ghosts carry the recorded previous node only, and only when the plan is a
+  real adjacent animation. Seeks, resets, holds and reduced motion expose no ghosts.
+- `MotionStage.jsx` draws those nodes with stable React keys and uses Web Animations for
+  enter, exit, value pulse, FLIP card/frame moves and verified list movements. List swaps use
+  `payload.indices`; shifts use the action's adjacent pair; insert/delete reindexing uses the
+  action's recorded index. The renderer never infers a move from equal values and never
+  invents list-cell identity: positional keys may change value while keeping their key.
+- The canvas consumes the shared event cursor and the Stage 1 controller. Every new effect
+  cancels the previous animations and supersedes its ticket; completion only settles the
+  controller and never dispatches to the session. Rapid stepping, backward steps, seeks and
+  resets therefore leave the cursor owned by the workspace.
+- Reduced motion is honored twice: `planMotion` zeroes durations, and the component skips
+  all Web Animations and ghosts, drawing the exact target directly. `useReducedMotion` keeps
+  the OS preference live.
+- `Motion` is a sixth entry in the existing canvas switcher (`vizMode.js`), and every prior
+  canvas and inspector remains reachable. No two-panel refactor, tracer change, trace-format
+  change, action-vocabulary change, dependency or default-canvas change was made.
+- Real-trace tests in `view.test.mjs` cover every live action target and ghost across the
+  13-program matrix, a real bubble swap, a real list append and delete, a dictionary value
+  change, real call/return frames, real object lifecycle, and reduced motion. The single
+  highlight test is marked synthetic because no fixture currently emits that fallback action;
+  the plan and nodes still come from a real trace. JS suite is **648 tests**.
+- Browser smoke check on `List.py` in the dev server: selecting Motion showed the real
+  `fruits` cards, step forward created the expected cell/value nodes, three steps 50 ms apart
+  advanced one step each and settled with no dangling animations, Last/First rendered the
+  target directly, and emulated reduced motion produced zero animations and zero ghosts.
+  (Synchronous clicks on the same button still advance once because the existing playback
+  handler closes over the current index; that is unchanged and outside this task.)
 
 ## Task 7 Stage 1 notes (motion plan and playback foundation)
 - `src/visualizer/motion/plan.js` turns one shared cursor position into a pure plan. The

@@ -14,7 +14,7 @@
  */
 
 /** Every canvas the workspace can draw, in the order they are offered. */
-export const VIZ_MODES = ["scene", "tree", "flow", "combined", "timeline"];
+export const VIZ_MODES = ["scene", "tree", "flow", "combined", "timeline", "motion"];
 
 export const DEFAULT_VIZ = "scene";
 export const VIZ_STORAGE_KEY = "codelens-viz";
@@ -25,6 +25,7 @@ export const VIZ_LABELS = {
   flow: "Control flow",
   combined: "Combined",
   timeline: "Timeline",
+  motion: "Motion",
 };
 
 export const VIZ_BLURBS = {
@@ -33,6 +34,7 @@ export const VIZ_BLURBS = {
   flow: "The decision shapes the code has, with the path this run took lit up",
   combined: "The call tree beside the stack and the variables of the current step",
   timeline: "Every recorded step in order, with its line, values and output",
+  motion: "Persistent data cards that move only when the recorded actions prove a movement",
 };
 
 /** True when `value` names a canvas this build actually has. */
