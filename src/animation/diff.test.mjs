@@ -1094,6 +1094,201 @@ test("list objects appear and disappear with their recorded heap entries", () =>
   for (let index = 0; index < filter.trace.length; index += 1) roundTrip(filter, index);
 });
 
+test("dictionary entries are keyed, ordered and reversible", () => {
+  const text = (value) => ({ type: "str", value });
+  const entry = (name, value) => ({ key: text(name), value: int(value) });
+  const snap = (step, entries) => snapshotOf(step, { o1: { type: "dict", entries } });
+  const fields = (actions) =>
+    actions.map((action) => ({
+      kind: action.kind,
+      key: action.target.key?.value ?? null,
+      index: action.payload?.index ?? null,
+      from: action.from?.value ?? null,
+      to: action.to?.value ?? null,
+    }));
+  const check = (before, after) => {
+    const actions = diffSteps(before, after);
+    assert.deepEqual(applyState(stateOf(before), actions), stateOf(after));
+    assert.deepEqual(applyState(stateOf(after), reverseActions(actions, stateOf(after))), stateOf(before));
+    return actions;
+  };
+
+  const added = check(
+    snap(1, [entry("a", 1)]),
+    snap(2, [entry("a", 1), entry("b", 2), entry("c", 3)]),
+  );
+  assert.deepEqual(fields(added), [
+    { kind: "appear", key: "b", index: 1, from: null, to: 2 },
+    { kind: "appear", key: "c", index: 2, from: null, to: 3 },
+  ]);
+  assert.equal(added.some((action) => action.target.key?.value === "a"), false);
+
+  const changed = check(snap(1, [entry("a", 1), entry("b", 2)]), snap(2, [entry("a", 9), entry("b", 2)]));
+  assert.deepEqual(fields(changed), [
+    { kind: "change", key: "a", index: null, from: 1, to: 9 },
+  ]);
+
+  const removed = check(
+    snap(1, [entry("a", 1), entry("b", 2), entry("c", 3)]),
+    snap(2, [entry("a", 1), entry("c", 3)]),
+  );
+  assert.deepEqual(fields(removed), [
+    { kind: "disappear", key: "b", index: 1, from: 2, to: null },
+  ]);
+
+  const mixed = check(
+    snap(1, [entry("a", 1), entry("b", 2), entry("c", 3)]),
+    snap(2, [entry("a", 9), entry("x", 4), entry("c", 3)]),
+  );
+  assert.deepEqual(fields(mixed), [
+    { kind: "disappear", key: "b", index: 1, from: 2, to: null },
+    { kind: "change", key: "a", index: null, from: 1, to: 9 },
+    { kind: "appear", key: "x", index: 1, from: null, to: 4 },
+  ]);
+
+  assert.deepEqual(diffSteps(snap(1, []), snap(2, [])), []);
+  const filled = check(snap(1, []), snap(2, [entry("a", 1)]));
+  assert.deepEqual(fields(filled), [
+    { kind: "appear", key: "a", index: 0, from: null, to: 1 },
+  ]);
+  const emptied = check(snap(1, [entry("a", 1), entry("b", 2)]), snap(2, []));
+  assert.deepEqual(fields(emptied), [
+    { kind: "disappear", key: "b", index: 1, from: 2, to: null },
+    { kind: "disappear", key: "a", index: 0, from: 1, to: null },
+  ]);
+});
+
+test("dictionary reordering and truncated membership stay deferred", () => {
+  const text = (value) => ({ type: "str", value });
+  const entry = (name, value) => ({ key: text(name), value: int(value) });
+  const snap = (step, entries, more) =>
+    snapshotOf(step, { o1: { type: "dict", entries, ...(more ? { more } : {}) } });
+
+  const reordered = diffSteps(
+    snap(1, [entry("a", 1), entry("b", 2)]),
+    snap(2, [entry("b", 2), entry("a", 1)]),
+  );
+  assert.deepEqual(
+    reordered.map((action) => [action.kind, action.target.kind, action.reason]),
+    [["highlight", "object", "unsupported"]],
+  );
+  assert.deepEqual(stateActions(reordered), []);
+
+  const structural = diffSteps(
+    snap(1, [entry("a", 1)], 2),
+    snap(2, [entry("a", 1), entry("b", 2)], 2),
+  );
+  assert.deepEqual(
+    structural.map((action) => [action.kind, action.target.kind, action.reason]),
+    [["highlight", "object", "truncated"]],
+  );
+  assert.deepEqual(stateActions(structural), []);
+
+  const visible = diffSteps(snap(1, [entry("a", 1)], 2), snap(2, [entry("a", 9)], 2));
+  assert.deepEqual(
+    visible.map((action) => [action.kind, action.target.key.value, action.reason]),
+    [["change", "a", "truncated"]],
+  );
+  assert.deepEqual(visible[0].from, int(1));
+  assert.deepEqual(visible[0].to, int(9));
+  const before = snap(1, [entry("a", 1)], 2);
+  const after = snap(2, [entry("a", 9)], 2);
+  assert.deepEqual(applyState(stateOf(before), visible), stateOf(after));
+  assert.deepEqual(applyState(stateOf(after), reverseActions(visible, stateOf(after))), stateOf(before));
+
+  const moreChanged = diffSteps(snap(1, [entry("a", 1)], 2), snap(2, [entry("a", 1)], 3));
+  assert.deepEqual(
+    moreChanged.map((action) => [action.kind, action.target.kind, action.reason]),
+    [["highlight", "object", "truncated"]],
+  );
+  assert.deepEqual(stateActions(moreChanged), []);
+});
+
+test("set membership is value-keyed, unordered and reversible", () => {
+  const snap = (step, items, extra = {}) =>
+    snapshotOf(step, { o1: { type: "set", items, ...extra } });
+  const fields = (actions) =>
+    actions.map((action) => ({
+      kind: action.kind,
+      key: action.target.key?.value ?? null,
+      index: action.payload?.index ?? null,
+      from: action.from?.value ?? null,
+      to: action.to?.value ?? null,
+    }));
+  const check = (before, after) => {
+    const actions = diffSteps(before, after);
+    assert.deepEqual(actions.filter((action) => action.target.kind === "cell"), []);
+    assert.deepEqual(actions.filter((action) => action.kind === "move"), []);
+    assert.deepEqual(applyState(stateOf(before), actions), stateOf(after));
+    assert.deepEqual(applyState(stateOf(after), reverseActions(actions, stateOf(after))), stateOf(before));
+    return actions;
+  };
+
+  const added = check(snap(1, [int(1), int(3)]), snap(2, [int(1), int(2), int(3)]));
+  assert.deepEqual(fields(added), [
+    { kind: "appear", key: 2, index: 1, from: null, to: 2 },
+  ]);
+  assert.equal(added[0].target.kind, "entry");
+
+  const removed = check(snap(1, [int(1), int(2), int(3)]), snap(2, [int(1), int(3)]));
+  assert.deepEqual(fields(removed), [
+    { kind: "disappear", key: 2, index: 1, from: 2, to: null },
+  ]);
+
+  const multipleAdds = check(
+    snap(1, [int(1), int(4)]),
+    snap(2, [int(1), int(2), int(3), int(4)]),
+  );
+  assert.deepEqual(fields(multipleAdds), [
+    { kind: "appear", key: 2, index: 1, from: null, to: 2 },
+    { kind: "appear", key: 3, index: 2, from: null, to: 3 },
+  ]);
+
+  const multipleRemovals = check(
+    snap(1, [int(1), int(2), int(3), int(4)]),
+    snap(2, [int(1), int(4)]),
+  );
+  assert.deepEqual(fields(multipleRemovals), [
+    { kind: "disappear", key: 3, index: 2, from: 3, to: null },
+    { kind: "disappear", key: 2, index: 1, from: 2, to: null },
+  ]);
+
+  assert.deepEqual(diffSteps(snap(1, []), snap(2, [])), []);
+  const filled = check(snap(1, []), snap(2, [int(2)]));
+  assert.deepEqual(fields(filled), [
+    { kind: "appear", key: 2, index: 0, from: null, to: 2 },
+  ]);
+  const emptied = check(snap(1, [int(2)]), snap(2, []));
+  assert.deepEqual(fields(emptied), [
+    { kind: "disappear", key: 2, index: 0, from: 2, to: null },
+  ]);
+});
+
+test("set truncation and class changes stay deferred", () => {
+  const snap = (step, items, extra = {}) =>
+    snapshotOf(step, { o1: { type: "set", items, ...extra } });
+
+  const truncated = diffSteps(
+    snap(1, [int(1)], { more: 2 }),
+    snap(2, [int(1), int(2)], { more: 2 }),
+  );
+  assert.deepEqual(
+    truncated.map((action) => [action.kind, action.target.kind, action.reason]),
+    [["highlight", "object", "truncated"]],
+  );
+  assert.deepEqual(stateActions(truncated), []);
+
+  const classChanged = diffSteps(
+    snap(1, [int(1)], { class: "A" }),
+    snap(2, [int(1)], { class: "B" }),
+  );
+  assert.deepEqual(
+    classChanged.map((action) => [action.kind, action.target.kind, action.reason]),
+    [["highlight", "object", "unsupported"]],
+  );
+  assert.deepEqual(stateActions(classChanged), []);
+});
+
 test("state-proven tail growth is explicit and reversible", () => {
   const sort = recognitionProgram("merge-sort");
   assert.deepEqual(actionsAt(sort, 42).map(describe), [
