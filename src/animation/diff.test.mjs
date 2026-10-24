@@ -572,6 +572,27 @@ test("every transition is classified: supported, or explicitly deferred", () => 
       }
       deferred += 1;
 
+      // Deferred covers the heap comparison only. The frame and variable half
+      // of the state must still round trip exactly, or a dictionary change
+      // could hide a broken call or a lost variable.
+      const frameActions = actions.filter(
+        (action) =>
+          isStateAction(action) &&
+          (action.target?.kind === "frame" || action.target?.kind === "variable"),
+      );
+      try {
+        const forwardFrames = applyState(before, frameActions);
+        const backwardFrames = applyState(after, reverseActions(frameActions, after));
+        if (!isDeepStrictEqual(forwardFrames.frames, after.frames)) {
+          failures.push(`${name} step ${next.step}: deferred transition hides a frame/variable change`);
+        }
+        if (!isDeepStrictEqual(backwardFrames.frames, before.frames)) {
+          failures.push(`${name} step ${next.step}: deferred transition cannot restore its frames`);
+        }
+      } catch (error) {
+        failures.push(`${name} step ${next.step}: frame/variable apply threw ${error.message}`);
+      }
+
       const found = new Set();
       const ids = new Set([...Object.keys(before.heap), ...Object.keys(after.heap)]);
       for (const id of ids) {
@@ -583,11 +604,23 @@ test("every transition is classified: supported, or explicitly deferred", () => 
           if (!isDeepStrictEqual(older, newer)) found.add("task-6");
           continue;
         }
-        if (oldSequence !== newSequence || older?.type !== newer?.type) {
-          found.add(oldSequence && newSequence ? "unsupported-list" : "task-6");
+        // Every list/tuple object is checked on its own, including one that
+        // appears or disappears: its whole-entry action must restore the other
+        // side. Lifecycle is not an exemption from the round trip.
+        if (roundTripsObject(actions, older, newer, id)) continue;
+        if (oldSequence !== newSequence) {
+          const lifecycle =
+            (oldSequence && newer === undefined) || (!oldSequence && older === undefined);
+          if (lifecycle) {
+            failures.push(`${name} step ${next.step}: ${id} lifecycle does not round trip`);
+          }
+          found.add("task-6");
           continue;
         }
-        if (roundTripsObject(actions, older, newer, id)) continue;
+        if (older?.type !== newer?.type) {
+          found.add("unsupported-list");
+          continue;
+        }
         if (older.more !== undefined || newer.more !== undefined) {
           if (highlightOn(actions, id, "truncated")) found.add("truncated");
           else if (highlightOn(actions, id, "unsupported")) found.add("tuple");
