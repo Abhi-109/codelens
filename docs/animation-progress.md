@@ -22,7 +22,8 @@ time.
 | 1.1 Action vocabulary, canonical targets, deterministic ids, overlay reset helper, `docs/animation.md` skeleton | done | `8e4e4b9` + `0900dc3` |
 | 1.2 Safe index-expression evaluator + separate bounds resolver | done | `044140e` + `9079d15` |
 | 1.3 Statement-shape parser (`lineShape.js`) + tests | done | `abe932e` + `c9156f6` |
-| 1.4 Diff core: snapshots, frames, calls, returns, print, error, variables, apply/reverse, six goldens | done | this commit |
+| 1.4 Diff core: snapshots, frames, calls, returns, print, error, variables, apply/reverse, six goldens | done | `6979804` |
+| 1.4b Docs/test cleanup before task 5: deferral wording, error `phase`, exact coverage assertions | done | this commit |
 
 ## Decisions made
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the
@@ -98,6 +99,23 @@ the Phase 1 plan is waiting for approval, not for clarification.
 Await approval to start Phase 1 task 5: the list/tuple diff — cells by index, `move`
 (swap/shift), `grow`/`shrink`, and the ambiguity fallbacks that reuse `lineShape.js`'s
 swap/shift shapes. Tasks 6–8 are unchanged in the approved plan.
+
+## Task 1.4b notes (docs/tests only, no behavior change)
+- `docs/animation.md` now states in the status block, §10, §11 and §12 that heap-only
+  transitions are deliberately unmodelled in task 4 and belong to tasks 5–6; no section
+  claims the animation layer is complete before then.
+- §5/§10 reconcile the error contract with `diff.js`: an `exception` badge carries
+  `{ type, message, line }`; the terminal `error` overlay carries the run's
+  `{ type, message, line, phase }` (`compile`, `runtime` or `tracer`), copied from the event.
+- The corpus coverage test now pins the fixtures' exact partition (114 programs, 2933
+  transitions: 2654 heap-stable round-tripped, 279 deferred) instead of `> 500`/`> 100`
+  floors. The `list-mutation` deferral test pins the four heap-only steps (3–6) and their
+  recorded list contents, so it fails if it stops exercising a real list transition. It is
+  marked temporary until task 5.
+- The filler `FALLBACK_REASON.unsupported === "unsupported"` assertion is gone; the
+  apply/reverse refusal test now checks `move`, `grow` and `shrink` explicitly.
+- No runtime file, action vocabulary, trace format, tracer, corpus, UI or dependency
+  changed. JS test count is unchanged.
 
 ## Task 1.4 notes
 - `diff.js` diffs **state only**: the frame stack, each frame's variables, and the

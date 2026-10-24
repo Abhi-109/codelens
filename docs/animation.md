@@ -7,6 +7,13 @@ the rest of Phase 1 is held to; they describe code that does not exist yet. Noth
 document lets the renderer invent an event: if a fact is not in the trace or the source, the
 action is a highlight or a change, never a move.
 
+**Task 4 is partial on purpose, and this document does not claim the layer is complete.**
+List, tuple, dict, set and object contents are deferred to tasks 5–6, so a heap-only
+transition currently produces no action and the reversibility property is proven only where
+the heap does not change. Section 11 records that gap and the tasks that must close it;
+section 12 states exactly what task 4's proof covers. Until tasks 5–6 land, no heap
+transition may be reported as handled or as complete.
+
 ## 1. What the layer is
 
 `src/animation/` turns two consecutive states of a **format-2** trace plus the executed
@@ -94,7 +101,7 @@ an overlay is keyed by step and can never outlive it.
 | `appear` | state | — | variable, cell, entry, attribute, object, frame | `null`; `to` holds the new element |
 | `disappear` | state | — | same as `appear` | `null`; `from` holds the removed element |
 | `change` | state | — | variable, cell, entry, attribute | `null`; `from`/`to` are the trace values |
-| `highlight` | overlay | — | cell, entry, attribute, variable | optional note; `reason` says why a move was refused |
+| `highlight` | overlay | — | cell, entry, attribute, variable | optional `{ note }`; the action's `reason` field says why a move was refused |
 | `move` | state | `swap`, `shift` | cell | the index pair the move describes |
 | `grow` | state | `append`, `insert` | cell (the new cell) | the inserted value in `to` |
 | `shrink` | state | `pop`, `delete` | cell (the removed cell) | the removed value in `from` |
@@ -103,10 +110,16 @@ an overlay is keyed by step and can never outlive it.
 | `call` | state | — | frame | `{ function, callLine, args }` |
 | `return` | overlay | — | frame | `{ function, value, to: "console" \| null }` |
 | `print` | overlay | — | console | `{ text }` |
-| `error` | overlay | — | frame, or console for a syntax error | `{ type, message, line }` |
+| `error` | overlay | — | frame (an exception), or console (the run's outcome) | `{ type, message, line }` on an exception badge; `{ type, message, line, phase }` on the run's outcome |
 
 `from` / `to` always carry trace values (or, for elements, the snapshot object), never
 formatted display text. Formatting is the renderer's job and must not change an action.
+
+The `error` payload follows the trace: an `exception` event records only `{type, message}`
+and the event's `line`, so the raising frame's badge has no `phase`; the terminal `error`
+event carries the top-level error object, including `phase` (`"compile"` for a syntax error,
+`"runtime"` for a recorded runtime error, `"tracer"` for a tracer failure — `diff.js` copies
+whatever the event records and invents nothing).
 
 ## 6. Action shape and deterministic ids
 
@@ -331,14 +344,18 @@ that step's actions. The rules for the non-collection half of the state:
   the caller passes it as `context.consoleAfterReturn`. Without it `to` is `null`. No landing
   variable is ever named.
 * **Error.** An `exception` event is one `error` overlay on the raising frame with
-  `{ type, message, line }`. `unwind` repeats the same exception and adds nothing. The final
-  `error` event is the run's recorded outcome: one `error` overlay on the console, which is
-  also where a compile error lands (it has no frame at all).
+  `{ type, message, line }` (an exception event records no `phase`). `unwind` repeats the
+  same exception and adds nothing. The final `error` event is the run's recorded outcome:
+  one `error` overlay on the console with `{ type, message, line, phase }`, which is also
+  where a compile error lands (it has no frame at all; its `phase` is `"compile"`).
 * **Limits.** `step_limit`, `timeout` and `output_limit` add no action: the state did not
   change, and the truncation banner is derived from the event's status, not from an action.
 
-Nothing here is claimed about list, dict, set or object contents: those are tasks 5 and 6,
-and task 4 emits **no action at all** for a heap transition (section 11).
+Nothing here is claimed about list, dict, set or object contents: those are tasks 5 and 6.
+Task 4 deliberately emits **no action at all** for a heap-only transition (sections 11 and
+12), so a list that sorts, a dict that grows or an object whose attribute changes is not yet
+animated. Tasks 5–6 must replace that deferral with real collection actions and inverses;
+until they do, the animation layer is not complete and no test may call it so.
 
 The module's surface, all pure and free of I/O, clocks and randomness:
 
@@ -374,18 +391,32 @@ Rules:
   by reason. A case is only allowed to use a fallback if the report names it;
 * an empty result means "the compared state did not change" — it never means "skipped".
 
-**Collections are not diffed until tasks 5 and 6.** Through task 4 a heap transition
-produces no action at all. That is a stated gap, not a hidden one: the vocabulary has no
-reason code for "deferred", and a highlight on every list step would be noise rather than
-information. The task-4 test counts the deferred transitions (279 of 2933 in the corpus and
-recognition fixtures) and fails if any of them ever gains a cell, entry, attribute or object
-action before the collection diff exists, so the gap cannot be forgotten or filled with a
-guess.
+**Heap-only transitions are deliberately unmodelled in task 4 and belong to tasks 5–6.**
+Through task 4 no heap content is diffed, and a heap-only transition produces no action at
+all (a transition that also changes frames or variables still gets those actions). That is a
+stated gap, not a hidden one, and it is exactly why the animation layer is not complete:
+`diff.js` makes no claim about list, dict, set or object contents, and
+`applyState`/`reverseActions` refuse `move`, `grow` and `shrink` rather than half-applying
+them. The vocabulary has no reason code for "deferred", and a highlight on every list step
+would be noise rather than information. Tasks 5 and 6 must emit the real collection actions
+and their inverses, at which point the gap closes; no later task may leave a heap-only
+transition silent.
+
+The task-4 suite pins the gap instead of trusting it. It classifies **every** consecutive
+transition of the corpus and recognition fixtures (2933 over 114 programs) into exactly two
+sets: 2654 heap-stable transitions must round trip forward and backward, and the remaining
+279 heap-changing transitions must be exactly the deferred ones. It fails if any deferred
+transition gains a cell, entry, attribute or object action before the collection diff
+exists. `list-mutation` additionally pins the four heap-only list steps it defers (the sort,
+the reverse, the cell assignment and the shrink) with their recorded contents, so the test
+fails if it stops exercising actual heap changes. Nothing here may be read as coverage of
+the deferred half of the state; section 12 says what the property does and does not prove.
 
 ## 12. Reversibility contract
 
-**State actions are exactly invertible over the state in section 3.** For every consecutive
-pair of state events `(A, B)` in a trace, with `actions = diffSteps(A, B, context)`:
+**The required contract, from tasks 5–6 onward: state actions are exactly invertible over
+the state in section 3.** For every consecutive pair of state events `(A, B)` in a trace,
+with `actions = diffSteps(A, B, context)`:
 
 ```
 applyState(stateOf(A), stateActions(actions))          ≡ stateOf(B)
@@ -396,6 +427,13 @@ The comparison is a deep equality of the exact state object in section 3 — eve
 variables, the stack's frame ids/functions/call_lines, and the whole heap including
 `more`, `class` and ordering. It is **not** normalised, sorted or filtered to make a test
 pass. If a transition cannot satisfy it, the diff is wrong and must change, not the test.
+
+**Task 4's proof is narrower than this contract.** Until tasks 5–6 land, the property is
+proven only for transitions whose compared heap is unchanged (plus the six golden programs,
+whose heap is also stable). Full snapshot-state coverage over every consecutive pair is
+required after tasks 5–6; until then a passing test is evidence about frames, variables and
+the console facts only, never about collections. The task-4 status below gives the exact
+counts.
 
 Inverse pairs:
 
@@ -415,25 +453,32 @@ every overlay of the previous step is dropped (`overlayActionsAt` returns none f
 step); a forward step installs only its own. This is tested separately from the snapshot
 property, so a passing reversibility test can never hide a stuck flash or a stale arrow.
 
-The suite runs the property over **every** program in the corpus, the recognition fixture
-and the animation fixture, and over **every** consecutive state pair — not a sample.
-Programs that cannot be modelled are still diffed; they simply produce the conservative
-actions their `reason` explains.
+After tasks 5–6, the suite must run the property over **every** program in the corpus, the
+recognition fixture and the animation fixture, and over **every** consecutive state pair —
+not a sample. Task 4 runs the same partition over every program and every pair, but proves
+the property only on the heap-stable side. Programs that cannot be modelled are still
+diffed; they simply produce the conservative actions their `reason` explains.
 
 ### Task 4 status of the property
 
 `applyState`, `reverseActions` and `stateActions` implement this contract for the kinds task
 4 emits (`appear`, `disappear`, `change`, `call`). Overlays are dropped by `reverseActions`
-and ignored by `applyState`, so they can never mutate the snapshot.
+and ignored by `applyState`, so they can never mutate the snapshot. The collection kinds
+(`move`, `grow`, `shrink`) are in the vocabulary but their diff, application and inverse are
+tasks 5–6; `applyState` and `reverseActions` refuse them rather than skipping them, so a
+half-applied state can never pass for a correct one.
 
 The suite runs the property on the six golden programs in full and on **every** heap-stable
-transition of the corpus and recognition fixtures — 2654 of 2933, over 114 programs. The 279
-transitions that change the heap are counted and excluded until tasks 5–6, because the
-collection actions that would complete them do not exist yet. `applyState` refuses a state
-kind it cannot apply yet (`move`, `grow`, `shrink`) instead of skipping it, so a
-half-applied state can never pass for a correct one. The comparison is deep equality of the
-state object of section 3: object key order is not part of the state (the tracer sorts
-variable names anyway), and nothing else is normalised, sorted or filtered.
+transition of the corpus and recognition fixtures — 2654 of 2933, over 114 programs. The
+remaining 279 transitions change the heap and are counted and excluded until tasks 5–6,
+because the collection actions that would complete them do not exist yet; the test fails if
+any of them gains a cell, entry, attribute or object action early. This is a deliberate,
+temporary gap: tasks 5–6 must extend the proof to those 279 pairs and then to every state
+pair, and only then is the reversibility property complete. The comparison is deep equality
+of the state object of section 3: object key order is not part of the state (the tracer
+sorts variable names anyway), and nothing else is normalised, sorted or filtered. The
+fixture counts are pinned in the test, not used as thresholds, so a regenerated fixture
+must update them deliberately.
 
 ## 13. What the layer never does
 

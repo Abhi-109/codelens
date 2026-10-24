@@ -10,9 +10,9 @@ import { test } from "node:test";
 import { gunzipSync } from "node:zlib";
 
 import {
-  FALLBACK_REASON,
   STATE_KINDS,
   canonicalValue,
+  createAction,
   isStateAction,
   overlayActionsAt,
 } from "./actions.js";
@@ -398,10 +398,12 @@ test("the same round trip holds over the whole corpus wherever the heap is uncha
     })),
   ];
   const failures = [];
+  let total = 0;
   let checked = 0;
   let deferred = 0;
   for (const { name, trace } of programs) {
     for (let index = 0; index < trace.length; index += 1) {
+      total += 1;
       const prev = index === 0 ? null : snapshotAt(trace, index - 1);
       const next = snapshotAt(trace, index);
       const before = stateOf(prev);
@@ -428,25 +430,47 @@ test("the same round trip holds over the whole corpus wherever the heap is uncha
     }
   }
   assert.deepEqual(failures, []);
-  assert.ok(checked > 500, `${checked} heap-stable transitions were checked`);
-  assert.ok(deferred > 100, `${deferred} heap transitions are deferred to tasks 5-6`);
+  assert.equal(programs.length, 114, "every program in the corpus and recognition fixtures");
+  // These are the fixtures' exact counts, not a floor: a transition is either
+  // heap-stable and round trips, or heap-changing and deferred to tasks 5-6.
+  // Regenerating a fixture must update these numbers deliberately.
+  assert.equal(checked + deferred, total, "every consecutive transition is classified");
+  assert.equal(checked, 2654, "heap-stable transitions checked forward and backward");
+  assert.equal(deferred, 279, "heap-changing transitions deferred to tasks 5-6");
 });
 
-test("a heap change alone produces no action and no claim yet", () => {
+// Temporary until task 5: the deferral below must be deleted when the list diff
+// lands, and this test must then assert the cell actions instead.
+test("a heap-only change is deferred to tasks 5-6 with no action and no claim", () => {
   const { trace } = program("list-mutation");
-  // scores[0] = 99 changes only the heap.
-  const change = trace.findIndex((event, index) => {
-    if (index === 0) return false;
-    const before = stateOf(snapshotAt(trace, index - 1));
+  // The four list transitions this fixture records with frames unchanged: the
+  // list is sorted, reversed, assigned into, and shrunk. Task 4 has nothing to
+  // say about any of them.
+  const heapOnly = [];
+  for (let index = 0; index < trace.length; index += 1) {
+    const before = stateOf(index === 0 ? null : snapshotAt(trace, index - 1));
     const after = stateOf(snapshotAt(trace, index));
-    return (
+    if (
       canonicalValue(before.heap) !== canonicalValue(after.heap) &&
       canonicalValue(before.frames) === canonicalValue(after.frames)
+    ) {
+      heapOnly.push(index);
+    }
+  }
+  assert.deepEqual(heapOnly, [3, 4, 5, 6], "the fixture has four heap-only steps");
+  const items = (index) => snapshotAt(trace, index).heap.o1.items.map((cell) => cell.value);
+  assert.deepEqual(
+    heapOnly.map(items),
+    [[10, 20, 30], [30, 20, 10], [99, 20, 10], [99, 20]],
+    "each deferred step really changes the recorded list, so the gap is exercised",
+  );
+  for (const index of heapOnly) {
+    assert.deepEqual(
+      diffSteps(snapshotAt(trace, index - 1), snapshotAt(trace, index)),
+      [],
+      `step ${index} defers its list change to tasks 5-6: no action, not a guessed one`,
     );
-  });
-  assert.notEqual(change, -1, "the program has a heap-only transition");
-  const actions = diffSteps(snapshotAt(trace, change - 1), snapshotAt(trace, change));
-  assert.deepEqual(actions, [], "collections are tasks 5-6: no action, not a guessed one");
+  }
 });
 
 test("overlays never change the state and vanish with their step", () => {
@@ -524,27 +548,35 @@ test("reverse drops overlays, inverts state actions, and inverts back", () => {
   }
 });
 
-test("applyState refuses what it cannot honestly apply", () => {
+test("applyState refuses the state kinds whose diff has not landed yet", () => {
   const { trace } = program("assign-only");
   const state = stateOf(snapshotAt(trace, 2));
-  const cell = {
-    id: "0:grow.append:o1[0]",
-    step: 0,
-    kind: "grow",
-    motion: "append",
-    effect: "state",
-    target: { kind: "cell", objectId: "o1", index: 0 },
-    path: "o1[0]",
-    from: null,
-    to: { type: "int", value: 1 },
-    reason: null,
-    payload: null,
-  };
-  assert.throws(() => applyState(state, [cell]), /cannot apply a grow action yet/);
-  assert.throws(() => reverseActions([cell]), /cannot reverse a grow action yet/);
+  const one = { type: "int", value: 1 };
+  const cell = { kind: "cell", objectId: "o1", index: 0 };
+  // They are in the vocabulary, but only tasks 5-6 can emit and invert them.
+  const collectionActions = [
+    createAction("move", { step: 0, target: { ...cell, index: 1 }, motion: "swap" }),
+    createAction("grow", { step: 0, target: cell, motion: "append", to: one }),
+    createAction("shrink", { step: 0, target: cell, motion: "pop", from: one }),
+  ];
+  assert.deepEqual(
+    collectionActions.map((action) => action.kind),
+    ["move", "grow", "shrink"],
+  );
+  for (const action of collectionActions) {
+    assert.ok(STATE_KINDS.includes(action.kind), `${action.kind} is a state kind`);
+    assert.throws(
+      () => applyState(state, [action]),
+      new RegExp(`cannot apply a ${action.kind} action yet`),
+      `${action.kind} must be refused, never half-applied`,
+    );
+    assert.throws(
+      () => reverseActions([action]),
+      new RegExp(`cannot reverse a ${action.kind} action yet`),
+    );
+  }
   // A silent skip would let a half-applied state pass for a correct one.
   assert.deepEqual(applyState(state, []), state);
-  assert.equal(FALLBACK_REASON.unsupported, "unsupported");
 });
 
 test("diffSteps needs snapshots, and never mutates them", () => {
