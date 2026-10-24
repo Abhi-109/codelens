@@ -517,14 +517,30 @@ test("every transition is classified: supported, or explicitly deferred", () => 
 
       for (const action of actions) {
         if (action.kind === "move") {
-          if (action.motion !== "swap") {
-            failures.push(`${name} step ${next.step}: move.${action.motion} belongs to 5b part 2`);
-          }
           const indices = action.payload?.indices;
           if (!Array.isArray(indices) || indices.length !== 2) {
             failures.push(`${name} step ${next.step}: a move must carry its index pair`);
-          } else if (action.target?.index !== Math.min(...indices)) {
-            failures.push(`${name} step ${next.step}: a move must target its lower index`);
+          } else if (action.motion === "swap") {
+            if (action.target?.index !== Math.min(...indices)) {
+              failures.push(`${name} step ${next.step}: a swap must target its lower index`);
+            }
+          } else if (action.motion === "shift") {
+            if (action.target?.index !== indices[1]) {
+              failures.push(`${name} step ${next.step}: a shift must target its destination`);
+            }
+            if (Math.abs(indices[1] - indices[0]) !== 1) {
+              failures.push(`${name} step ${next.step}: a shift must be adjacent`);
+            }
+            if (
+              action.from === null ||
+              action.from === undefined ||
+              action.to === null ||
+              action.to === undefined
+            ) {
+              failures.push(`${name} step ${next.step}: a shift must carry both values`);
+            }
+          } else {
+            failures.push(`${name} step ${next.step}: unknown move motion ${action.motion}`);
           }
         }
         if (action.target?.kind === "entry" || action.target?.kind === "attribute") {
@@ -805,6 +821,112 @@ test("a verified swap is one move with its index pair, and reverses to itself", 
   const inverse = reverseActions(actions, stateOf(after));
   assert.deepEqual(inverse, actions, "a swap is its own inverse");
   assert.deepEqual(applyState(stateOf(after), inverse), stateOf(before));
+});
+
+test("a verified right shift copies into the destination and reverses to a change", () => {
+  const variables = { values: { type: "ref", id: "o1" }, j: int(0) };
+  const before = snapshotOf(1, { o1: { type: "list", items: [int(5), int(2), int(4)] } });
+  const after = snapshotOf(2, { o1: { type: "list", items: [int(5), int(5), int(4)] } });
+  before.frames[0].variables = variables;
+  after.frames[0].variables = variables;
+  const actions = diffSteps(before, after, { source: "values[j + 1] = values[j]\n" });
+  assert.deepEqual(actions.map(describe), ["move.shift o1[1] [0, 1]"]);
+  assert.equal(actions[0].motion, "shift");
+  assert.equal(actions[0].target.index, 1);
+  assert.deepEqual(actions[0].payload.indices, [0, 1]);
+  assert.deepEqual(actions[0].from, int(2));
+  assert.deepEqual(actions[0].to, int(5));
+  assert.deepEqual(applyState(stateOf(before), actions), stateOf(after));
+  assert.deepEqual(
+    applyState(stateOf(before), actions).heap.o1.items[0],
+    int(5),
+    "the source keeps its value",
+  );
+
+  const inverse = reverseActions(actions, stateOf(after));
+  assert.deepEqual(inverse.map(describe), ["change o1[1] 5 -> 2"]);
+  assert.equal(inverse[0].kind, "change");
+  assert.deepEqual(applyState(stateOf(after), inverse), stateOf(before));
+});
+
+test("a verified left shift targets its lower destination as well", () => {
+  const variables = { values: { type: "ref", id: "o1" }, j: int(0) };
+  const before = snapshotOf(1, { o1: { type: "list", items: [int(5), int(2), int(4)] } });
+  const after = snapshotOf(2, { o1: { type: "list", items: [int(2), int(2), int(4)] } });
+  before.frames[0].variables = variables;
+  after.frames[0].variables = variables;
+  const actions = diffSteps(before, after, { source: "values[j] = values[j + 1]\n" });
+  assert.deepEqual(actions.map(describe), ["move.shift o1[0] [1, 0]"]);
+  assert.equal(actions[0].target.index, 0);
+  assert.deepEqual(actions[0].payload.indices, [1, 0]);
+  assert.deepEqual(actions[0].from, int(5));
+  assert.deepEqual(actions[0].to, int(2));
+  assert.deepEqual(applyState(stateOf(before), actions), stateOf(after));
+  assert.deepEqual(
+    applyState(stateOf(before), actions).heap.o1.items[1],
+    int(2),
+    "the source keeps its value",
+  );
+
+  const inverse = reverseActions(actions, stateOf(after));
+  assert.deepEqual(inverse.map(describe), ["change o1[0] 2 -> 5"]);
+  assert.deepEqual(applyState(stateOf(after), inverse), stateOf(before));
+});
+
+test("a shift the values do not prove stays conservative", () => {
+  const variables = { values: { type: "ref", id: "o1" }, j: int(0) };
+  const snap = (step, items) => {
+    const snapshot = snapshotOf(step, { o1: { type: "list", items } });
+    snapshot.frames[0].variables = variables;
+    return snapshot;
+  };
+  const source = "values[j + 1] = values[j]\n";
+
+  const changed = diffSteps(
+    snap(1, [int(5), int(2), int(4)]),
+    snap(2, [int(5), int(9), int(4)]),
+    { source },
+  );
+  assert.deepEqual(changed.map(describe), ["change o1[1] 2 -> 9 (unknown-shape)"]);
+  assert.equal(changed.some((action) => action.kind === "move"), false);
+
+  const equal = diffSteps(
+    snap(1, [int(5), int(5), int(4)]),
+    snap(2, [int(5), int(5), int(4)]),
+    { source },
+  );
+  assert.deepEqual(equal.map(describe), ["highlight o1 duplicate-values"]);
+  assert.deepEqual(stateActions(equal), []);
+
+  const extra = diffSteps(
+    snap(1, [int(5), int(2), int(4)]),
+    snap(2, [int(5), int(5), int(9)]),
+    { source },
+  );
+  assert.equal(extra.some((action) => action.kind === "move"), false);
+  assert.deepEqual(extra.map(describe), [
+    "change o1[1] 2 -> 5 (unknown-shape)",
+    "change o1[2] 4 -> 9 (unknown-shape)",
+  ]);
+});
+
+test("insertion sort shifts are adjacent moves that round trip exactly", () => {
+  const shifting = recognitionProgram("insertion-sort");
+  const moves = [];
+  for (let index = 0; index < shifting.trace.length; index += 1) {
+    moves.push(...actionsAt(shifting, index).filter((action) => action.kind === "move"));
+  }
+  assert.equal(moves.length, 7, "insertion sort shifts seven times");
+  for (const move of moves) {
+    assert.equal(move.motion, "shift");
+    assert.equal(move.payload.indices.length, 2);
+    assert.equal(move.target.index, move.payload.indices[1]);
+    assert.equal(Math.abs(move.payload.indices[1] - move.payload.indices[0]), 1);
+    assert.notEqual(move.from, null);
+    assert.notEqual(move.to, null);
+  }
+  assert.deepEqual(actionsAt(shifting, 9).map(describe), ["move.shift o1[1] [0, 1]"]);
+  for (let index = 0; index < shifting.trace.length; index += 1) roundTrip(shifting, index);
 });
 
 test("a swap the values do not prove stays conservative", () => {
@@ -1121,15 +1243,64 @@ test("a swap applies once, targets its lower index, and is its own inverse", () 
     /tuple/,
   );
 
-  // Shift arrives with 5b part 2.
+});
+
+test("a shift applies only its destination and refuses malformed actions", () => {
+  const asList = (items) => ({ frames: [], heap: { o1: { type: "list", items } } });
+  const before = asList([int(1), int(2), int(3)]);
+  const after = asList([int(1), int(1), int(3)]);
   const shift = createAction("move", {
     step: 0,
     target: { kind: "cell", objectId: "o1", index: 1 },
     motion: "shift",
+    from: int(2),
+    to: int(1),
     payload: { indices: [0, 1] },
   });
-  assert.throws(() => applyState(before, [shift]), /not supported yet/);
-  assert.throws(() => reverseActions([shift], before), /move\.shift/);
+  assert.deepEqual(applyState(before, [shift]), after);
+  assert.deepEqual(
+    applyState(before, [shift]).heap.o1.items[0],
+    int(1),
+    "the forward shift leaves the source alone",
+  );
+  const inverse = reverseActions([shift], after);
+  assert.deepEqual(inverse.map(describe), ["change o1[1] 1 -> 2"]);
+  assert.deepEqual(applyState(after, inverse), before);
+
+  const malformed = (fields) =>
+    createAction("move", {
+      step: 0,
+      target: { kind: "cell", objectId: "o1", index: 1 },
+      motion: "shift",
+      from: int(2),
+      to: int(1),
+      payload: { indices: [0, 1] },
+      ...fields,
+    });
+  assert.throws(
+    () => applyState(before, [malformed({ target: { kind: "cell", objectId: "o1", index: 0 } })]),
+    /destination/,
+  );
+  assert.throws(() => applyState(before, [malformed({ payload: { indices: [0, 2] } })]), /adjacent/);
+  assert.throws(() => applyState(before, [malformed({ payload: { indices: [2, 3] } })]), /outside/);
+  assert.throws(() => applyState(before, [malformed({ from: null })]), /overwritten/);
+  assert.throws(() => applyState(before, [malformed({ to: null })]), /copied/);
+  assert.throws(() => applyState(before, [malformed({ payload: null })]), /index pair/);
+  assert.throws(
+    () => reverseActions([malformed({ target: { kind: "cell", objectId: "o1", index: 0 } })], after),
+    /destination/,
+  );
+  assert.throws(
+    () => reverseActions([malformed({ payload: { indices: [0, 2] } })], after),
+    /adjacent/,
+  );
+  assert.throws(() => reverseActions([malformed({ from: null })], after), /overwritten/);
+  assert.throws(() => reverseActions([malformed({ to: null })], after), /copied/);
+  assert.throws(
+    () => applyState({ frames: [], heap: { o1: { type: "tuple", items: [int(1), int(2)] } } }, [shift]),
+    /tuple/,
+  );
+  assert.throws(() => reverseActions([shift], { frames: [], heap: { o1: { type: "tuple", items: [int(1), int(2)] } } }), /tuple/);
 });
 
 test("diffSteps needs snapshots, and never mutates them", () => {

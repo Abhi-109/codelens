@@ -1,9 +1,9 @@
 // The diff core: one transition of a format-2 trace becomes a list of actions.
 //
-// Task 5a covers list/tuple state: object lifecycle, cell changes, append/delete
-// and state-proven tail growth/shrinkage. Movement (swap/shift), pop/insert
-// shapes and truncation fallbacks belong to tasks 5b/5c; dict, set and object
-// contents belong to task 6. A transition this module cannot model honestly
+// Tasks 5a and 5b cover list/tuple state: object lifecycle, cell changes,
+// append/delete, state-proven tail growth/shrinkage and verified swap/shift
+// movement. Pop/insert shapes and truncation fallbacks belong to task 5c; dict,
+// set and object contents belong to task 6. A transition this module cannot model honestly
 // carries a highlight with a reason, or is classified as deferred by the tests;
 // it is never silently skipped.
 //
@@ -148,6 +148,50 @@ function swapEvidence(context, older, newer, id) {
     : { i, j };
 }
 
+/**
+ * The adjacent shift a recognized copy statement describes, when the snapshots
+ * agree. Returns null without evidence, or "ambiguous" when the source and
+ * destination hold equal values so the copy cannot be seen. Indices are always
+ * [source, destination]; the action targets the destination.
+ */
+function shiftEvidence(context, older, newer, id) {
+  const parsed = context?.shape;
+  if (
+    parsed?.kind !== "shift" ||
+    parsed.targets.length !== 1 ||
+    parsed.sources.length !== 1
+  ) {
+    return null;
+  }
+  const destination = resolveCellRef(parsed.targets[0], context.heap, context.variables);
+  const source = resolveCellRef(parsed.sources[0], context.heap, context.variables);
+  if (destination === null || source === null) return null;
+  if (destination.objectId !== id || source.objectId !== id) return null;
+  const { index: dest } = destination;
+  const { index: origin } = source;
+  if (Math.abs(dest - origin) !== 1) return null;
+  if (dest >= older.items.length || origin >= older.items.length) return null;
+  // The source must survive, the destination must receive it, and nothing else
+  // may move.
+  if (canonicalValue(newer.items[origin]) !== canonicalValue(older.items[origin])) return null;
+  if (canonicalValue(newer.items[dest]) !== canonicalValue(older.items[origin])) return null;
+  for (let index = 0; index < older.items.length; index += 1) {
+    if (index === origin || index === dest) continue;
+    if (canonicalValue(older.items[index]) !== canonicalValue(newer.items[index])) return null;
+  }
+  return canonicalValue(older.items[origin]) === canonicalValue(older.items[dest])
+    ? "ambiguous"
+    : { origin, dest };
+}
+
+function isIndexPair(indices) {
+  return (
+    Array.isArray(indices) &&
+    indices.length === 2 &&
+    indices.every((index) => Number.isInteger(index) && index >= 0)
+  );
+}
+
 /** The object a reference names, following attributes and ref-valued cells. */
 function followReference(entry, access) {
   if (access?.kind === "attr") {
@@ -220,9 +264,9 @@ function isShapeCell(context, ref, objectId, index) {
 function cellChangeReason(context, objectId, index) {
   const shape = context?.shape;
   if (!shape || shape.kind === "unknown") return FALLBACK_REASON.unknownShape;
-  // A verified swap becomes one move; any cell change left over is a fallback.
-  if (shape.kind === "swap") return FALLBACK_REASON.unknownShape;
-  if (shape.kind === "shift" || shape.kind === "subscript-assign" || shape.kind === "augmented") {
+  // A verified swap/shift becomes one move; any cell change left over is a fallback.
+  if (shape.kind === "swap" || shape.kind === "shift") return FALLBACK_REASON.unknownShape;
+  if (shape.kind === "subscript-assign" || shape.kind === "augmented") {
     return isShapeCell(context, shape.targets[0], objectId, index)
       ? null
       : FALLBACK_REASON.unknownShape;
@@ -394,6 +438,30 @@ function collectionActions(before, after, step, context) {
             target: { kind: "cell", objectId: id, index: Math.min(swap.i, swap.j) },
             motion: "swap",
             payload: { indices: [swap.i, swap.j] },
+          }),
+        );
+        continue;
+      }
+      const shift = shiftEvidence(shape, older, newer, id);
+      if (shift === "ambiguous") {
+        overlays.push(
+          createAction("highlight", {
+            step,
+            target: { kind: "object", objectId: id },
+            reason: FALLBACK_REASON.duplicateValues,
+          }),
+        );
+        continue;
+      }
+      if (shift !== null) {
+        structural.push(
+          createAction("move", {
+            step,
+            target: { kind: "cell", objectId: id, index: shift.dest },
+            motion: "shift",
+            from: older.items[shift.dest],
+            to: newer.items[shift.dest],
+            payload: { indices: [shift.origin, shift.dest] },
           }),
         );
         continue;
@@ -740,20 +808,47 @@ export function reverseActions(actions, state = null) {
         break;
       }
       case "move": {
-        if (action.motion !== "swap") {
+        const indices = action.payload?.indices;
+        if (!isIndexPair(indices)) {
+          throw new TypeError("a move action needs its index pair in payload.indices");
+        }
+        if (action.motion === "swap") {
+          // A swap is its own inverse; the pair is applied exactly once.
+          reversed.push(
+            createAction("move", {
+              step: action.step,
+              target: action.target,
+              motion: "swap",
+              payload: { indices: [...indices] },
+            }),
+          );
+          break;
+        }
+        if (action.motion !== "shift") {
           throw new TypeError(`cannot reverse a move.${String(action.motion)} action yet`);
         }
-        const indices = action.payload?.indices;
-        if (!Array.isArray(indices) || indices.length !== 2) {
-          throw new TypeError("a move.swap needs its index pair in payload.indices");
+        const [origin, dest] = indices;
+        if (Math.abs(dest - origin) !== 1) {
+          throw new TypeError("a move.shift needs adjacent source and destination indices");
         }
-        // A swap is its own inverse; the pair is applied exactly once.
+        if (action.target?.kind !== "cell") throw new TypeError("a move action must target a cell");
+        if (action.target.index !== dest) {
+          throw new TypeError("a move.shift targets its destination cell");
+        }
+        if (action.from === null || action.from === undefined) {
+          throw new TypeError("a move.shift must carry the overwritten value in from");
+        }
+        if (action.to === null || action.to === undefined) {
+          throw new TypeError("a move.shift must carry the copied value in to");
+        }
+        // A shift is undone by restoring the overwritten destination, never by
+        // copying in the opposite direction: the source was never changed.
         reversed.push(
-          createAction("move", {
+          createAction("change", {
             step: action.step,
             target: action.target,
-            motion: "swap",
-            payload: { indices: [...indices] },
+            from: action.to,
+            to: action.from,
           }),
         );
         break;
@@ -858,27 +953,44 @@ export function applyState(state, actions) {
         if (!entry) throw new TypeError(`object ${target.objectId} is not in the heap`);
         if (entry.type === "tuple") throw new TypeError("cannot move tuple cells");
         if (entry.type !== "list") throw new TypeError("a move action must target a list");
-        if (action.motion !== "swap") {
-          throw new TypeError(`a move.${String(action.motion)} action is not supported yet`);
-        }
         const indices = action.payload?.indices;
-        if (
-          !Array.isArray(indices) ||
-          indices.length !== 2 ||
-          !indices.every((index) => Number.isInteger(index) && index >= 0)
-        ) {
-          throw new TypeError("a move.swap needs its index pair in payload.indices");
+        if (!isIndexPair(indices)) {
+          throw new TypeError("a move action needs its index pair in payload.indices");
         }
-        const [i, j] = indices;
-        if (i === j) throw new TypeError("a move.swap cannot swap a cell with itself");
-        if (i >= entry.items.length || j >= entry.items.length) {
-          throw new TypeError(`cells ${i} and ${j} are outside ${target.objectId}`);
+        if (action.motion === "swap") {
+          const [i, j] = indices;
+          if (i === j) throw new TypeError("a move.swap cannot swap a cell with itself");
+          if (i >= entry.items.length || j >= entry.items.length) {
+            throw new TypeError(`cells ${i} and ${j} are outside ${target.objectId}`);
+          }
+          if (target.index !== Math.min(i, j)) {
+            throw new TypeError("a move.swap targets the lower of its two indices");
+          }
+          [entry.items[i], entry.items[j]] = [entry.items[j], entry.items[i]];
+          break;
         }
-        if (target.index !== Math.min(i, j)) {
-          throw new TypeError("a move.swap targets the lower of its two indices");
+        if (action.motion === "shift") {
+          const [origin, dest] = indices;
+          if (Math.abs(dest - origin) !== 1) {
+            throw new TypeError("a move.shift needs adjacent source and destination indices");
+          }
+          if (dest >= entry.items.length || origin >= entry.items.length) {
+            throw new TypeError(`cells ${origin} and ${dest} are outside ${target.objectId}`);
+          }
+          if (target.index !== dest) {
+            throw new TypeError("a move.shift targets its destination cell");
+          }
+          if (action.from === null || action.from === undefined) {
+            throw new TypeError("a move.shift must carry the overwritten value in from");
+          }
+          if (action.to === null || action.to === undefined) {
+            throw new TypeError("a move.shift must carry the copied value in to");
+          }
+          // Only the destination changes; the source keeps its value.
+          entry.items[dest] = copyValue(action.to);
+          break;
         }
-        [entry.items[i], entry.items[j]] = [entry.items[j], entry.items[i]];
-        break;
+        throw new TypeError(`a move.${String(action.motion)} action is not supported yet`);
       }
       case "grow":
       case "shrink": {

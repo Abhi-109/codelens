@@ -213,9 +213,9 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 111 Python tests: the tracer, the flowchart model, the static
                       # program profile and the corpus
-npm run test:js       # 603 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 608 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5a list/tuple state and
-                      # 5b swap movement),
+                      # 5b swap/shift movement),
                       # the safe index evaluator and the
                       # statement-shape parser, the call tree and control flow model and
                       # layout, the

@@ -1,12 +1,12 @@
 # Animation visualizer: progress
 
-**Current phase:** 1 (Diff engine) — tasks 1–4, 5a and 5b-swap of 8 done. Task 5b-shift,
-5c and 6–8 await approval, one at a time.
+**Current phase:** 1 (Diff engine) — tasks 1–4, 5a and 5b of 8 done. Task 5c and 6–8 await
+approval, one at a time.
 **Last updated:** 2026-10-24
 
 ## Phase checklist
 - [x] 0 Audit
-- [ ] 1 Diff engine (tasks 1–4, 5a and 5b-swap of 8 done)
+- [ ] 1 Diff engine (tasks 1–4, 5a and 5b of 8 done)
 - [ ] 2 Two-panel page + generic stage
 - [ ] 3 List motion
 - [ ] 4 Frames, recursion, objects
@@ -25,7 +25,8 @@
 | 1.4 Diff core: snapshots, frames, calls, returns, print, error, variables, apply/reverse, six goldens | done | `6979804` |
 | 1.4b Docs/test cleanup before task 5: deferral wording, error `phase`, exact coverage assertions | done | `c6b7b8f` |
 | 1.5a List/tuple state diff: heap copying, lifecycle, cell changes, append/delete, state-proven tail growth/shrink, explicit supported/deferred classification | done | `75820cb` |
-| 1.5b-swap Swap movement: one verified `move.swap` per pair, apply/reverse, duplicate-value and evidence fallbacks | done | this commit |
+| 1.5b-swap Swap movement: one verified `move.swap` per pair, apply/reverse, duplicate-value and evidence fallbacks | done | `1c95b27` |
+| 1.5b-shift Shift movement: one verified adjacent `move.shift`, destination-only apply, `change` inverse, evidence fallbacks | done | this commit |
 
 ## Decisions made
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the
@@ -105,10 +106,30 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await approval to start Phase 1 task 5b part 2: shift movement (`swap` is done) with the
-overwritten destination carried so its inverse is a `change`, and the conservative
-fallbacks unchanged. Task 5c (pop/insert shapes and truncation fallbacks) and tasks 6–8 are
-unchanged in the approved plan.
+Await approval to start Phase 1 task 5c: pop/insert shapes and truncation fallbacks.
+Movement (`swap` and `shift`) is done; tasks 6–8 are unchanged in the approved plan.
+
+## Task 1.5b-shift notes (movement, adjacent shifts)
+- `diff.js` emits one `move.shift` for an adjacent copy only when the shape, resolved
+  indices and snapshots agree: the destination receives the source's previous value, the
+  source is unchanged, and every other cell is unchanged. The action targets the
+  destination, carries `payload.indices = [source, destination]`, `from` the overwritten
+  destination value and `to` the copied value. Forward application updates only the
+  destination.
+- Equal source/destination values get one object `highlight` with `duplicate-values` and no
+  state action. Unproven values or extra cell changes stay cell `change`s with
+  `unknown-shape`.
+- `reverseActions` emits one `change` on the destination, `from` the copied value and `to`
+  the overwritten value; it never shifts in the opposite direction. Malformed shifts (wrong
+  target, non-adjacent or out-of-range indices, missing indices/from/to, tuple) are refused
+  by both functions.
+- Tests pin synthetic right and left shifts, the conservative cases, all 7 real
+  insertion-sort shifts (one pinned golden and exact round trips), and malformed actions.
+  The exhaustive property accepts both motions and still requires exact full-state equality.
+  Counts unchanged: 2933 event steps, 2896 supported, 2819 pairs (2782 supported), 37
+  deferred.
+- JS test count is **608**. No change to the tracer, trace format, action vocabulary,
+  `lineShape.js`, UI or dependencies.
 
 ## Task 1.5b-swap notes (movement, swap only)
 - `diff.js` emits exactly one `move.swap` per verified pair. Evidence requires the
@@ -122,7 +143,7 @@ unchanged in the approved plan.
   fallbacks; a leftover swap cell change now always says `unknown-shape`.
 - `applyState` rejects malformed pairs (missing indices, same cell, out of range, target not
   the lower index, tuple, non-list). `reverseActions` returns the same swap action, so both
-  directions apply once. `move.shift` is still refused until 5b part 2.
+  directions apply once. `move.shift` was still refused until 5b part 2.
 - Tests pin a synthetic verified swap, the conservative cases (unproven values, equal
   values, unresolved index), real bubble/selection swaps, and malformed pairs. The
   exhaustive property accepts `move.swap`, requires its index pair and lower-index target,
@@ -151,7 +172,7 @@ unchanged in the approved plan.
 - `applyState` accepts `grow.append`/`insert` and `shrink.pop`/`delete`; `append` is
   tail-only, `pop` is last-cell-only, and both motions invert bijectively. `reverseActions`
   takes the optional after-state to reject tuple-cell inverses. `move.swap` is applied in
-  5b part 1; `move.shift` is still refused until part 2.
+  5b part 1; `move.shift` followed in part 2.
 - Round trip measured with the exact section-3 state: 2933 event steps over 114 programs
   (114 run starts + 2819 consecutive pairs). **2896 event steps supported** forward and
   backward, of which **2782 are consecutive pairs**; **37 consecutive pairs deferred to
@@ -165,7 +186,7 @@ unchanged in the approved plan.
   structure, middle `del`, all four grow/shrink motions and invalid cell actions.
 - `docs/animation.md` section 12 now corrects the `move.shift` inverse: a shift-copy
   overwrites the destination, so its inverse is a `change` restoring the destination's
-  previous value, not a reverse shift. Swap is now implemented; shift remains 5b part 2.
+  previous value, not a reverse shift. Swap and shift are now both implemented.
 - JS test count was 600 at this commit. Tracer, trace format, action vocabulary, `lineShape.js`,
   `evaluate.js`, corpus, UI, old visualizer and dependencies are unchanged.
 
