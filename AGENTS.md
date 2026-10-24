@@ -41,3 +41,29 @@ explanation layer.
 - `README.md` test counts and its structure tree drift easily — update them when
   the numbers or `src/` layout change.
 - `docs/roadmap.md` records stage status; update it when a stage lands.
+
+
+```markdown
+## Animation visualizer project: non-negotiable rules
+
+Source of truth: docs/animation-spec.md. Progress and decisions: docs/animation-progress.md.
+Read both at the start of every session.
+
+1. One phase per session. Never start the next phase, and never "get ahead".
+2. Before coding, state objective, in scope, out of scope, files, and tests. Wait for "go".
+3. One task per commit, about 300 lines or less. If a change is bigger, split it.
+4. After every task run: npm run test:tracer, npm run test:js, npm run lint,
+   npm run build. Paste the real output. Never claim a check passed unless you ran it.
+5. The renderer never runs Python and never invents events. If unsure, highlight.
+6. No example-specific code (keep the no-hardcoding test green). Works for any program.
+7. No new dependency, no trace-format change, no deleting features or tests, and no edits
+   outside the phase scope without asking first.
+8. Two-panel page only: Code and Animation. Do not add tabs, inspector cards, dashboards,
+   or AI explanations.
+9. Use existing tokens and both themes. Respect prefers-reduced-motion.
+10. Do not read or paste node_modules, dist, or large generated files.
+11. After each task, update docs/animation-progress.md.
+12. At the end of a phase, do a drift check against the spec (done / partly / not done per
+    requirement), report, and stop.
+If anything is unclear or conflicts with the spec: stop and ask. Do not guess.
+```
