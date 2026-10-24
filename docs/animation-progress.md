@@ -137,10 +137,27 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-The array-cell redesign is in progress: R1 (cells, bars removed) is committed, R2 (verified
-operation highlighting) and R3 (motion verification) follow in this series. Comparison
-visualisation still has no trace data and awaits a separate architectural decision.
-Nothing is pushed.
+Stage 5 R1–R3 are in: labeled cells replace the bars, verified operations ring the cells they
+touch, and the interrupted-move measurement order is fixed. Comparison visualisation has no
+trace data; the smallest viable design for capturing operands and outcomes is reported and
+awaits a separate architectural decision. Nothing is pushed.
+
+## Motion-first Stage 5 notes (animation hardening, R3)
+- Inspected, as asked: interruption on fast playback, seeking and reset, reverse swaps and
+  reduced motion.
+- One defect found and fixed. `MotionStage` cancelled the running animations *before* reading
+  the FLIP source rects, and kept the earlier plan's layout rects in `positions`. So an
+  interrupted move snapped back to its layout slot, then restarted from the previous step's
+  start: a visible backwards jump exactly when playback advances quickly. It now reads the live
+  rects first (they include the running transform), keeps the last rect of detached elements so
+  an exit ghost still fades from where it really was, then cancels and reads the layout targets.
+- No duration, easing, arc height, operation precedence or per-algorithm logic changed. Reverse
+  swaps, seeks/resets and reduced motion already behaved correctly: a seek or reset renders the
+  target with `animate` false, and reduced motion drops every ghost.
+- Existing tests already cover reverse plans, seek/reset, reduced motion and stale controller
+  tickets. The measurement order is inside a DOM layout effect, and the suite is node-only with
+  no jsdom dependency, so this fix has no regression test; it is code-reviewed and still needs
+  a browser check. JS suite stays at **663 tests**.
 
 ## Motion-first Stage 5 notes (verified operation highlighting, R2)
 - `flagsFor` now also builds an `active` set, exposed per slot as `active` and in the DOM as

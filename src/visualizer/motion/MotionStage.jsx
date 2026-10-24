@@ -198,6 +198,17 @@ export default function MotionStage({ plan }) {
 
   useLayoutEffect(() => {
     const motionController = controller.current;
+
+    // Measure before cancelling. A running animation holds a transform, so this
+    // is where each element actually is; cancelling first would snap an
+    // interrupted move back to its layout slot and the next step would jump.
+    // The stored map also keeps the last rect of elements that just left the
+    // DOM, so their ghost can fade out from where it really was.
+    const previousRects = new Map(positions.current);
+    for (const [key, element] of nodeRefs.current) {
+      if (element?.isConnected) previousRects.set(key, element.getBoundingClientRect());
+    }
+
     const cancelAll = () => {
       const running = animations.current;
       animations.current = [];
@@ -223,8 +234,7 @@ export default function MotionStage({ plan }) {
     for (const [key, element] of nodeRefs.current) {
       if (element?.isConnected) currentRects.set(key, element.getBoundingClientRect());
     }
-    const previousRects = positions.current;
-    positions.current = currentRects;
+    positions.current = previousRects;
 
     for (const element of ghostRefs.current.values()) {
       element.style.visibility = "hidden";
