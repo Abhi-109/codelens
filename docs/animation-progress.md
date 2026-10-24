@@ -28,7 +28,7 @@ approval, one at a time.
 | 1.5b-swap Swap movement: one verified `move.swap` per pair, apply/reverse, duplicate-value and evidence fallbacks | done | `1c95b27` |
 | 1.5b-shift Shift movement: one verified adjacent `move.shift`, destination-only apply, `change` inverse, evidence fallbacks | done | `6c8e2c7` |
 | 1.5c Insert/pop shapes: verified `grow.insert`, bare `shrink.pop`, explicit `shrink.delete`, Python-normalized insert indices, conservative fallbacks | done | this commit |
-| 1.6 Dict/set/object contents: keyed entry and attribute add/remove/change, non-sequence lifecycle, exact inverse with insertion order, deferred ambiguity | done | `f8edf2f` + `82f369f` + `34f1145` + this docs commit |
+| 1.6 Dict/set/object contents: keyed entry and attribute add/remove/change, non-sequence lifecycle, exact inverse with insertion order, deferred ambiguity | done | `f8edf2f` + `82f369f` + `34f1145` + docs commits |
 
 ## Decisions made
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the

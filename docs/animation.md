@@ -4,8 +4,9 @@
 vocabulary (`actions.js`), the safe evaluator (`evaluate.js`), the statement-shape parser
 (`lineShape.js`), the diff core (`diff.js`), and the collection diff for lists, tuples,
 dictionaries, sets and objects, with verified swap/shift movement, insert/pop shapes and
-exactly reversible content and lifecycle actions. Task 7 (`apply.js` and the whole-corpus
-property) and task 8 (the per-program report and remaining goldens) are still ahead.
+exactly reversible content and lifecycle actions. Task 7 (`apply.js`; the whole-corpus
+property is already proven) and task 8 (the per-program report and remaining goldens) are
+still ahead.
 Nothing in this document lets the renderer invent an event: if a fact is not in the trace or
 the source, the action is a highlight or a change, never a move.
 
