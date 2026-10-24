@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { isDeepStrictEqual } from "node:util";
 import { gunzipSync } from "node:zlib";
 
 import {
@@ -40,6 +41,12 @@ function program(name) {
   return { name, source: entry.source, trace: eventsOf(entry.trace) };
 }
 
+function recognitionProgram(name) {
+  const entry = RECOGNITION.programs[name];
+  assert.ok(entry, `${name} is in the recognition fixture`);
+  return { name: `recognition/${name}`, source: entry.source, trace: eventsOf(entry.trace) };
+}
+
 /** A compact, hand-reviewable rendering of an action, for the golden lists. */
 const brief = (value) => {
   if (value === null || value === undefined) return "-";
@@ -61,6 +68,10 @@ const brief = (value) => {
       return `fn ${value.name}`;
     case "class":
       return `class ${value.name}`;
+    case "list":
+      return `list[${value.items.length}]`;
+    case "tuple":
+      return `tuple[${value.items.length}]`;
     default:
       return value.name ?? value.type;
   }
@@ -86,7 +97,19 @@ function describe(action) {
     case "disappear":
       return `disappear ${action.path} ${brief(action.from)}`;
     case "change":
-      return `change ${action.path} ${brief(action.from)} -> ${brief(action.to)}`;
+      return `change ${action.path} ${brief(action.from)} -> ${brief(action.to)}${
+        action.reason ? ` (${action.reason})` : ""
+      }`;
+    case "grow":
+      return `grow.${action.motion} ${action.path} ${brief(action.to)}${
+        action.reason ? ` (${action.reason})` : ""
+      }`;
+    case "shrink":
+      return `shrink.${action.motion} ${action.path} ${brief(action.from)}${
+        action.reason ? ` (${action.reason})` : ""
+      }`;
+    case "highlight":
+      return `highlight ${action.path} ${action.reason}`;
     default:
       return `${action.kind} ${action.path}`;
   }
@@ -101,6 +124,40 @@ function goldenRows({ source, trace }) {
     })
       .map(describe)
       .join(" | "),
+  );
+}
+
+const int = (value) => ({ type: "int", value });
+
+function snapshotOf(step, heap, line = 1) {
+  return {
+    event: "line",
+    step,
+    line,
+    frames: [
+      { frame_id: 1, function: "<module>", call_line: null, variables: {} },
+    ],
+    heap,
+  };
+}
+
+function actionsAt({ source, trace }, index) {
+  return diffSteps(index === 0 ? null : snapshotAt(trace, index - 1), snapshotAt(trace, index), {
+    source,
+    consoleAfterReturn: consoleFollowsReturn(trace, index),
+  });
+}
+
+function roundTrip(program, index) {
+  const { trace } = program;
+  const before = stateOf(index === 0 ? null : snapshotAt(trace, index - 1));
+  const after = stateOf(snapshotAt(trace, index));
+  const actions = actionsAt(program, index);
+  assert.deepEqual(applyState(before, actions), after, `${program.name} step ${index} forward`);
+  assert.deepEqual(
+    applyState(after, reverseActions(actions, after)),
+    before,
+    `${program.name} step ${index} backward`,
   );
 }
 
@@ -136,11 +193,13 @@ test("snapshotAt gives a print step the state it printed from", () => {
 });
 
 test("stateOf is exactly the compared state, and a copy of it", () => {
-  const { trace } = program("for-loop");
+  const { trace } = program("list-mutation");
   const snapshot = snapshotAt(trace, 3);
   const state = stateOf(snapshot);
   assert.deepEqual(Object.keys(state).sort(), ["frames", "heap"]);
-  assert.equal(state.heap, snapshot.heap, "no action this module emits changes the heap");
+  assert.notEqual(state.heap, snapshot.heap, "the heap is copied");
+  assert.notEqual(state.heap.o1, snapshot.heap.o1, "heap entries are copied");
+  assert.notEqual(state.heap.o1.items, snapshot.heap.o1.items, "cell arrays are copied");
   for (const frame of state.frames) {
     assert.deepEqual(
       Object.keys(frame).sort(),
@@ -149,7 +208,9 @@ test("stateOf is exactly the compared state, and a copy of it", () => {
     );
   }
   state.frames[0].variables.injected = { type: "int", value: 1 };
+  state.heap.o1.items[0] = { type: "int", value: 999 };
   assert.equal(Object.hasOwn(snapshot.frames[0].variables, "injected"), false, "the trace is untouched");
+  assert.deepEqual(snapshot.heap.o1.items[0], { type: "int", value: 10 }, "the trace heap is untouched");
   assert.deepEqual(stateOf(null), { frames: [], heap: {} });
 });
 
@@ -386,91 +447,473 @@ test("the round trip is exact for the golden programs", () => {
   }
 });
 
-test("the same round trip holds over the whole corpus wherever the heap is unchanged", () => {
+test("every transition is classified: supported, or explicitly deferred", () => {
   const programs = [
     ...Object.entries(CORPUS).map(([name, entry]) => ({
       name,
+      source: entry.source,
       trace: eventsOf(entry.trace),
     })),
     ...Object.entries(RECOGNITION.programs).map(([name, entry]) => ({
       name: `recognition/${name}`,
+      source: entry.source,
       trace: eventsOf(entry.trace),
     })),
   ];
   const failures = [];
+  const reasons = { "task-6": 0, truncated: 0, tuple: 0, "unsupported-list": 0 };
   let total = 0;
-  let checked = 0;
+  let pairs = 0;
+  let supported = 0;
+  let supportedPairs = 0;
   let deferred = 0;
-  for (const { name, trace } of programs) {
+  const stateFor = (id, entry) =>
+    entry === undefined ? { frames: [], heap: {} } : { frames: [], heap: { [id]: entry } };
+  const roundTripsObject = (actions, older, newer, id) => {
+    const own = actions.filter(
+      (action) => isStateAction(action) && action.target?.objectId === id,
+    );
+    try {
+      return (
+        isDeepStrictEqual(applyState(stateFor(id, older), own), stateFor(id, newer)) &&
+        isDeepStrictEqual(
+          applyState(stateFor(id, newer), reverseActions(own, stateFor(id, newer))),
+          stateFor(id, older),
+        )
+      );
+    } catch {
+      return false;
+    }
+  };
+  const highlightOn = (actions, id, reason) =>
+    actions.some(
+      (action) =>
+        action.kind === "highlight" &&
+        action.target?.kind === "object" &&
+        action.target.objectId === id &&
+        action.reason === reason,
+    );
+
+  for (const { name, source, trace } of programs) {
     for (let index = 0; index < trace.length; index += 1) {
       total += 1;
+      if (index > 0) pairs += 1;
       const prev = index === 0 ? null : snapshotAt(trace, index - 1);
       const next = snapshotAt(trace, index);
       const before = stateOf(prev);
       const after = stateOf(next);
-      const actions = diffSteps(prev, next);
-      // Task 4 emits no collection action, so a heap transition cannot round
-      // trip yet. It is counted, not hidden: tasks 5 and 6 make it complete.
-      if (canonicalValue(before.heap) !== canonicalValue(after.heap)) {
-        deferred += 1;
-        for (const action of actions) {
-          if (["cell", "entry", "attribute", "object"].includes(action.target.kind)) {
-            failures.push(`${name} step ${next.step} invented a ${action.target.kind} action`);
-          }
-        }
+      let actions;
+      try {
+        actions = diffSteps(prev, next, {
+          source,
+          consoleAfterReturn: consoleFollowsReturn(trace, index),
+        });
+      } catch (error) {
+        failures.push(`${name} step ${next.step}: diff threw ${error.message}`);
         continue;
       }
-      checked += 1;
-      try {
-        assert.deepEqual(applyState(before, actions), after);
-        assert.deepEqual(applyState(after, reverseActions(actions)), before);
-      } catch {
-        failures.push(`${name} step ${next.step} does not round trip`);
+
+      for (const action of actions) {
+        if (action.kind === "move") failures.push(`${name} step ${next.step}: move belongs to 5b`);
+        if (action.target?.kind === "entry" || action.target?.kind === "attribute") {
+          failures.push(`${name} step ${next.step}: ${action.kind} ${action.target.kind} belongs to task 6`);
+        }
+        if (
+          action.target?.kind === "cell" &&
+          ["change", "grow", "shrink"].includes(action.kind)
+        ) {
+          const entry = before.heap[action.target.objectId] ?? after.heap[action.target.objectId];
+          if (entry?.type === "tuple") {
+            failures.push(`${name} step ${next.step}: tuple cell mutation`);
+          }
+        }
       }
+
+      let forward = false;
+      let backward = false;
+      try {
+        forward = isDeepStrictEqual(applyState(before, actions), after);
+        backward = isDeepStrictEqual(applyState(after, reverseActions(actions, after)), before);
+      } catch (error) {
+        failures.push(`${name} step ${next.step}: apply threw ${error.message}`);
+      }
+      if (forward && backward) {
+        supported += 1;
+        if (index > 0) supportedPairs += 1;
+        continue;
+      }
+      deferred += 1;
+
+      const found = new Set();
+      const ids = new Set([...Object.keys(before.heap), ...Object.keys(after.heap)]);
+      for (const id of ids) {
+        const older = before.heap[id];
+        const newer = after.heap[id];
+        const oldSequence = older?.type === "list" || older?.type === "tuple";
+        const newSequence = newer?.type === "list" || newer?.type === "tuple";
+        if (!oldSequence && !newSequence) {
+          if (!isDeepStrictEqual(older, newer)) found.add("task-6");
+          continue;
+        }
+        if (oldSequence !== newSequence || older?.type !== newer?.type) {
+          found.add(oldSequence && newSequence ? "unsupported-list" : "task-6");
+          continue;
+        }
+        if (roundTripsObject(actions, older, newer, id)) continue;
+        if (older.more !== undefined || newer.more !== undefined) {
+          if (highlightOn(actions, id, "truncated")) found.add("truncated");
+          else if (highlightOn(actions, id, "unsupported")) found.add("tuple");
+          else if (highlightOn(actions, id, "unknown-shape")) found.add("unsupported-list");
+          else failures.push(`${name} step ${next.step}: ${id} does not round trip and has no highlight`);
+        } else if (older.type === "tuple") {
+          if (highlightOn(actions, id, "unsupported")) found.add("tuple");
+          else failures.push(`${name} step ${next.step}: tuple ${id} changed without a highlight`);
+        } else if (
+          highlightOn(actions, id, "unknown-shape") ||
+          highlightOn(actions, id, "unsupported")
+        ) {
+          found.add("unsupported-list");
+        } else {
+          failures.push(`${name} step ${next.step}: list ${id} does not round trip and has no highlight`);
+        }
+      }
+      if (found.size === 0) {
+        failures.push(`${name} step ${next.step}: deferred with no reason`);
+      }
+      for (const reason of found) reasons[reason] += 1;
     }
   }
+
   assert.deepEqual(failures, []);
   assert.equal(programs.length, 114, "every program in the corpus and recognition fixtures");
-  // These are the fixtures' exact counts, not a floor: a transition is either
-  // heap-stable and round trips, or heap-changing and deferred to tasks 5-6.
-  // Regenerating a fixture must update these numbers deliberately.
-  assert.equal(checked + deferred, total, "every consecutive transition is classified");
-  assert.equal(checked, 2654, "heap-stable transitions checked forward and backward");
-  assert.equal(deferred, 279, "heap-changing transitions deferred to tasks 5-6");
+  assert.equal(supported - supportedPairs, programs.length, "every run-start step is supported");
+  assert.equal(supported + deferred, total, "every event step is classified");
+  // These are the fixtures' exact counts for task 5a, not a floor. Movement
+  // (5b), pop/insert and truncation fallbacks (5c), and dictionaries, sets and
+  // objects (task 6) will move steps between these groups.
+  assert.equal(total, 2933, "the fixtures' exact event-step count, including 114 run starts");
+  assert.equal(pairs, 2819, "consecutive state pairs: the event steps after the run starts");
+  assert.equal(supported, 2896, "event steps whose state actions round trip");
+  assert.equal(supportedPairs, 2782, "consecutive pairs whose state actions round trip");
+  assert.equal(deferred, 37, "consecutive pairs still owned by task 6");
+  assert.deepEqual(reasons, { "task-6": 37, truncated: 0, tuple: 0, "unsupported-list": 0 });
 });
 
-// Temporary until task 5: the deferral below must be deleted when the list diff
-// lands, and this test must then assert the cell actions instead.
-test("a heap-only change is deferred to tasks 5-6 with no action and no claim", () => {
-  const { trace } = program("list-mutation");
-  // The four list transitions this fixture records with frames unchanged: the
-  // list is sorted, reversed, assigned into, and shrunk. Task 4 has nothing to
-  // say about any of them.
-  const heapOnly = [];
-  for (let index = 0; index < trace.length; index += 1) {
-    const before = stateOf(index === 0 ? null : snapshotAt(trace, index - 1));
+test("list-mutation's sort, reverse, assignment and delete are explicit and reversible", () => {
+  const { source, trace } = program("list-mutation");
+  assert.deepEqual(goldenRows(program("list-mutation")), [
+    "call f1 <module> {}",
+    "",
+    "appear f1.scores o1 | appear o1 list[3]",
+    "change o1[0] 30 -> 10 (unknown-shape) | change o1[1] 10 -> 20 (unknown-shape) | change o1[2] 20 -> 30 (unknown-shape)",
+    "change o1[0] 10 -> 30 (unknown-shape) | change o1[2] 30 -> 10 (unknown-shape)",
+    "change o1[0] 30 -> 99",
+    "shrink.delete o1[2] 10",
+    'print "[99, 20]"',
+    'print "\\n"',
+    "return f1 None ->null",
+  ]);
+
+  for (const index of [3, 4, 5, 6]) {
+    const before = stateOf(snapshotAt(trace, index - 1));
     const after = stateOf(snapshotAt(trace, index));
-    if (
-      canonicalValue(before.heap) !== canonicalValue(after.heap) &&
-      canonicalValue(before.frames) === canonicalValue(after.frames)
-    ) {
-      heapOnly.push(index);
-    }
+    const actions = diffSteps(snapshotAt(trace, index - 1), snapshotAt(trace, index), { source });
+    assert.deepEqual(applyState(before, actions), after, `step ${index} forward`);
+    assert.deepEqual(applyState(after, reverseActions(actions, after)), before, `step ${index} backward`);
   }
-  assert.deepEqual(heapOnly, [3, 4, 5, 6], "the fixture has four heap-only steps");
-  const items = (index) => snapshotAt(trace, index).heap.o1.items.map((cell) => cell.value);
+
+  const deleted = diffSteps(snapshotAt(trace, 5), snapshotAt(trace, 6), { source });
   assert.deepEqual(
-    heapOnly.map(items),
-    [[10, 20, 30], [30, 20, 10], [99, 20, 10], [99, 20]],
-    "each deferred step really changes the recorded list, so the gap is exercised",
+    deleted.map((action) => [action.kind, action.motion, action.path, action.reason]),
+    [["shrink", "delete", "o1[2]", null]],
   );
-  for (const index of heapOnly) {
+  const restored = reverseActions(deleted, stateOf(snapshotAt(trace, 6)));
+  assert.deepEqual(
+    restored.map((action) => [action.kind, action.motion, action.path]),
+    [["grow", "insert", "o1[2]"]],
+  );
+});
+
+test("list lifecycle, append and aliasing are explicit and reversible", () => {
+  const basics = program("list-basics");
+  assert.deepEqual(actionsAt(basics, 3).map(describe), ['grow.append o1[2] "cherry"']);
+  assert.deepEqual(actionsAt(basics, 5).map(describe), [
+    "appear f1.pair o2",
+    "appear o2 list[2]",
+  ]);
+  for (let index = 0; index < basics.trace.length; index += 1) roundTrip(basics, index);
+
+  const aliased = program("alias-shared");
+  assert.deepEqual(actionsAt(aliased, 4).map(describe), ["grow.append o1[2] 3"]);
+  assert.deepEqual(actionsAt(aliased, 5).map(describe), ["change o1[0] 1 -> 9"]);
+  assert.equal(
+    actionsAt(aliased, 4).filter((action) => action.target.kind === "cell").length,
+    1,
+    "two names for one list do not duplicate the change",
+  );
+  for (let index = 0; index < aliased.trace.length; index += 1) roundTrip(aliased, index);
+
+  const classes = program("class-basic");
+  assert.deepEqual(actionsAt(classes, 15).map(describe), ['grow.append o2[0] "sit"']);
+});
+
+test("tuple cells are lifecycle only; a mutation is refused explicitly", () => {
+  const tuple = program("tuple-unpack");
+  assert.deepEqual(actionsAt(tuple, 2).map(describe), [
+    "appear f1.point o1",
+    "appear o1 tuple[2]",
+  ]);
+  for (let index = 0; index < tuple.trace.length; index += 1) roundTrip(tuple, index);
+
+  const before = snapshotOf(1, {
+    o1: { type: "tuple", items: [int(1), int(2)] },
+  });
+  const after = snapshotOf(2, {
+    o1: { type: "tuple", items: [int(1), int(3)] },
+  });
+  const actions = diffSteps(before, after);
+  assert.deepEqual(
+    actions.map((action) => [action.kind, action.reason]),
+    [["highlight", "unsupported"]],
+  );
+  assert.equal(actions.some((action) => action.target.kind === "cell"), false);
+  const mutation = createAction("change", {
+    step: 2,
+    target: { kind: "cell", objectId: "o1", index: 1 },
+    from: int(2),
+    to: int(3),
+  });
+  assert.throws(() => applyState(stateOf(before), [mutation]), /tuple/);
+  assert.throws(() => reverseActions([mutation], stateOf(before)), /tuple/);
+});
+
+test("truncated lists use visible changes and an explicit truncated fallback", () => {
+  const truncated = recognitionProgram("bubble-truncated");
+  const all = [];
+  for (let index = 0; index < truncated.trace.length; index += 1) {
+    all.push(...actionsAt(truncated, index));
+  }
+  const listActions = all.filter((action) => action.target.objectId === "o1");
+  assert.equal(
+    listActions.some((action) => ["move", "grow", "shrink"].includes(action.kind)),
+    false,
+    "a truncated list never claims movement, growth or shrinkage",
+  );
+  const changes = listActions.filter((action) => action.kind === "change");
+  assert.ok(changes.length > 0, "the fixture really changes visible cells");
+  assert.ok(changes.every((action) => action.reason === "truncated"));
+  assert.equal(
+    goldenRows(truncated)[5],
+    "change o1[0] 35 -> 34 (truncated) | change o1[1] 34 -> 35 (truncated)",
+  );
+  for (let index = 0; index < truncated.trace.length; index += 1) {
+    roundTrip(truncated, index);
+  }
+
+  const before = snapshotOf(1, { o1: { type: "list", items: [int(1), int(2)], more: 5 } });
+  const moreChanged = snapshotOf(2, {
+    o1: { type: "list", items: [int(1), int(2)], more: 4 },
+  });
+  assert.deepEqual(diffSteps(before, moreChanged).map(describe), ["highlight o1 truncated"]);
+
+  const shorter = snapshotOf(2, { o1: { type: "list", items: [int(1)], more: 5 } });
+  const shortened = diffSteps(before, shorter);
+  assert.deepEqual(shortened.map(describe), ["highlight o1 truncated"]);
+  assert.equal(shortened.some((action) => action.target.kind === "cell"), false);
+
+  const visible = snapshotOf(2, { o1: { type: "list", items: [int(1), int(3)], more: 5 } });
+  const visibleActions = diffSteps(before, visible);
+  assert.deepEqual(visibleActions.map(describe), ["change o1[1] 2 -> 3 (truncated)"]);
+  assert.deepEqual(applyState(stateOf(before), visibleActions), stateOf(visible));
+});
+
+test("list objects appear and disappear with their recorded heap entries", () => {
+  const filter = recognitionProgram("filter-list");
+  assert.deepEqual(actionsAt(filter, 5).map(describe), [
+    "appear f2.result o2",
+    "appear o2 list[0]",
+  ]);
+  const last = filter.trace.length - 1;
+  assert.deepEqual(actionsAt(filter, last).map(describe), [
+    "disappear f2 f2",
+    "disappear o1 list[3]",
+    "disappear o2 list[2]",
+    "return f1 None ->null",
+  ]);
+  for (let index = 0; index < filter.trace.length; index += 1) roundTrip(filter, index);
+});
+
+test("state-proven tail growth is explicit and reversible", () => {
+  const sort = recognitionProgram("merge-sort");
+  assert.deepEqual(actionsAt(sort, 42).map(describe), [
+    "grow.append o7[1] 43 (unknown-shape)",
+  ]);
+  assert.deepEqual(actionsAt(sort, 142).map(describe), [
+    "grow.append o18[2] 10 (unknown-shape)",
+    "grow.append o18[3] 82 (unknown-shape)",
+  ]);
+  for (let index = 0; index < sort.trace.length; index += 1) roundTrip(sort, index);
+});
+
+test("state-proven tail shrinkage removes every extra cell and reverses exactly", () => {
+  const three = snapshotOf(1, { o1: { type: "list", items: [int(1), int(2), int(3)] } });
+  const one = snapshotOf(2, { o1: { type: "list", items: [int(1)] } });
+  const popped = diffSteps(three, one);
+  assert.deepEqual(popped.map(describe), [
+    "shrink.pop o1[2] 3 (unknown-shape)",
+    "shrink.pop o1[1] 2 (unknown-shape)",
+  ]);
+  assert.deepEqual(applyState(stateOf(three), popped), stateOf(one));
+
+  const inverse = reverseActions(popped, stateOf(one));
+  assert.deepEqual(inverse.map(describe), [
+    "grow.append o1[1] 2 (unknown-shape)",
+    "grow.append o1[2] 3 (unknown-shape)",
+  ]);
+  assert.deepEqual(applyState(stateOf(one), inverse), stateOf(three));
+  assert.deepEqual(
+    reverseActions(inverse, stateOf(three)).map(describe),
+    popped.map(describe),
+    "the removal and its inverse invert back",
+  );
+});
+
+test("an unknown non-tail structural change is highlighted, not guessed", () => {
+  const before = snapshotOf(1, { o1: { type: "list", items: [int(1), int(2), int(3)] } });
+  const after = snapshotOf(2, { o1: { type: "list", items: [int(1), int(3)] } });
+  const actions = diffSteps(before, after);
+  assert.deepEqual(actions.map(describe), ["highlight o1 unknown-shape"]);
+  assert.equal(actions.some((action) => action.target.kind === "cell"), false);
+
+  const deleteBefore = snapshotOf(1, {
+    o1: { type: "list", items: [int(1), int(2), int(3)] },
+  });
+  deleteBefore.frames[0].variables.a = { type: "ref", id: "o1" };
+  const deleteAfter = snapshotOf(2, { o1: { type: "list", items: [int(2), int(3)] } });
+  deleteAfter.frames[0].variables.a = { type: "ref", id: "o1" };
+  const deleted = diffSteps(deleteBefore, deleteAfter, { source: "del a[0]\n" });
+  assert.deepEqual(deleted.map(describe), ["shrink.delete o1[0] 1"]);
+  assert.deepEqual(applyState(stateOf(deleteBefore), deleted), stateOf(deleteAfter));
+  assert.deepEqual(
+    applyState(stateOf(deleteAfter), reverseActions(deleted, stateOf(deleteAfter))),
+    stateOf(deleteBefore),
+  );
+});
+
+test("grow and shrink motions round trip, and invalid cell actions are refused", () => {
+  const listState = (values) => ({
+    frames: [],
+    heap: { o1: { type: "list", items: values.map(int) } },
+  });
+  const cases = [
+    {
+      action: createAction("grow", {
+        step: 1,
+        target: { kind: "cell", objectId: "o1", index: 2 },
+        motion: "append",
+        to: int(3),
+        reason: "unknown-shape",
+      }),
+      before: [1, 2],
+      after: [1, 2, 3],
+    },
+    {
+      action: createAction("grow", {
+        step: 1,
+        target: { kind: "cell", objectId: "o1", index: 1 },
+        motion: "insert",
+        to: int(3),
+      }),
+      before: [1, 2],
+      after: [1, 3, 2],
+    },
+    {
+      action: createAction("shrink", {
+        step: 1,
+        target: { kind: "cell", objectId: "o1", index: 1 },
+        motion: "pop",
+        from: int(2),
+        reason: "unknown-shape",
+      }),
+      before: [1, 2],
+      after: [1],
+    },
+    {
+      action: createAction("shrink", {
+        step: 1,
+        target: { kind: "cell", objectId: "o1", index: 0 },
+        motion: "delete",
+        from: int(1),
+      }),
+      before: [1, 2],
+      after: [2],
+    },
+  ];
+  for (const { action, before, after } of cases) {
+    const first = listState(before);
+    const second = listState(after);
+    assert.deepEqual(applyState(first, [action]), second, `${action.kind}.${action.motion} forward`);
+    const inverse = reverseActions([action], second);
+    assert.deepEqual(applyState(second, inverse), first, `${action.kind}.${action.motion} backward`);
     assert.deepEqual(
-      diffSteps(snapshotAt(trace, index - 1), snapshotAt(trace, index)),
-      [],
-      `step ${index} defers its list change to tasks 5-6: no action, not a guessed one`,
+      reverseActions(inverse, first),
+      [action],
+      `${action.kind}.${action.motion} inverts back`,
     );
   }
+
+  const two = listState([1, 2]);
+  assert.throws(
+    () =>
+      applyState(two, [
+        createAction("grow", {
+          step: 1,
+          target: { kind: "cell", objectId: "o1", index: 0 },
+          motion: "append",
+          to: int(3),
+        }),
+      ]),
+    /append at the end/,
+  );
+  assert.throws(
+    () =>
+      applyState(two, [
+        createAction("shrink", {
+          step: 1,
+          target: { kind: "cell", objectId: "o1", index: 2 },
+          motion: "pop",
+          from: int(3),
+        }),
+      ]),
+    /outside/,
+  );
+  assert.throws(
+    () =>
+      applyState(two, [
+        createAction("shrink", {
+          step: 1,
+          target: { kind: "cell", objectId: "o1", index: 0 },
+          motion: "pop",
+          from: int(1),
+        }),
+      ]),
+    /last cell/,
+  );
+  assert.throws(
+    () =>
+      applyState(
+        { frames: [], heap: { o1: { type: "dict", entries: [] } } },
+        [
+          createAction("grow", {
+            step: 1,
+            target: { kind: "cell", objectId: "o1", index: 0 },
+            motion: "append",
+            to: int(3),
+          }),
+        ],
+      ),
+    /target a list/,
+  );
 });
 
 test("overlays never change the state and vanish with their step", () => {
@@ -548,35 +991,36 @@ test("reverse drops overlays, inverts state actions, and inverts back", () => {
   }
 });
 
-test("applyState refuses the state kinds whose diff has not landed yet", () => {
+test("applyState still refuses movement until task 5b", () => {
   const { trace } = program("assign-only");
   const state = stateOf(snapshotAt(trace, 2));
   const one = { type: "int", value: 1 };
   const cell = { kind: "cell", objectId: "o1", index: 0 };
-  // They are in the vocabulary, but only tasks 5-6 can emit and invert them.
-  const collectionActions = [
-    createAction("move", { step: 0, target: { ...cell, index: 1 }, motion: "swap" }),
-    createAction("grow", { step: 0, target: cell, motion: "append", to: one }),
-    createAction("shrink", { step: 0, target: cell, motion: "pop", from: one }),
-  ];
-  assert.deepEqual(
-    collectionActions.map((action) => action.kind),
-    ["move", "grow", "shrink"],
+  const move = createAction("move", {
+    step: 0,
+    target: { ...cell, index: 1 },
+    motion: "swap",
+  });
+  assert.ok(STATE_KINDS.includes(move.kind));
+  assert.throws(
+    () => applyState(state, [move]),
+    /cannot apply a move action yet/,
+    "move must be refused, never half-applied",
   );
-  for (const action of collectionActions) {
-    assert.ok(STATE_KINDS.includes(action.kind), `${action.kind} is a state kind`);
-    assert.throws(
-      () => applyState(state, [action]),
-      new RegExp(`cannot apply a ${action.kind} action yet`),
-      `${action.kind} must be refused, never half-applied`,
-    );
-    assert.throws(
-      () => reverseActions([action]),
-      new RegExp(`cannot reverse a ${action.kind} action yet`),
-    );
-  }
+  assert.throws(
+    () => reverseActions([move]),
+    /cannot reverse a move action yet/,
+  );
   // A silent skip would let a half-applied state pass for a correct one.
   assert.deepEqual(applyState(state, []), state);
+  // Grow and shrink are no longer refused: they are the task 5a state actions.
+  assert.deepEqual(
+    applyState(
+      { frames: [], heap: { o1: { type: "list", items: [] } } },
+      [createAction("grow", { step: 0, target: cell, motion: "append", to: one })],
+    ),
+    { frames: [], heap: { o1: { type: "list", items: [one] } } },
+  );
 });
 
 test("diffSteps needs snapshots, and never mutates them", () => {

@@ -1,12 +1,12 @@
 # Animation visualizer: progress
 
-**Current phase:** 1 (Diff engine) — tasks 1–4 of 8 done. Tasks 5–8 await approval, one at a
-time.
+**Current phase:** 1 (Diff engine) — tasks 1–4 and task 5a of 8 done. Tasks 5b, 5c and 6–8
+await approval, one at a time.
 **Last updated:** 2026-10-24
 
 ## Phase checklist
 - [x] 0 Audit
-- [ ] 1 Diff engine (tasks 1–4 of 8 done)
+- [ ] 1 Diff engine (tasks 1–4 and 5a of 8 done)
 - [ ] 2 Two-panel page + generic stage
 - [ ] 3 List motion
 - [ ] 4 Frames, recursion, objects
@@ -23,7 +23,8 @@ time.
 | 1.2 Safe index-expression evaluator + separate bounds resolver | done | `044140e` + `9079d15` |
 | 1.3 Statement-shape parser (`lineShape.js`) + tests | done | `abe932e` + `c9156f6` |
 | 1.4 Diff core: snapshots, frames, calls, returns, print, error, variables, apply/reverse, six goldens | done | `6979804` |
-| 1.4b Docs/test cleanup before task 5: deferral wording, error `phase`, exact coverage assertions | done | this commit |
+| 1.4b Docs/test cleanup before task 5: deferral wording, error `phase`, exact coverage assertions | done | `c6b7b8f` |
+| 1.5a List/tuple state diff: heap copying, lifecycle, cell changes, append/delete, state-proven tail growth/shrink, explicit supported/deferred classification | done | this commit |
 
 ## Decisions made
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the
@@ -68,6 +69,13 @@ time.
   `change`/`highlight`; (4) no trace is excluded silently — fallbacks are reported with a
   reason; (5) existing tests and the old visualizer are preserved, with no new dependency,
   tracer change, trace-format change or out-of-scope edit.
+- 2026-10-24 — **Task 5a keeps the grow/shrink inverse pairs bijective.**
+  `grow.append` ↔ `shrink.pop` and `grow.insert` ↔ `shrink.delete`; `append` is tail-only and
+  `pop` removes only the last cell, so a middle `pop(i)` will be modelled as `delete` in 5c.
+  A truncated list whose `more` or visible length changes gets a `highlight` on the object
+  with `reason: "truncated"` and is classified deferred; visible cells may still `change`
+  with that reason. A tuple cell mutation is `unsupported` and rejected by
+  `applyState`/`reverseActions(actions, state)`.
 
 ## Open questions for the owner
 None open. All four Phase 0 questions were answered on 2026-10-24 and are recorded above;
@@ -96,9 +104,48 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await approval to start Phase 1 task 5: the list/tuple diff — cells by index, `move`
-(swap/shift), `grow`/`shrink`, and the ambiguity fallbacks that reuse `lineShape.js`'s
-swap/shift shapes. Tasks 6–8 are unchanged in the approved plan.
+Await approval to start Phase 1 task 5b: movement inference (`swap`/`shift`) with source-shape
+plus snapshot evidence, and the conservative fallbacks when the evidence is incomplete.
+Task 5c (pop/insert shapes and truncation fallbacks) and tasks 6–8 are unchanged in the
+approved plan.
+
+## Task 1.5a notes (list/tuple state, not movement)
+- `stateOf` now deep-copies the heap (entries and `items` arrays) as well as the frames, so
+  applying or reversing actions can never mutate the trace. References stay references, so
+  aliases still share one object.
+- `diff.js` compares list/tuple entries by object id. It supports object lifecycle
+  (`appear`/`disappear` on the object), equal-length cell `change`s, recognized
+  `append`/`del` (`grow.append`, `shrink.delete`), and state-proven tail growth/shrink
+  (`grow.append`/`shrink.pop` with `reason: "unknown-shape"`). Sort and reverse currently
+  appear as cell changes with that reason; movement is task 5b.
+- Tuples are lifecycle-only. A tuple whose cells differ gets one `highlight` on the object
+  with `reason: "unsupported"` and no cell action; `applyState` and
+  `reverseActions(actions, state)` reject a tuple cell mutation.
+- Truncated lists never claim movement, growth or shrinkage. Visible cells may `change`
+  with `reason: "truncated"`; a `more` or visible-length change gets an object `highlight`
+  with `reason: "truncated"` and is classified deferred. An unknown non-tail structural
+  change gets `highlight` `unknown-shape`/`unsupported`, never a guessed move.
+- `applyState` accepts `grow.append`/`insert` and `shrink.pop`/`delete`; `append` is
+  tail-only, `pop` is last-cell-only, and both motions invert bijectively. `reverseActions`
+  takes the optional after-state to reject tuple-cell inverses. `move` is still refused
+  until task 5b.
+- Round trip measured with the exact section-3 state: 2933 event steps over 114 programs
+  (114 run starts + 2819 consecutive pairs). **2896 event steps supported** forward and
+  backward, of which **2782 are consecutive pairs**; **37 consecutive pairs deferred to
+  task 6**. The deferred set is dict/set/object content and non-sequence lifecycle changes;
+  no list transition is deferred for lack of an action. The classification test also round-trips every list/tuple
+  object inside a deferred transition.
+- Goldens added for `list-mutation` (sort, reverse, assignment, tail `del`), `list-basics`
+  (append, lifecycle), `alias-shared`, `class-basic` (nested receiver append), `tuple-unpack`,
+  `filter-list`, `bubble-truncated` and `merge-sort` (state-proven tail growth). Synthetic
+  pairs cover `more` changes, visible-length truncation, tuple mutation, non-tail unknown
+  structure, middle `del`, all four grow/shrink motions and invalid cell actions.
+- `docs/animation.md` section 12 now corrects the `move.shift` inverse: a shift-copy
+  overwrites the destination, so its inverse is a `change` restoring the destination's
+  previous value, not a reverse shift. This is documented now; the `move` itself remains
+  task 5b.
+- JS test count is **600**. Tracer, trace format, action vocabulary, `lineShape.js`,
+  `evaluate.js`, corpus, UI, old visualizer and dependencies are unchanged.
 
 ## Task 1.4b notes (docs/tests only, no behavior change)
 - `docs/animation.md` now states in the status block, §10, §11 and §12 that heap-only

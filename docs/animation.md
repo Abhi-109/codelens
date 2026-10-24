@@ -1,18 +1,21 @@
 # Animation diff: actions and rules
 
-**Status:** Phase 1 in progress. Tasks 1–4 are implemented and tested: the vocabulary
-(`actions.js`), the safe evaluator (`evaluate.js`), the statement-shape parser
-(`lineShape.js`) and the diff core (`diff.js`). Sections marked *(planned)* are the contract
-the rest of Phase 1 is held to; they describe code that does not exist yet. Nothing in this
-document lets the renderer invent an event: if a fact is not in the trace or the source, the
-action is a highlight or a change, never a move.
+**Status:** Phase 1 in progress. Tasks 1–4 and task 5a are implemented and tested: the
+vocabulary (`actions.js`), the safe evaluator (`evaluate.js`), the statement-shape parser
+(`lineShape.js`), the diff core (`diff.js`), and the list/tuple half of the collection diff.
+Tasks 5b (movement), 5c (pop/insert shapes and truncation fallbacks) and 6 (dict/set/object
+contents) have not landed. Sections marked *(planned)* are the contract the rest of Phase 1 is
+held to; they describe code that does not exist yet. Nothing in this document lets the
+renderer invent an event: if a fact is not in the trace or the source, the action is a
+highlight or a change, never a move.
 
-**Task 4 is partial on purpose, and this document does not claim the layer is complete.**
-List, tuple, dict, set and object contents are deferred to tasks 5–6, so a heap-only
-transition currently produces no action and the reversibility property is proven only where
-the heap does not change. Section 11 records that gap and the tasks that must close it;
-section 12 states exactly what task 4's proof covers. Until tasks 5–6 land, no heap
-transition may be reported as handled or as complete.
+**Task 5a is partial on purpose, and this document does not claim the layer is complete.**
+List and tuple lifecycle, visible cell changes, append/delete, and state-proven tail
+growth/shrink now produce exactly reversible state actions. Movement, pop/insert shapes and
+truncation fallbacks are tasks 5b/5c; dict, set and object contents are task 6. A supported
+list transition must not be silently ignored: it either round-trips or carries a highlight
+with a reason and is classified as deferred. Section 11 records the remaining gap and the
+tasks that close it; section 12 states exactly what task 5a's proof covers.
 
 ## 1. What the layer is
 
@@ -67,6 +70,11 @@ replaying state actions, and rebuild the *cursor facts* by reading the trace. It
 the reason the contract is not weakened later: the comparison covers every frame's
 variables, the frame stack's shape, and the whole reachable heap.
 
+`stateOf` returns a deep copy of the heap as well as the frames: every entry and its
+`items` array is copied, so `applyState` can never mutate the trace it is replaying.
+References inside the heap stay references (an `id` string), so aliasing is preserved
+without copying one object per variable.
+
 ## 4. Three kinds of information
 
 Every action has exactly one **effect**, decided by its kind and never by its caller:
@@ -101,7 +109,7 @@ an overlay is keyed by step and can never outlive it.
 | `appear` | state | — | variable, cell, entry, attribute, object, frame | `null`; `to` holds the new element |
 | `disappear` | state | — | same as `appear` | `null`; `from` holds the removed element |
 | `change` | state | — | variable, cell, entry, attribute | `null`; `from`/`to` are the trace values |
-| `highlight` | overlay | — | cell, entry, attribute, variable | optional `{ note }`; the action's `reason` field says why a move was refused |
+| `highlight` | overlay | — | cell, entry, attribute, variable, object | optional `{ note }`; the action's `reason` field says why a move was refused |
 | `move` | state | `swap`, `shift` | cell | the index pair the move describes |
 | `grow` | state | `append`, `insert` | cell (the new cell) | the inserted value in `to` |
 | `shrink` | state | `pop`, `delete` | cell (the removed cell) | the removed value in `from` |
@@ -114,6 +122,12 @@ an overlay is keyed by step and can never outlive it.
 
 `from` / `to` always carry trace values (or, for elements, the snapshot object), never
 formatted display text. Formatting is the renderer's job and must not change an action.
+
+`grow` and `shrink` motions are paired bijectively: `append` ↔ `pop`, `insert` ↔ `delete`.
+`append` is legal only at the end and `pop` removes only the last cell; `insert` accepts any
+index `0..length`, and `delete` removes any cell. A middle `pop(i)` is therefore modelled as
+`delete` when it lands in 5c, not as a `pop` whose inverse would require an append at a
+non-tail index. `applyState` rejects a malformed pair rather than half-applying it.
 
 The `error` payload follows the trace: an `exception` event records only `{type, message}`
 and the event's `line`, so the raising frame's badge has no `phase`; the terminal `error`
@@ -298,21 +312,46 @@ exactly the documented cases: `groups.setdefault(...).append(...)` twice and the
 `x, y = …` tuple assignments in `tuple-unpack`. Nothing in the corpus is silently dropped,
 and no statement is reported as a movement shape without the indices to prove adjacency.
 
-## 9. Collections *(planned: tasks 5 and 6)*
+## 9. Collections *(list/tuple state: task 5a; movement: 5b; pop/insert/truncation: 5c; dict/set/object: task 6)*
 
-* **list / tuple** — cells by index; grow/shrink at the ends or at an inserted position once
-  the shape proves it; a shift is a set of cell moves, not a rewrite.
-* **dict** — entries by key, in the trace's insertion order; a new key is a `grow` at the
-  end, an update is a `change` in place, a removal is a `shrink`.
-* **set** — an unordered bag. Elements `appear` and `disappear`; there are no positions, no
-  markers and no `move` / `shift` / `grow at an index` for a set. The tracer sorts sets, so
-  an index diff would move every cell on every change; that would be a lie.
-* **object** — attributes by name; new attribute is `appear` on the attribute, an update is
-  `change`, a removal is `disappear`. An object that becomes reachable is `appear` on the
-  object; one that stops being reachable is `disappear`, carrying its last state in `from`
-  so the reverse can restore it.
-* **truncation** — `more` means "there are cells we cannot see"; the diff never claims a
-  position past the visible window.
+Task 5a compares each heap entry by object id and supports the list/tuple half of the state:
+
+* **list / tuple lifecycle** — an object that becomes reachable is one `appear` on the
+  object target, carrying the whole entry in `to`; one that stops being reachable is one
+  `disappear`, carrying its last entry in `from` so the reverse restores it. A list that
+  appears already carries its cells; there is no second cell action.
+* **cells** — equal-length cell changes are `change` on the cell, with the exact trace
+  values. Sorting or reversing a list is therefore a set of cell changes with
+  `reason: "unknown-shape"` until task 5b proves movement from the executed line's shape;
+  a direct subscript assignment with a resolved shape has no reason. The diff never claims
+  an order that the snapshot cannot prove.
+* **append/delete** — task 5a emits `grow.append` for a recognized `append` and
+  `shrink.delete` for a recognized `del`. Task 5c wires `insert`/`pop`; the vocabulary and
+  `applyState`/`reverseActions` already support all four motions. `grow.append` is
+  tail-only and `shrink.pop` is last-cell-only (section 5).
+* **state-proven tail growth/shrink** — when the old list is a prefix of the new one, or the
+  new one is a prefix of the old, the snapshot proves a tail change even when the syntax is
+  inconclusive. The diff emits `grow.append` or `shrink.pop` with
+  `reason: "unknown-shape"`. Multiple appended cells are multiple appends in ascending
+  index order; multiple removals are multiple pops in descending order, so forward and
+  reverse application both stay valid.
+* **tuples** — lifecycle only. A tuple whose cells differ cannot be produced by valid
+  Python, and the diff does not pretend it can: it emits a `highlight` on the object with
+  `reason: "unsupported"` and no cell action. `applyState` and
+  `reverseActions(actions, state)` reject a tuple cell mutation (section 12).
+* **truncation** — a list with `more > 0` never claims movement, growth or shrinkage. Visible
+  cells may still `change`, with `reason: "truncated"`. If `more` or the visible length
+  changes, the diff emits a `highlight` on the object with `reason: "truncated"` and the
+  transition is classified as deferred, because the hidden positions cannot be restored.
+* **unsupported list structure** — a non-tail insertion/removal, or any structural change
+  the line shape does not prove, gets a `highlight` on the object with
+  `reason: "unknown-shape"` or `"unsupported"`; it is never guessed as a move. An empty
+  action list still means "the compared state did not change", not "skipped".
+* **dict / set / object** — task 6. Task 5a emits no entry or attribute action for them and
+  classifies those transitions deferred (section 11).
+
+`more` means "there are cells we cannot see"; the diff never claims a position past the
+visible window.
 
 ## 10. Calls, returns and the console *(done: task 4)*
 
@@ -351,22 +390,24 @@ that step's actions. The rules for the non-collection half of the state:
 * **Limits.** `step_limit`, `timeout` and `output_limit` add no action: the state did not
   change, and the truncation banner is derived from the event's status, not from an action.
 
-Nothing here is claimed about list, dict, set or object contents: those are tasks 5 and 6.
-Task 4 deliberately emits **no action at all** for a heap-only transition (sections 11 and
-12), so a list that sorts, a dict that grows or an object whose attribute changes is not yet
-animated. Tasks 5–6 must replace that deferral with real collection actions and inverses;
-until they do, the animation layer is not complete and no test may call it so.
+Task 5a now models list and tuple state as described in section 9: lifecycle, visible cell
+changes, append/delete and state-proven tail growth/shrink, all exactly reversible. Movement
+(swap/shift), pop/insert shapes and truncation fallbacks are tasks 5b/5c; dict, set and
+object contents are task 6. Until those land, a transition that changes only dict, set or
+object contents still yields no state action and is counted as deferred (section 11). A list
+transition is never silently skipped: it either round-trips or carries a highlight with a
+reason and is classified as deferred.
 
 The module's surface, all pure and free of I/O, clocks and randomness:
 
 | Function | Job |
 |---|---|
 | `snapshotAt(trace, i)` | the event at `i` plus the state it is shown against |
-| `stateOf(snapshot)` | the compared state of section 3, with frames copied |
+| `stateOf(snapshot)` | the compared state of section 3, with frames and heap deep-copied |
 | `diffSteps(prev, next, context)` | this step's state actions, then its overlays |
 | `stateActions(actions)` | the subset that changes the snapshot |
 | `applyState(state, actions)` | the state after those actions, without mutating the input |
-| `reverseActions(actions)` | the actions that undo the step; overlays dropped |
+| `reverseActions(actions, state?)` | the actions that undo the step; overlays dropped; optional `state` enables tuple and container checks |
 | `consoleFollowsReturn(trace, i)` | the recorded fact behind `to: "console"` |
 
 ## 11. Reporting ambiguity and unsupported cases *(planned: tasks 5, 6 and 8)*
@@ -391,26 +432,30 @@ Rules:
   by reason. A case is only allowed to use a fallback if the report names it;
 * an empty result means "the compared state did not change" — it never means "skipped".
 
-**Heap-only transitions are deliberately unmodelled in task 4 and belong to tasks 5–6.**
-Through task 4 no heap content is diffed, and a heap-only transition produces no action at
-all (a transition that also changes frames or variables still gets those actions). That is a
-stated gap, not a hidden one, and it is exactly why the animation layer is not complete:
-`diff.js` makes no claim about list, dict, set or object contents, and
-`applyState`/`reverseActions` refuse `move`, `grow` and `shrink` rather than half-applying
-them. The vocabulary has no reason code for "deferred", and a highlight on every list step
-would be noise rather than information. Tasks 5 and 6 must emit the real collection actions
-and their inverses, at which point the gap closes; no later task may leave a heap-only
-transition silent.
+**Task 5a closes the list/tuple half of the gap; dict, set and object contents remain task 6.**
+The task-5a suite classifies **every** event step of the corpus and recognition fixtures:
+2933 over 114 programs, of which 114 are run-start steps and the other 2819 are consecutive
+state pairs. 2896 event steps round trip forward and backward. All 37 deferred steps are
+consecutive pairs, so 2782 of the 2819 pairs round trip and 37 are deferred to task 6. The
+deferred set is exactly dict/set/object content and non-sequence lifecycle changes; no list
+transition is deferred for lack of an action. The
+test also applies and reverses the actions of every list/tuple object inside a deferred
+transition, so 5a's sequence part is proven even where a dict, set or object change makes the
+whole snapshots unequal. A transition fails the suite if it neither round-trips nor carries a
+highlight that explains itself.
 
-The task-4 suite pins the gap instead of trusting it. It classifies **every** consecutive
-transition of the corpus and recognition fixtures (2933 over 114 programs) into exactly two
-sets: 2654 heap-stable transitions must round trip forward and backward, and the remaining
-279 heap-changing transitions must be exactly the deferred ones. It fails if any deferred
-transition gains a cell, entry, attribute or object action before the collection diff
-exists. `list-mutation` additionally pins the four heap-only list steps it defers (the sort,
-the reverse, the cell assignment and the shrink) with their recorded contents, so the test
-fails if it stops exercising actual heap changes. Nothing here may be read as coverage of
-the deferred half of the state; section 12 says what the property does and does not prove.
+The fixtures do not contain every fallback, so synthetic snapshot pairs pin the rest: a
+`more` change under truncation, a visible-length change with `more` unchanged, a tuple cell
+mutation, a non-tail structural change with no usable shape, and a recognized middle `del`.
+The first three are conservative (`highlight` or visible `change` with a reason, never a
+guessed state action); the middle `del` is a supported `shrink.delete`.
+
+`list-mutation` additionally pins the sort, reverse, subscript assignment and tail `del`
+with their recorded contents. `list-basics`, `alias-shared`, `class-basic`, `tuple-unpack`,
+`filter-list`, `bubble-truncated` and `merge-sort` pin lifecycle, aliasing, nested receiver
+resolution, tuple immutability, truncated changes and state-proven tail growth. Nothing here
+may be read as coverage of movement (5b), pop/insert shapes (5c) or dict/set/object contents
+(task 6); section 12 says exactly what the property proves.
 
 ## 12. Reversibility contract
 
@@ -428,12 +473,14 @@ variables, the stack's frame ids/functions/call_lines, and the whole heap includ
 `more`, `class` and ordering. It is **not** normalised, sorted or filtered to make a test
 pass. If a transition cannot satisfy it, the diff is wrong and must change, not the test.
 
-**Task 4's proof is narrower than this contract.** Until tasks 5–6 land, the property is
-proven only for transitions whose compared heap is unchanged (plus the six golden programs,
-whose heap is also stable). Full snapshot-state coverage over every consecutive pair is
-required after tasks 5–6; until then a passing test is evidence about frames, variables and
-the console facts only, never about collections. The task-4 status below gives the exact
-counts.
+**Task 5a's proof covers list and tuple state; movement, pop/insert shapes and task 6 remain.**
+The property is proven for all 2819 consecutive pairs' list/tuple state (the 2933 event steps
+include 114 run-start steps): 2782 pairs round trip as whole snapshots, and in the 37 pairs
+that are deferred to task 6 the test applies and reverses the actions of every list/tuple
+object individually. The six task-4 golden programs
+are unchanged and still round trip in full. What is not proven yet is movement (5b), the
+pop/insert shapes (5c), and dict/set/object contents (task 6); 5a emits none of those state
+actions.
 
 Inverse pairs:
 
@@ -442,42 +489,49 @@ Inverse pairs:
 | `appear` (`to` = element) | `disappear` (`from` = the same element) |
 | `disappear` (`from` = element) | `appear` / `call` restoring it |
 | `change` (`from` → `to`) | `change` (`to` → `from`) |
-| `grow` (cell `i`, `to`) | `shrink` (cell `i`, `from = to`) |
-| `shrink` (cell `i`, `from`) | `grow` (cell `i`, `to = from`) |
+| `grow` `append` (cell at the end) | `shrink` `pop` (the same cell) |
+| `grow` `insert` (cell `i`) | `shrink` `delete` (cell `i`) |
+| `shrink` `pop` (the last cell) | `grow` `append` (the same cell) |
+| `shrink` `delete` (cell `i`) | `grow` `insert` (cell `i`) |
 | `move` `swap` | itself |
-| `move` `shift` (`i → i+1`) | `move` `shift` (`i+1 → i`) |
+| `move` `shift` (`a[i+1] = a[i]`, `i → i+1`) | `change` on cell `i+1` restoring its previous value; the source cell `i` is unchanged. (Task 5b; no `move` is emitted yet.) |
 | `call` (frame) | `disappear` (frame, `from` = the frame) |
+
+A shift-copy is not a rotation. `a[i+1] = a[i]` copies the source over the destination and
+leaves the source in place, so reversing it must restore the overwritten destination value;
+reversing the arrow would copy the wrong value back into `i`.
 
 **Overlays are not inverted — they are discarded.** On backward playback and on a seek,
 every overlay of the previous step is dropped (`overlayActionsAt` returns none for the new
 step); a forward step installs only its own. This is tested separately from the snapshot
 property, so a passing reversibility test can never hide a stuck flash or a stale arrow.
 
-After tasks 5–6, the suite must run the property over **every** program in the corpus, the
-recognition fixture and the animation fixture, and over **every** consecutive state pair —
-not a sample. Task 4 runs the same partition over every program and every pair, but proves
-the property only on the heap-stable side. Programs that cannot be modelled are still
-diffed; they simply produce the conservative actions their `reason` explains.
+After tasks 5b/5c/6, the suite must run the property over **every** program in the corpus,
+the recognition fixture and the animation fixture, and over **every** consecutive state pair
+— not a sample. Task 5a already runs the same partition over every program and every pair,
+and proves the list/tuple side of each pair; programs that cannot be modelled are still
+diffed and produce the conservative actions their `reason` explains.
 
-### Task 4 status of the property
+### Task 5a status of the property
 
-`applyState`, `reverseActions` and `stateActions` implement this contract for the kinds task
-4 emits (`appear`, `disappear`, `change`, `call`). Overlays are dropped by `reverseActions`
-and ignored by `applyState`, so they can never mutate the snapshot. The collection kinds
-(`move`, `grow`, `shrink`) are in the vocabulary but their diff, application and inverse are
-tasks 5–6; `applyState` and `reverseActions` refuse them rather than skipping them, so a
-half-applied state can never pass for a correct one.
+`applyState`, `reverseActions` and `stateActions` implement the contract for the kinds task 5a
+emits: `appear`, `disappear`, `change`, `call`, object lifecycle, cell changes,
+`grow.append`/`grow.insert` and `shrink.pop`/`shrink.delete`. Overlays are dropped by
+`reverseActions` and ignored by `applyState`, so they can never mutate the snapshot. `move`
+is in the vocabulary but is still refused by both functions until task 5b; a malformed
+`grow`/`shrink` target, a tuple cell mutation, or a middle `pop` is rejected rather than
+half-applied. `reverseActions(actions, state)` takes the optional after-state precisely so it
+can reject a tuple-cell inverse; without it, the function cannot know a container's type.
 
-The suite runs the property on the six golden programs in full and on **every** heap-stable
-transition of the corpus and recognition fixtures — 2654 of 2933, over 114 programs. The
-remaining 279 transitions change the heap and are counted and excluded until tasks 5–6,
-because the collection actions that would complete them do not exist yet; the test fails if
-any of them gains a cell, entry, attribute or object action early. This is a deliberate,
-temporary gap: tasks 5–6 must extend the proof to those 279 pairs and then to every state
-pair, and only then is the reversibility property complete. The comparison is deep equality
-of the state object of section 3: object key order is not part of the state (the tracer
-sorts variable names anyway), and nothing else is normalised, sorted or filtered. The
-fixture counts are pinned in the test, not used as thresholds, so a regenerated fixture
+The suite runs the property on the six task-4 golden programs, on every list/tuple program
+of the fixtures, and on **every** event step of the corpus and recognition fixtures — 2933
+over 114 programs, including 114 run starts and 2819 consecutive pairs. All 2896 supported
+event steps round trip forward and backward; that is every run start plus 2782 pairs. The 37
+deferred consecutive pairs are counted and classified as task 6, and their list/tuple objects
+are checked individually. The comparison is strict deep equality of the state object of
+section 3:
+object key order is not part of the state, and nothing is normalised, sorted or filtered.
+The fixture counts are pinned in the test, not used as thresholds, so a regenerated fixture
 must update them deliberately.
 
 ## 13. What the layer never does
@@ -497,7 +551,7 @@ must update them deliberately.
 | 2 | safe index-expression evaluator + separate bounds resolver | **done** |
 | 3 | statement-shape parser (`lineShape.js`) | **done** |
 | 4 | diff core: snapshots, frames, calls, returns, print, error, variables, `applyState`/`reverseActions` | **done** |
-| 5 | list/tuple diff, movement inference, ambiguity fallbacks | planned |
+| 5 | list/tuple diff, movement inference, ambiguity fallbacks | **partly:** 5a (lifecycle, visible cell changes, append/delete, state-proven tail growth/shrink) done; 5b movement and 5c pop/insert shapes/truncation fallbacks planned |
 | 6 | dict/set/object diff | planned |
-| 7 | `apply.js` + whole-corpus reversibility property | partly: `applyState`/`reverseActions` and the property for variables, frames and console facts landed in task 4; the whole-corpus property completes with tasks 5–6 |
-| 8 | golden action lists (20+ programs), determinism report, fixture wiring | partly: six golden programs, determinism and id stability in task 4 |
+| 7 | `apply.js` + whole-corpus reversibility property | partly: `applyState`/`reverseActions` and the property for variables, frames, console facts and task-5a list/tuple state landed; movement and dict/set/object state complete with tasks 5b/5c/6 |
+| 8 | golden action lists (20+ programs), determinism report, fixture wiring | partly: six task-4 goldens plus task-5a list/tuple, lifecycle, truncation and tail-growth goldens; the full set lands after 5b/5c |
