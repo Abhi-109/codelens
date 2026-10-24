@@ -51,6 +51,7 @@ const PROGRAM_WORDS = [
 const DIRS = [
   { dir: join(ROOT, "src", "tracer"), exts: [".js"] },
   { dir: join(ROOT, "src", "flowchart"), exts: [".js", ".jsx"] },
+  { dir: join(ROOT, "src", "animation"), exts: [".js"] },
 ];
 
 const isTestFile = (name) => name.endsWith(".test.mjs");
