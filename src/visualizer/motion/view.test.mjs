@@ -712,10 +712,22 @@ test("value changes, calls and returns say exactly what the trace proves", () =>
     (operation) =>
       operation.op === MOTION_OPERATION.value && operation.target?.kind === "variable",
   );
-  assert.equal(motionView(variableChange.plan).feedback.kind, "change");
+  const variableView = motionView(variableChange.plan);
+  assert.equal(
+    variableView.feedback.kind,
+    "neutral",
+    "a loop counter is not the operation being taught",
+  );
+  assert.equal(variableView.feedback.text, "step");
   assert.ok(
-    motionView(variableChange.plan).feedback.text.startsWith(`${variableOp.target.name} `),
-    motionView(variableChange.plan).feedback.text,
+    !variableView.feedback.text.includes(variableOp.target.name),
+    "the headline never reads like an internal variable chip",
+  );
+  assert.ok(
+    variableView.frames.some((frame) =>
+      frame.variables.some((variable) => variable.name === variableOp.target.name),
+    ),
+    "the variable is still visible in the call strip",
   );
 
   const called = findPlan("function-basic", (candidate) =>
@@ -741,7 +753,7 @@ test("a step that changed nothing says so, and no change is ever called a swap",
   );
   const view = motionView(held.plan);
   assert.equal(view.feedback.kind, "neutral");
-  assert.equal(view.feedback.text, "no recorded change");
+  assert.equal(view.feedback.text, "no data change");
 
   for (const name of MATRIX) {
     const p = program(name);
@@ -757,4 +769,40 @@ test("a step that changed nothing says so, and no change is ever called a swap",
       );
     }
   }
+});
+
+test("the view carries the source line that ran, verbatim", () => {
+  const p = program("bubble-sort");
+  const lines = p.source.split(/\r?\n/);
+  const index = Math.min(6, p.trace.length - 1);
+  const line = snapshotAt(p.trace, index).line;
+  const view = motionView(planAt(p, index));
+
+  assert.equal(view.line, line);
+  assert.equal(view.lineText, lines[line - 1].trim());
+  assert.ok(view.lineText.length > 0, "the head never shows an empty snippet");
+});
+
+test("a comparison-looking line never invents a swap or operand highlight", () => {
+  const p = program("bubble-sort");
+  const lines = p.source.split(/\r?\n/);
+  let checked = 0;
+
+  for (let index = 0; index < p.trace.length; index += 1) {
+    const line = snapshotAt(p.trace, index).line;
+    if (!/[<>]=?|==|!=/.test(lines[line - 1] ?? "")) continue;
+    checked += 1;
+    const view = motionView(planAt(p, index));
+    assert.ok(
+      !["swap", "shift", "insert", "remove"].includes(view.feedback.kind),
+      `step ${index} describes the comparison as a mutation`,
+    );
+    assert.deepEqual(
+      activeCells(view),
+      [],
+      `step ${index} highlights operands the tracer never recorded`,
+    );
+  }
+
+  assert.ok(checked > 0, "the fixture really runs comparison lines");
 });

@@ -295,3 +295,25 @@ test("motion plans are deterministic and never mutate the trace", () => {
   assert.equal(JSON.stringify(p.trace), before, "planning does not write to the trace");
   assert.deepEqual(first.state, stateOf(snapshotAt(p.trace, index)));
 });
+
+test("every plan carries the source line it renders, trimmed but unchanged", () => {
+  for (const name of MATRIX) {
+    const p = program(name);
+    const lines = p.source.split(/\r?\n/);
+    for (let index = 0; index < p.trace.length; index += 1) {
+      const plan = planAt(p, index);
+      if (!plan) continue;
+      const line = snapshotAt(p.trace, index).line;
+      assert.equal(plan.line, Number.isInteger(line) ? line : null, `${name} step ${index}`);
+      if (plan.line === null) {
+        assert.equal(plan.lineText, null);
+      } else {
+        assert.equal(
+          plan.lineText,
+          (lines[plan.line - 1] ?? "").trim() || null,
+          `${name} step ${index} reads its own source line`,
+        );
+      }
+    }
+  }
+});

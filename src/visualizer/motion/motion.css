@@ -37,28 +37,28 @@
   line-height: 1.55;
 }
 
+/* The step, in one place: line number, verified operation, then the source.
+ * No pill or border: the accent on the operation is enough to separate a real
+ * mutation from a plain step. */
 .motion-stage-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-2);
+  gap: 2px var(--space-2);
   flex: none;
   min-height: 22px;
 }
 
-.motion-kicker {
-  font: 600 10px/1.4 var(--sans);
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text);
+.motion-line {
+  flex: none;
+  font: 600 11px/1.4 var(--mono);
+  color: var(--text-h);
 }
 
 .motion-event {
+  min-width: 0;
   overflow: hidden;
-  padding: 1px 7px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -70,15 +70,17 @@
 .motion-event.is-insert,
 .motion-event.is-remove,
 .motion-event.is-change {
-  border-color: var(--accent-border);
-  background: var(--accent-bg);
-  color: var(--text-h);
+  font-weight: 600;
+  color: var(--accent);
 }
 
-.motion-event.is-neutral {
-  padding: 0;
-  border-color: transparent;
-  background: transparent;
+.motion-source {
+  flex: 1 1 100%;
+  overflow: hidden;
+  font: 12px/1.45 var(--mono);
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: pre;
 }
 
 .motion-frames {
@@ -185,7 +187,7 @@
   flex: 1;
   flex-wrap: wrap;
   align-items: flex-start;
-  align-content: stretch;
+  align-content: safe center;
   gap: var(--space-3);
   min-height: 0;
 }
@@ -201,6 +203,27 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
+}
+
+/* A sequence is the subject: it takes the whole row and drops the card chrome,
+ * so its cells, not a box around them, are what the eye lands on. Its name
+ * stays as one quiet label; the type pill is debug detail. */
+.motion-object.is-sequence {
+  flex: 1 1 100%;
+  align-self: stretch;
+  min-width: 0;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.motion-object.is-sequence .motion-object-head {
+  padding: 0 2px;
+}
+
+.motion-object.is-sequence .motion-object-type {
+  display: none;
 }
 
 .motion-object.is-highlighted {
@@ -269,8 +292,8 @@
   flex-direction: column;
   align-items: stretch;
   gap: 0;
-  min-width: 56px;
-  max-width: 160px;
+  min-width: 64px;
+  max-width: 220px;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -280,18 +303,19 @@
 .motion-cell-value {
   display: block;
   min-width: 0;
-  padding: 7px 8px 6px;
+  padding: 9px 10px 7px;
   text-align: center;
 }
 
 .motion-cell-value .motion-value {
   display: block;
+  font-size: 14px;
 }
 
 .motion-cell-index {
   padding: 0 6px 4px;
   overflow: hidden;
-  font: 10px/1.4 var(--mono);
+  font: 11px/1.4 var(--mono);
   color: var(--text);
   text-align: center;
   text-overflow: ellipsis;
@@ -439,6 +463,12 @@
   .motion-object {
     flex: 1 1 100%;
     min-width: 0;
+  }
+
+  /* The line number and operation still name the step; the snippet would
+   * push the data down on a phone. */
+  .motion-source {
+    display: none;
   }
 }
 

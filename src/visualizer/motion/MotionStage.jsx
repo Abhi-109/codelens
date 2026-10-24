@@ -104,6 +104,7 @@ function ObjectCard({ object, registerNode, registerSlot }) {
       ref={registerNode}
       className={classNames(
         "motion-object",
+        (object.type === "list" || object.type === "tuple") && "is-sequence",
         object.highlighted && "is-highlighted",
         object.entering && "is-entering",
       )}
@@ -403,12 +404,20 @@ export default function MotionStage({ plan }) {
 
   return (
     <div className="motion-stage" ref={stageRef}>
+      {/* One place for the step: which line ran, what it verifiably did, and the
+          source itself. A comparison can sit beside the operation later without
+          rearranging this block. */}
       <div className="motion-stage-head">
-        <span className="motion-kicker">Live state</span>
+        {view.line === null ? null : <span className="motion-line">line {view.line}</span>}
         {view.feedback ? (
           <span className={`motion-event is-${view.feedback.kind}`} title={view.feedback.text}>
             {view.feedback.text}
           </span>
+        ) : null}
+        {view.lineText ? (
+          <code className="motion-source" title={view.lineText}>
+            {view.lineText}
+          </code>
         ) : null}
       </div>
 

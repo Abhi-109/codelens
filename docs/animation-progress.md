@@ -137,10 +137,35 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Stage 5 R1–R3 are in: labeled cells replace the bars, verified operations ring the cells they
-touch, and the interrupted-move measurement order is fixed. Comparison visualisation has no
-trace data; the smallest viable design for capturing operands and outcomes is reported and
-awaits a separate architectural decision. Nothing is pushed.
+Stage 5 R1–R4 are in: labeled cells replace the bars, verified operations ring the cells they
+touch, the interrupted-move measurement order is fixed, and the canvas now uses its width with
+a single step head (line, operation, source). The R3 measurement fix and the R4 layout both
+still need a real browser check; this environment has no browser automation. Comparison
+visualisation has no trace data; the smallest viable design for capturing operands and outcomes
+is reported and awaits a separate architectural decision. Nothing is pushed.
+
+## Motion-first Stage 5 notes (canvas focus and step head, R4)
+- Layout cause, fixed at both levels: `.motion-object` was still `flex: 0 1 300px`, so a
+  sequence could never use more than a 300 px basis even after the cells replaced the bars;
+  every list also kept the card border, padding and type pill. A list/tuple now gets
+  `is-sequence`: full row width, no border or padding, no type pill, and its name stays as a
+  single quiet label.
+- The cells themselves now grow: `flex: 1 1 0` with `64–220 px` bounds and a larger value
+  (14 px) and index (11 px), so a short array fills the row evenly and a long one scrolls
+  without wrapping. `.motion-objects` uses `align-content: safe center`, so the row sits in
+  the canvas instead of at its top corner.
+- The head is now one step block: `line N`, the verified operation, and the trimmed source
+  line. The "Live state" kicker and the pill styling are gone; a verified mutation is accent
+  bold text, a plain step is quiet text. The source snippet is hidden below 720 px.
+- Variable-only changes are demoted to a neutral `step`; a data change still wins the headline
+  when both happen in one step, so `j 2 → 3` is never the primary explanation. The variable
+  chip remains in the call strip with its change flash. A step with no operations says
+  `no data change`.
+- Comparison handling is unchanged and honest: no operand highlighting, no result derived from
+  the array. A bubble-sort comparison line is tested to produce no active cell and no mutation
+  label. The head layout leaves room for a comparison element beside the operation.
+- Tests: three new (`view.test.mjs` line/snippet passthrough and the comparison-line guard,
+  `plan.test.mjs` real-fixture `line`/`lineText`). JS suite is **666 tests**.
 
 ## Motion-first Stage 5 notes (animation hardening, R3)
 - Inspected, as asked: interruption on fast playback, seeking and reset, reverse swaps and

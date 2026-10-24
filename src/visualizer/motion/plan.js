@@ -301,6 +301,9 @@ export function planMotion(
   const next = snapshotAt(trace, index);
   if (!next) return null;
   const state = stateOf(next);
+  const line = Number.isInteger(next.line) ? next.line : null;
+  const lineText =
+    line === null ? null : (String(source).split(/\r?\n/)[line - 1] ?? "").trim() || null;
   const transition = transitionOf(index, previousIndex, trace.length);
   const timing = { reducedMotion, speed };
 
@@ -335,6 +338,8 @@ export function planMotion(
     index,
     step: next.step,
     event: next.event ?? null,
+    line,
+    lineText,
     transition,
     previousIndex: Number.isInteger(previousIndex) ? previousIndex : null,
     mode: reducedMotion ? MOTION_MODE.reduced : MOTION_MODE.full,

@@ -176,16 +176,19 @@ export function operationFeedback(plan) {
     };
   }
 
-  const changed = find((operation) => operation.op === MOTION_OPERATION.value);
+  // A local variable is bookkeeping, not the operation being taught: it stays
+  // in the call strip and never becomes the headline. A real data change wins
+  // even when the same step also assigned a loop counter.
+  const changed = find(
+    (operation) =>
+      operation.op === MOTION_OPERATION.value && operation.target?.kind !== "variable",
+  );
   if (changed) {
     const target = changed.action?.target ?? {};
     const from = fromText(changed.action?.from);
     const to = toText(changed.action?.to);
     if (target.kind === "cell") {
       return { kind: "change", text: `[${target.index}] ${from} → ${to}` };
-    }
-    if (target.kind === "variable") {
-      return { kind: "change", text: `${target.name} ${from} → ${to}` };
     }
     if (target.kind === "attribute") {
       return { kind: "change", text: `${target.name} ${from} → ${to}` };
@@ -217,7 +220,9 @@ export function operationFeedback(plan) {
     return { kind: "return", text: name ? `return from ${name}` : "call ends" };
   }
 
-  return { kind: "neutral", text: "no recorded change" };
+  // Nothing proven to describe: a plain line step, or a step that only moved a
+  // bookkeeping variable. The head still shows which line ran.
+  return { kind: "neutral", text: operations.length > 0 ? "step" : "no data change" };
 }
 
 /**
@@ -250,6 +255,8 @@ export function motionView(plan) {
     index: plan.index,
     step: plan.step,
     event: plan.event,
+    line: plan.line ?? null,
+    lineText: plan.lineText ?? null,
     transition: plan.transition,
     animate: plan.animate,
     durationMs: plan.durationMs,
