@@ -213,10 +213,12 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 111 Python tests: the tracer, the flowchart model, the static
                       # program profile and the corpus
-npm run test:js       # 632 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 640 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6
-                      # dict/set/object contents and lifecycle),
+                      # dict/set/object contents and lifecycle), the pure motion
+                      # plan (stable nodes, operations, seeks, reduced motion and
+                      # cancellation),
                       # the safe index evaluator and the
                       # statement-shape parser, the call tree and control flow model and
                       # layout, the
@@ -309,6 +311,9 @@ codelens/
 │   │   └── lineShape.test.mjs
 │   ├── visualizer/
 │   │   ├── session/             # one execution session: run, cursor, playback, selected call
+│   │   ├── motion/
+│   │   │   ├── plan.js          # cursor -> stable nodes + generic motion operations (pure)
+│   │   │   └── plan.test.mjs   # real traces, reversibility, seeks, timing, cancellation
 │   │   ├── Inspector.jsx        # six tabbed sections, full ARIA tab pattern
 │   │   ├── PlaybackBar.jsx      # stepping, timeline, speed, Developer menu
 │   │   ├── panelBits.jsx        # shared panel pieces (components only)

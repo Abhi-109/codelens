@@ -11,6 +11,8 @@ The page has **exactly two panels**:
 
 No tabs, inspector cards, timeline tables, comparison views, call-stack dashboards, or AI-generated explanations on this page. Call frames, variables, and references appear **inside the stage** as part of the animation.
 
+**Approved Task 7 amendment (2026-10-24):** the right Visual Animation panel may contain a compact inspector using tabs and a switcher for the existing visualization canvases. These are views inside the single right panel, not additional primary panels. This supersedes the "No tabs..." sentence above for the Task 7 renderer; see the decision log.
+
 **Caption line (Decision D1, owner may change):** one short, subtitle-style line inside the stage built only from recorded facts ("`j` is compared with `j + 1`; 12 > 11, so they swap"). It has a toggle and is on by default.
 
 ## 2. Non-goals for v1
@@ -111,3 +113,4 @@ Rules:
 | 2026-10-24 | Corpus count corrected from 45 to 60 in section 10. The spec number was stale; `corpus.py`, the golden file and README all say 60, and the corpus is not changed by the correction. | owner |
 | 2026-10-24 | A return value may animate toward the console for `print(f(x))` when the trace proves the output follows the return; no landing variable is invented. Otherwise the return animation stays simpler. | owner |
 | 2026-10-24 | Sets are unordered bags of cells: their elements may appear and disappear, never move between ordered positions. | owner |
+| 2026-10-24 | Task 7 keeps exactly two primary panels, Code and Visual Animation. The existing inspector tabs and canvas switcher live inside the right panel as views, never as separate primary panels. This is the approved Task 7 layout; remaining `apply.js` and whole-corpus golden work is separately scoped. | owner |

@@ -1,7 +1,9 @@
 # Animation visualizer: progress
 
-**Current phase:** 1 (Diff engine) — tasks 1–4, 5a–5c and 6 of 8 done. Tasks 7–8 await
-approval, one at a time.
+**Current phase:** 1 (Diff engine) — tasks 1–4, 5a–5c and 6 of 8 done.
+**Current milestone:** Task 7 universal motion renderer — Stage 1 done; Stages 2–4 await
+approval one stage at a time. The diff engine's remaining `apply.js`/golden work is
+separately scoped.
 **Last updated:** 2026-10-24
 
 ## Phase checklist
@@ -135,9 +137,30 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await approval to start Phase 1 task 7. Task 6 (dict/set/object content and non-sequence
-lifecycle) is done and every fixture transition now round trips; tasks 7–8 are unchanged in
-the approved plan.
+Await approval to start Task 7 Stage 2: connect the verified motion plan to a real
+`MotionStage` canvas. Stage 1 is complete and committed; no layout refactor has started.
+
+## Task 7 Stage 1 notes (motion plan and playback foundation)
+- `src/visualizer/motion/plan.js` turns one shared cursor position into a pure plan. The
+  target state comes only from `snapshotAt`/`stateOf`; the previous state and actions come
+  only from `diffSteps`. Adjacent forward steps, adjacent backward steps, seeks, resets and
+  holds are distinguished, and only adjacent steps expose actions for motion.
+- Stable node keys use trace identity where it exists: object id, canonical dict key, set
+  member value, attribute name and frame id. List/tuple cells are keyed by position because
+  the trace records no cell identity; a value change keeps the same positional key and no
+  value-to-cell identity is invented.
+- Actions map to generic `enter`, `exit`, `value`, `move`, `highlight` and `overlay`
+  operations. No algorithm names, list-sort branches or fake intermediate states exist in the
+  motion layer. Operations retain the original action, target, reason and payload.
+- `motionDuration` scales a fixed 80–280 ms range by the existing speed choices; reduced
+  motion sets every duration to zero and marks the plan reduced. `createMotionController`
+  supersedes older requests and ignores completion from a stale animation. Seeking/reset/
+  hold plans carry the exact target state with no actions, so they render directly.
+- Tested against real traces from 13 corpus/recognition programs, all steps forward and all
+  adjacent steps backward: exact target state, forward/reverse action equality, unique node
+  keys, real move/change/shrink/enter mapping, seek/reset/hold, reduced motion, speed, stale
+  completion and trace immutability. This is model-level coverage only; no DOM-test
+  dependency was added. JS suite is **640 tests**.
 
 ## Task 1.6 notes (dict, set and object contents)
 - `diff.js` adds keyed content diffing for dictionaries, sets and objects plus whole-entry
