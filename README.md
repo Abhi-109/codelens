@@ -213,7 +213,7 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 111 Python tests: the tracer, the flowchart model, the static
                       # program profile and the corpus
-npm run test:js       # 648 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 654 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6
                       # dict/set/object contents and lifecycle), the pure motion
@@ -316,6 +316,7 @@ codelens/
 │   │   ├── motion/
 │   │   │   ├── plan.js          # cursor -> stable nodes + generic motion operations (pure)
 │   │   │   ├── plan.test.mjs   # real traces, reversibility, seeks, timing, cancellation
+│   │   │   ├── bars.js          # numeric list/tuple -> bar fractions, zero baseline (pure)
 │   │   │   ├── view.js          # plan -> drawable nodes, ghosts and step flags (pure)
 │   │   │   ├── view.test.mjs   # real-trace action-to-render mapping
 │   │   │   ├── MotionStage.jsx  # persistent data cards, FLIP moves, cancellation

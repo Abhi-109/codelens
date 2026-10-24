@@ -11,6 +11,7 @@ import { gunzipSync } from "node:zlib";
 
 import { snapshotAt, stateOf } from "../../animation/diff.js";
 import { showValue } from "../../tracer/values.js";
+import { numericBars } from "./bars.js";
 import { MOTION_OPERATION, motionNodes, planMotion } from "./plan.js";
 import { motionView } from "./view.js";
 
@@ -331,4 +332,151 @@ test("highlights are static state; reduced motion removes every ghost", () => {
   assert.equal(reducedView.animate, false);
   assert.equal(reducedView.mode, "reduced");
   assert.deepEqual(reducedView.ghosts, [], "nothing leaves after the target is already drawn");
+});
+
+const near = (actual, expected, message) =>
+  assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: ${actual} ≈ ${expected}`);
+
+const numberSlot = (index, value, extra = {}) => ({
+  key: `cell:o1:${index}`,
+  index,
+  text: String(value),
+  valueType: Number.isInteger(value) ? "int" : "float",
+  value: { type: Number.isInteger(value) ? "int" : "float", value },
+  ...extra,
+});
+
+test("numeric bars scale positives, zero and equal values from a real baseline", () => {
+  const positive = numericBars([numberSlot(0, 4), numberSlot(1, 2), numberSlot(2, 5)]);
+  assert.equal(positive.min, 0);
+  assert.equal(positive.max, 5);
+  assert.equal(positive.zero, 0);
+  assert.deepEqual(positive.cells.map((cell) => cell.from), [0, 0, 0]);
+  near(positive.cells[0].size, 0.8, "4 of 5");
+  near(positive.cells[1].size, 0.4, "2 of 5");
+  near(positive.cells[2].size, 1, "5 of 5");
+
+  const zeros = numericBars([numberSlot(0, 0), numberSlot(1, 0)]);
+  assert.deepEqual(zeros.cells.map((cell) => cell.size), [0, 0]);
+  assert.equal(zeros.zero, 0, "an all-zero list keeps the baseline at the bottom");
+
+  const equal = numericBars([numberSlot(0, 3), numberSlot(1, 3), numberSlot(2, 3)]);
+  assert.deepEqual(equal.cells.map((cell) => cell.size), [1, 1, 1]);
+  assert.deepEqual(equal.cells.map((cell) => cell.from), [0, 0, 0]);
+
+  const single = numericBars([numberSlot(0, 7)]);
+  assert.equal(single.cells.length, 1);
+  near(single.cells[0].size, 1, "a single positive value fills the plot");
+});
+
+test("numeric bars hang below the baseline for negatives and mixed signs", () => {
+  const negative = numericBars([numberSlot(0, -4), numberSlot(1, -2)]);
+  assert.equal(negative.min, -4);
+  assert.equal(negative.max, 0);
+  assert.equal(negative.zero, 1, "the baseline is the top of the plot");
+  assert.deepEqual(negative.cells.map((cell) => cell.from), [0, 0.5]);
+  near(negative.cells[0].size, 1, "-4 fills the plot downward");
+  near(negative.cells[1].size, 0.5, "-2 fills half of it");
+
+  const mixed = numericBars([numberSlot(0, -2), numberSlot(1, 5)]);
+  assert.equal(mixed.min, -2);
+  assert.equal(mixed.max, 5);
+  near(mixed.zero, 2 / 7, "zero sits two sevenths up");
+  near(mixed.cells[0].from, 0, "the negative bar starts at the bottom");
+  near(mixed.cells[0].size, 2 / 7, "and ends at zero");
+  near(mixed.cells[1].from, 2 / 7, "the positive bar starts at zero");
+  near(mixed.cells[1].size, 5 / 7, "and ends at the top");
+
+  const float = numericBars([numberSlot(0, 1.5), numberSlot(1, -0.5)]);
+  assert.equal(float.cells.length, 2, "floats are numbers too");
+});
+
+test("numeric bars refuse empty, mixed, boolean and reference contents", () => {
+  assert.equal(numericBars([]), null);
+  assert.equal(numericBars(null), null);
+  assert.equal(numericBars([numberSlot(0, 1), { ...numberSlot(1, 2), valueType: "str" }]), null);
+  assert.equal(
+    numericBars([{ ...numberSlot(0, 1), valueType: "bool", value: { type: "bool", value: true } }]),
+    null,
+  );
+  assert.equal(
+    numericBars([{ ...numberSlot(0, 1), valueType: "ref", value: { type: "ref", id: "o2" } }]),
+    null,
+  );
+  assert.equal(numericBars([{ ...numberSlot(0, 1), value: { type: "int", value: NaN } }]), null);
+});
+
+test("numeric bars keep the exact slot keys, so verified swaps still match", () => {
+  const slots = [numberSlot(0, 4), numberSlot(1, 2)];
+  assert.deepEqual(
+    numericBars(slots).cells.map((cell) => cell.key),
+    slots.map((slot) => slot.key),
+  );
+
+  const swapped = findPlan("bubble-sort", (candidate) =>
+    candidate.operations.some((operation) => operation.motion === "swap"),
+  );
+  const view = motionView(swapped.plan);
+  const list = view.objects.find((object) => object.bars);
+  assert.ok(list, "bubble-sort carries a numeric list");
+  assert.deepEqual(
+    list.bars.cells.map((cell) => cell.key),
+    list.slots.map((slot) => slot.key),
+    "bars are the same identities the cell view would have drawn",
+  );
+  assert.deepEqual(
+    list.bars.cells.map((cell) => cell.value),
+    list.slots.map((slot) => slot.value.value),
+  );
+
+  const swap = view.moves.find((move) => move.motion === "swap");
+  assert.ok(swap);
+  for (const index of swap.indices) {
+    assert.ok(
+      list.bars.cells.some((cell) => cell.index === index),
+      `swap index ${index} is a bar`,
+    );
+    assert.ok(
+      list.slots.some((slot) => slot.index === index),
+      `swap index ${index} is a registered slot`,
+    );
+  }
+});
+
+test("a real shift keeps the destination bar, and a seek shows the same bars", () => {
+  const shifted = findPlan("insertion-sort", (candidate) =>
+    candidate.operations.some((operation) => operation.motion === "shift"),
+  );
+  const view = motionView(shifted.plan);
+  const list = view.objects.find((object) => object.bars);
+  assert.ok(list, "insertion-sort carries a numeric list");
+  const shift = view.moves.find((move) => move.motion === "shift");
+  assert.ok(shift);
+  const destination = shift.indices[1];
+  assert.ok(list.bars.cells.some((cell) => cell.index === destination));
+
+  const seekPlan = planAt(shifted.p, shifted.index, { previousIndex: shifted.index - 2 });
+  assert.equal(seekPlan.transition, "seek");
+  assert.deepEqual(
+    motionView(seekPlan).objects.find((object) => object.bars)?.bars,
+    list.bars,
+    "a seek renders the same projection as arriving forward",
+  );
+});
+
+test("non-numeric collections keep their existing cell representation", () => {
+  const strings = findPlan("list-basics", (candidate) =>
+    candidate.nodes.objects.some((object) => object.type === "list"),
+  );
+  const stringList = motionView(strings.plan).objects.find((object) => object.type === "list");
+  assert.ok(stringList);
+  assert.equal(stringList.bars, null);
+  assert.ok(stringList.slots.length > 0, "string cells are still drawn");
+
+  const dict = findPlan("dict-basics", (candidate) =>
+    candidate.nodes.objects.some((object) => object.type === "dict"),
+  );
+  const entries = motionView(dict.plan).objects.find((object) => object.type === "dict");
+  assert.ok(entries);
+  assert.equal(entries.bars, null);
 });

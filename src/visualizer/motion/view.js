@@ -8,6 +8,7 @@
 // snapshot's data. That split is what lets an exit fade without the canvas
 // briefly showing a made-up intermediate value.
 
+import { numericBars } from "./bars.js";
 import { MOTION_OPERATION, motionNodes } from "./plan.js";
 
 function flatten(nodes) {
@@ -80,11 +81,15 @@ function frameView(frame, flags) {
 }
 
 function objectView(object, flags) {
+  const slots = object.slots.map((slot) => slotView(slot, flags));
+  const numeric = object.type === "list" || object.type === "tuple";
   return {
     ...object,
     entering: flags.entering.has(object.key),
     highlighted: flags.highlighted.has(object.key),
-    slots: object.slots.map((slot) => slotView(slot, flags)),
+    slots,
+    // Only real numbers become bars; every other collection keeps its cells.
+    bars: numeric ? numericBars(slots) : null,
   };
 }
 

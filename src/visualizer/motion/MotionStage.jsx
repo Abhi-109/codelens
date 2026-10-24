@@ -6,6 +6,8 @@ import "./motion.css";
 
 const EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 const EXIT_MS = 180;
+/** A swap arcs this far above the straight line between the two cells. */
+const SWAP_LIFT = 12;
 
 function registerIn(map, key, node) {
   if (node) map.current.set(key, node);
@@ -88,6 +90,41 @@ function Slot({ slot, registerNode }) {
   );
 }
 
+/**
+ * A numeric list or tuple as bars. The registered node is still the slot's own
+ * column and still carries the slot key, so the existing verified swap/shift
+ * FLIP finds the same element the cell view would have moved.
+ */
+function BarRow({ object, registerSlot }) {
+  return (
+    <div className="motion-bars" style={{ "--zero": object.bars.zero }}>
+      {object.bars.cells.map((cell) => (
+        <span
+          key={cell.key}
+          ref={(node) => registerSlot(cell.key, node)}
+          className={classNames(
+            "motion-bar",
+            cell.negative && "is-negative",
+            cell.changed && "is-changed",
+            cell.highlighted && "is-highlighted",
+            cell.entering && "is-entering",
+          )}
+          data-key={cell.key}
+          style={{ "--from": cell.from, "--size": cell.size }}
+        >
+          <span className="motion-bar-value" title={cell.text}>
+            {cell.text}
+          </span>
+          <span className="motion-bar-plot">
+            <span className="motion-bar-fill" />
+          </span>
+          <span className="motion-bar-index">[{cell.index}]</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function ObjectCard({ object, registerNode, registerSlot }) {
   return (
     <article
@@ -105,7 +142,9 @@ function ObjectCard({ object, registerNode, registerSlot }) {
         </span>
         <span className="motion-object-type">{object.objectType}</span>
       </header>
-      {object.slots.length > 0 ? (
+      {object.bars ? (
+        <BarRow object={object} registerSlot={registerSlot} />
+      ) : object.slots.length > 0 ? (
         <div className={classNames("motion-slots", `slots-${object.type}`)}>
           {object.slots.map((slot) => (
             <Slot
@@ -241,7 +280,7 @@ export default function MotionStage({ plan }) {
     };
 
     const explicit = new Set();
-    const animateMove = (key, fromRect) => {
+    const animateMove = (key, fromRect, lift = 0) => {
       if (!fromRect || explicit.has(key)) return;
       const element = nodeRefs.current.get(key);
       const toRect = currentRects.get(key);
@@ -250,18 +289,34 @@ export default function MotionStage({ plan }) {
       const dy = fromRect.top - toRect.top;
       if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
       explicit.add(key);
-      play(element, [
-        { transform: `translate(${dx}px, ${dy}px)` },
-        { transform: "translate(0, 0)" },
-      ]);
+      const frames =
+        lift > 0
+          ? [
+              { transform: `translate(${dx}px, ${dy}px)` },
+              { transform: `translate(${dx / 2}px, ${dy / 2 - lift}px)` },
+              { transform: "translate(0, 0)" },
+            ]
+          : [
+              { transform: `translate(${dx}px, ${dy}px)` },
+              { transform: "translate(0, 0)" },
+            ];
+      play(element, frames);
     };
 
     for (const move of view.moves) {
       if (!Array.isArray(move.indices)) continue;
       if (move.motion === "swap" && move.indices.length === 2) {
         const [i, j] = move.indices;
-        animateMove(cellKey(move.objectId, i), previousRects.get(cellKey(move.objectId, j)));
-        animateMove(cellKey(move.objectId, j), previousRects.get(cellKey(move.objectId, i)));
+        animateMove(
+          cellKey(move.objectId, i),
+          previousRects.get(cellKey(move.objectId, j)),
+          SWAP_LIFT,
+        );
+        animateMove(
+          cellKey(move.objectId, j),
+          previousRects.get(cellKey(move.objectId, i)),
+          SWAP_LIFT,
+        );
       } else if (move.motion === "shift" && move.indices.length === 2) {
         const [origin, destination] = move.indices;
         animateMove(

@@ -1,9 +1,9 @@
 # Animation visualizer: progress
 
 **Current phase:** 1 (Diff engine) — tasks 1–4, 5a–5c and 6 of 8 done.
-**Current milestone:** Task 7 universal motion renderer — Stages 1–3 done; Stage 4 await
-approval one stage at a time. The diff engine's remaining `apply.js`/golden work is
-separately scoped.
+**Current milestone:** Motion-first visualizer — Stage 1 (numeric bars) done; Stage 2 awaits
+approval. Task 7 Stages 1–3 remain complete; the diff engine's remaining `apply.js`/golden
+work is separately scoped.
 **Last updated:** 2026-10-24
 
 ## Phase checklist
@@ -137,8 +137,34 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await approval to start Task 7 Stage 4. Stage 3 (the two-panel workspace) is complete and
-committed locally; Stage 4 has not started and nothing has been pushed.
+Motion-first Stage 1 is committed. Stage 2 (recursion stack, return/output overlays, current
+line) awaits approval and has not started. Nothing is pushed.
+
+## Motion-first Stage 1 notes (numeric bars)
+- `src/visualizer/motion/bars.js` is the pure projection. It returns `null` unless every slot
+  is `int`/`float` with a finite value, so empty, mixed, boolean, reference and unsupported
+  collections keep the existing cells. The domain always contains zero (`min(0, …)` /
+  `max(0, …)`), and one `from`/`size`/`zero` formula covers positives, negatives, mixed signs,
+  equal values and all-zero lists without dividing by zero. It reads slot values and never
+  mutates the snapshot.
+- `view.js` attaches `bars` to list/tuple objects only. The bar cells keep the exact
+  `cell:<objectId>:<index>` slot keys, and `MotionStage` registers each bar column under that
+  key, so the existing verified swap/shift FLIP animates the same element the cell view moved.
+  No new cursor, action or animation state exists.
+- Swaps now take a 12 px vertical arc between the two recorded rects. It is still a
+  transform-only WAAPI animation with the existing duration and the existing reduced-motion
+  path (which skips all motion). Shift, insert, delete and value changes are unchanged.
+- Comparisons are not inferred. The verified vocabulary has no comparison action; `highlight`
+  is still emitted only for the existing conservative fallback reasons, and bars render it as
+  a static accent.
+- Spec threshold updated: bars apply to any non-empty all-numeric list/tuple, not only 8+
+  numbers; recorded in the spec decision log.
+- Tests in `view.test.mjs` cover positives, zero, equal values, negatives, mixed signs,
+  floats, empty/single, boolean/mixed/reference refusal, key stability, real bubble swaps,
+  real insertion shifts, seek equality, and non-numeric collections. JS suite is **654 tests**.
+- Known limits: a removed cell still ghosts as the small `[i] value` chip rather than a bar;
+  very wide values truncate visually and keep the full text in `title`; no browser validation
+  was performed for this stage.
 
 ## Task 7 Stage 3 notes (two-panel workspace, inspector drawer)
 - The redesign brief called this Stage B. `.layout` is now three tracks — `var(--col-left, 34%)`,

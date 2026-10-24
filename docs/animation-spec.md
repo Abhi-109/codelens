@@ -62,7 +62,7 @@ Rules:
 - **Objects and references:** node cards with fields and arrows. Two names for one object share one card. Stable layout: an object keeps its position across steps unless it must move. `next` chains lay out as a linked list; `left`/`right` as a tree.
 - **Call frames:** a call slides a frame in with its arguments; a return sends the value back and removes the frame. Deep recursion compacts.
 - **Console:** printed text appears incrementally.
-- **Skins** are chosen from evidence in the trace, show a small "why" chip, and can be switched off: **bars** (8 or more numbers), **linked list**, **tree**, **hash buckets** (a list of lists or nodes indexed with a modulus expression). No evidence means generic views.
+- **Skins** are chosen from evidence in the trace, show a small "why" chip, and can be switched off: **bars** (any non-empty list or tuple whose values are all finite numbers), **linked list**, **tree**, **hash buckets** (a list of lists or nodes indexed with a modulus expression). No evidence means generic views.
 - **Big data:** show the first N items with "+ M more", zoom and pan.
 
 ## 8. Playback semantics
@@ -115,3 +115,4 @@ Rules:
 | 2026-10-24 | Sets are unordered bags of cells: their elements may appear and disappear, never move between ordered positions. | owner |
 | 2026-10-24 | Task 7 keeps exactly two primary panels, Code and Visual Animation. The existing inspector tabs and canvas switcher live inside the right panel as views, never as separate primary panels. This is the approved Task 7 layout; remaining `apply.js` and whole-corpus golden work is separately scoped. | owner |
 | 2026-10-24 | Task 7 Stage 2 adds `Motion` as an additional canvas in the existing switcher while the two-panel layout is still pending. It uses the shared event cursor and keeps every existing canvas and the default Adaptive view unchanged. | owner |
+| 2026-10-24 | Bars are no longer gated at eight elements: the Motion canvas draws any non-empty list or tuple whose values are all finite numbers as bars, at every length. Empty, mixed, boolean and unsupported collections keep the cell representation. This changes the Stage 1 threshold only; the action vocabulary and cursor are untouched. | owner |
