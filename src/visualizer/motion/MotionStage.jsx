@@ -76,6 +76,7 @@ function Slot({ slot, registerNode }) {
         slot.kind === "cell" && "motion-cell",
         slot.changed && "is-changed",
         slot.highlighted && "is-highlighted",
+        slot.active && "is-active",
         slot.entering && "is-entering",
       )}
       data-key={slot.key}
@@ -435,7 +436,11 @@ export default function MotionStage({ plan }) {
             <div
               key={`${ghost.kind}:${ghost.key}`}
               ref={(node) => registerIn(ghostRefs, ghost.key, node)}
-              className={classNames("motion-ghost", `ghost-${ghost.kind}`)}
+              className={classNames(
+                "motion-ghost",
+                `ghost-${ghost.kind}`,
+                ghost.active && "is-active",
+              )}
             >
               <span className="motion-ghost-name">{ghostName(ghost)}</span>
               <span className="motion-ghost-value">{ghostValue(ghost)}</span>

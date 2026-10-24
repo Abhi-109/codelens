@@ -9,7 +9,7 @@
 // briefly showing a made-up intermediate value.
 
 import { showValue } from "../../tracer/values.js";
-import { MOTION_OPERATION, motionNodes } from "./plan.js";
+import { MOTION_OPERATION, motionNodes, motionTargetKey } from "./plan.js";
 
 function flatten(nodes) {
   const map = new Map();
@@ -30,6 +30,7 @@ function flagsFor(plan) {
   const exiting = new Set();
   const changed = new Set();
   const highlighted = new Set();
+  const active = new Set();
   const moves = [];
 
   for (const operation of plan.operations) {
@@ -48,9 +49,20 @@ function flagsFor(plan) {
         durationMs: operation.durationMs,
       });
     }
+
+    // The operation's own cells, from the verified action only: both ends of a
+    // recorded pair, or the one cell an insert, removal or change names.
+    if (operation.op === MOTION_OPERATION.move) {
+      const objectId = operation.target?.objectId;
+      for (const index of operation.action?.payload?.indices ?? []) {
+        active.add(motionTargetKey({ kind: "cell", objectId, index }));
+      }
+    } else if (operation.target?.kind === "cell") {
+      active.add(key);
+    }
   }
 
-  return { entering, exiting, changed, highlighted, moves };
+  return { entering, exiting, changed, highlighted, active, moves };
 }
 
 function variableView(variable, flags) {
@@ -68,6 +80,7 @@ function slotView(slot, flags) {
     entering: flags.entering.has(slot.key),
     changed: flags.changed.has(slot.key),
     highlighted: flags.highlighted.has(slot.key),
+    active: flags.active.has(slot.key),
   };
 }
 
@@ -229,7 +242,7 @@ export function motionView(plan) {
   if (plan.animate) {
     for (const key of flags.exiting) {
       const node = previous.get(key);
-      if (node) ghosts.push({ key, kind: node.kind, node });
+      if (node) ghosts.push({ key, kind: node.kind, node, active: flags.active.has(key) });
     }
   }
 

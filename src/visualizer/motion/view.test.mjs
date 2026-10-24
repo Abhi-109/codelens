@@ -512,6 +512,117 @@ const moveOf = (plan, motion) =>
     (operation) => operation.op === MOTION_OPERATION.move && operation.motion === motion,
   );
 
+const activeCells = (view) => allSlots(view).filter((slot) => slot.active);
+const keysOf = (slots) => slots.map((slot) => slot.key).sort();
+const indicesOf = (slots) => slots.map((slot) => slot.index).sort((a, b) => a - b);
+
+test("a verified swap marks exactly its two cells, forward and backward", () => {
+  const { p, index, plan } = findPlan("bubble-sort", (candidate) =>
+    Boolean(moveOf(candidate, "swap")),
+  );
+  const swap = moveOf(plan, "swap");
+  const [left, right] = swap.action.payload.indices;
+  const objectId = swap.action.target.objectId;
+  const expected = [`cell:${objectId}:${left}`, `cell:${objectId}:${right}`].sort();
+
+  const forward = activeCells(motionView(plan));
+  assert.deepEqual(keysOf(forward), expected);
+  assert.deepEqual(indicesOf(forward), [left, right].sort((a, b) => a - b));
+  assert.ok(
+    forward.every((slot) => slot.active && !slot.changed),
+    "a swap rings its cells; it does not relabel them as changed values",
+  );
+
+  const backwardPlan = planAt(p, index - 1, { previousIndex: index });
+  assert.equal(backwardPlan.transition, "backward");
+  const backward = activeCells(motionView(backwardPlan));
+  assert.deepEqual(keysOf(backward), expected, "the inverse swap names the same pair");
+});
+
+test("a verified shift marks its origin and its destination", () => {
+  const { plan } = findPlan("insertion-sort", (candidate) => Boolean(moveOf(candidate, "shift")));
+  const shift = moveOf(plan, "shift");
+  const [origin, destination] = shift.action.payload.indices;
+  const active = activeCells(motionView(plan));
+
+  assert.deepEqual(indicesOf(active), [origin, destination].sort((a, b) => a - b));
+  assert.ok(active.every((slot) => slot.objectId === shift.action.target.objectId));
+});
+
+test("an insert, a removal and a value change mark only the cell they name", () => {
+  const appended = findPlan("list-basics", (candidate) =>
+    candidate.operations.some(
+      (operation) => operation.op === MOTION_OPERATION.enter && operation.action?.kind === "grow",
+    ),
+  );
+  const grow = appended.plan.operations.find((operation) => operation.action?.kind === "grow");
+  const grown = activeCells(motionView(appended.plan));
+  assert.equal(grown.length, 1);
+  assert.equal(grown[0].index, grow.action.target.index);
+
+  const removed = findPlan("list-mutation", (candidate) =>
+    candidate.operations.some(
+      (operation) => operation.op === MOTION_OPERATION.exit && operation.action?.kind === "shrink",
+    ),
+  );
+  const shrink = removed.plan.operations.find((operation) => operation.action?.kind === "shrink");
+  const removedView = motionView(removed.plan);
+  assert.deepEqual(
+    activeCells(removedView),
+    [],
+    "the removed cell is no longer in the target state",
+  );
+  const leaving = removedView.ghosts.find(
+    (ghost) => ghost.kind === "cell" && ghost.node.index === shrink.action.target.index,
+  );
+  assert.ok(leaving, "the removed cell is drawn as a ghost");
+  assert.equal(leaving.active, true, "the leaving cell is the affected one");
+
+  const changed = findPlan("list-mutation", (candidate) =>
+    candidate.operations.some(
+      (operation) => operation.op === MOTION_OPERATION.value && operation.target?.kind === "cell",
+    ),
+  );
+  const value = changed.plan.operations.find(
+    (operation) => operation.op === MOTION_OPERATION.value && operation.target?.kind === "cell",
+  );
+  const changedCells = activeCells(motionView(changed.plan));
+  assert.ok(changedCells.some((slot) => slot.index === value.target.index));
+  assert.ok(
+    changedCells.every((slot) => slot.changed),
+    "a value change is both the active operation and the change flash",
+  );
+});
+
+test("no verified mutation means no active cell, on any fixture", () => {
+  const held = findPlan(
+    "bubble-sort",
+    (candidate) => candidate.index > 0 && candidate.operations.length === 0,
+  );
+  assert.deepEqual(activeCells(motionView(held.plan)), []);
+
+  for (const name of MATRIX) {
+    const p = program(name);
+    for (let index = 1; index < p.trace.length; index += 1) {
+      const plan = planAt(p, index);
+      if (!plan) continue;
+      const named = new Set();
+      for (const operation of plan.operations) {
+        if (operation.op === MOTION_OPERATION.move) {
+          for (const cell of operation.action?.payload?.indices ?? []) {
+            named.add(`cell:${operation.target.objectId}:${cell}`);
+          }
+        } else if (operation.target?.kind === "cell") {
+          named.add(operation.targetKey);
+        }
+      }
+      for (const slot of activeCells(motionView(plan))) {
+        assert.ok(named.has(slot.key), `${name} step ${index} invents ${slot.key}`);
+      }
+    }
+  }
+});
+
 test("a verified swap reports the real indices and the values that move", () => {
   const { p, index } = findPlan("bubble-sort", (candidate) => Boolean(moveOf(candidate, "swap")));
   const plan = planAt(p, index);

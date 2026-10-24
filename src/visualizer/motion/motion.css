@@ -311,6 +311,14 @@
   box-shadow: 0 0 0 1px var(--accent-border);
 }
 
+/* The verified operation's cells. A ring, not a fill: the fill is the change
+ * flash, so a swap reads as two ringed cells moving, not two repainted values.
+ * Inset because the sequence row clips its overflow. */
+.motion-slot.motion-cell.is-active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 .motion-slot {
   display: inline-flex;
   align-items: baseline;
@@ -402,6 +410,13 @@
   font-size: 11.5px;
   visibility: hidden;
   will-change: transform, opacity;
+}
+
+/* The cell a removal takes away has already left the target state, so its
+ * ghost is the affected element and gets the operation ring. */
+.motion-ghost.is-active {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md), inset 0 0 0 1px var(--accent);
 }
 
 .motion-ghost-name {

@@ -142,6 +142,23 @@ operation highlighting) and R3 (motion verification) follow in this series. Comp
 visualisation still has no trace data and awaits a separate architectural decision.
 Nothing is pushed.
 
+## Motion-first Stage 5 notes (verified operation highlighting, R2)
+- `flagsFor` now also builds an `active` set, exposed per slot as `active` and in the DOM as
+  `is-active`. It is derived only from verified actions: both indices in a `move` payload
+  (swap and shift), and the one cell an `enter` (grow), `exit` (shrink) or `value` action
+  names. Nothing reads the line text, the event name or neighbouring cells, so a
+  comparison-looking line marks nothing.
+- A removal's cell is already gone from the target state, so the affected element there is the
+  leaving ghost: `motionView` marks that ghost `active` and it gets the same ring.
+- The ring is deliberately not the change flash: a value change is both `is-changed` (accent
+  fill) and `is-active` (accent ring), while a swap is only ringed because a swap is a move,
+  not a value rewrite.
+- Tests: four in `view.test.mjs`, all real fixtures. A bubble-sort swap names exactly its two
+  cells forward and on the inverse plan; an insertion-sort shift names origin and destination;
+  `list-basics` append, the `list-mutation` delete ghost and its cell change name one each; a
+  no-op bubble-sort line names none, and every fixture step is checked so no active key exists
+  without a verified action naming it. JS suite is **663 tests**.
+
 ## Motion-first Stage 5 notes (array cells, R1)
 - The numeric bars are gone: `src/visualizer/motion/bars.js`, `numericBars`, the `bars` field on
   an object view, the `BarRow` component, and the `.motion-bars` / `.motion-bar*` / `is-bars`
