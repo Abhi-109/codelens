@@ -1,12 +1,12 @@
 # Animation visualizer: progress
 
-**Current phase:** 1 (Diff engine) — tasks 1–2 of 8 done. Tasks 3–8 await approval, one at a
+**Current phase:** 1 (Diff engine) — tasks 1–3 of 8 done. Tasks 4–8 await approval, one at a
 time.
 **Last updated:** 2026-10-24
 
 ## Phase checklist
 - [x] 0 Audit
-- [ ] 1 Diff engine (tasks 1–2 of 8 done)
+- [ ] 1 Diff engine (tasks 1–3 of 8 done)
 - [ ] 2 Two-panel page + generic stage
 - [ ] 3 List motion
 - [ ] 4 Frames, recursion, objects
@@ -20,7 +20,8 @@ time.
 | 0.1 Audit the real tracer, trace data, reuse surface and baseline; write `docs/animation-audit.md` | done | `fd988ad` |
 | 0.2 Record the owner's Phase 0 decisions; correct the stale corpus count in the spec | done | `334d210` |
 | 1.1 Action vocabulary, canonical targets, deterministic ids, overlay reset helper, `docs/animation.md` skeleton | done | `8e4e4b9` + `0900dc3` |
-| 1.2 Safe index-expression evaluator + separate bounds resolver | done | `044140e` + this commit |
+| 1.2 Safe index-expression evaluator + separate bounds resolver | done | `044140e` + `9079d15` |
+| 1.3 Statement-shape parser (`lineShape.js`) + tests | done | this commit |
 
 ## Decisions made
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the
@@ -93,6 +94,25 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Await approval to start Phase 1 task 3: `src/animation/lineShape.js`, the statement-shape
-parser (swap, shift, insert/delete, subscripts, augmented assign, `del`, attribute assign,
-unknown), with its tests. Tasks 4–8 are unchanged in the approved plan.
+Await approval to start Phase 1 task 4: the diff core (`src/animation/diff.js`) — frames,
+calls, returns, print, error and variables, combining source evidence from `lineShape.js`
+with before/after snapshots. Tasks 5–8 are unchanged in the approved plan.
+
+## Task 1.3 notes
+- `lineShape.js` recognizes syntax only: swap, shift, subscript assign, attribute assign,
+  augmented assign, `del`, `append`/`insert`/`pop`, and an explicit `unknown` with a reason
+  from a closed set. It never claims a value moved; `diff.js` will require snapshot evidence.
+- Shift is claimed only when **both** indices evaluate and are adjacent; `a[j + 1] = a[j]`
+  is `right`, `a[j] = a[j + 1]` is `left`. Without an environment, or when the indices are
+  not adjacent, the same statement is a `subscript-assign`.
+- Chained assignments and top-level `;` are `ambiguous` so no fragment is recognized
+  partially; strings, comments and bracket depth decide every split point, so a lookup
+  table or an f-string cannot fake a swap.
+- Real-corpus check (665 distinct statements in the corpus and recognition fixtures):
+  `unknown/not-a-mutation` 630, `append` 9, `subscript-assign` 7, `swap` 7,
+  `attribute-assign` 6, `unknown/unsupported` 4, `del` 1, `shift` 1 — the four
+  `unsupported` statements are the documented `setdefault(...).append(...)` chain and the
+  two tuple assignments in `tuple-unpack`.
+- Fixed while verifying: a bogus number literal (`1abc`) used to tokenize as a number and
+  could report a supported mutation for invalid syntax; number tokens are now validated and
+  an unreadable character is `unsupported`.

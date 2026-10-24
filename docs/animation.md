@@ -214,6 +214,77 @@ else is `null`. Evaluation never receives a length, so `"-1"` evaluates to `-1` 
 `resolveIndex(-1, 3)` turns it into cell 2. If either step returns `null`, the stage shows
 no marker; it does not guess one.
 
+### Statement shapes *(done: task 3)*
+
+`lineShape(source, line, { env })` answers **what the source says**, never what happened. A
+shape is a hint for `diff.js`; the snapshot evidence still has to agree before a movement
+action is emitted.
+
+```js
+{
+  kind,                         // "swap" | "shift" | "subscript-assign" | "attribute-assign"
+                                // | "augmented" | "del" | "append" | "insert" | "pop" | "unknown"
+  reason,                       // null for a recognized shape; a closed-set reason for unknown
+  statement: { text, startLine, endLine },
+  targets: [reference],         // written targets, or the receiver of a method
+  sources: [reference],         // the cells a swap/shift copies from
+  operator,                     // "=", an augmented operator, "del", or the method name
+  args,                         // method arguments as written
+  direction,                    // "left" | "right" for an adjacent cell copy, else null
+}
+```
+
+A reference carries its written `text`, its `base` name, a token-level `canonical` used to
+compare two references without caring about spacing, its `tail`, and each accessor:
+`.attr` or `[subscript]` with the subscript's text, its evaluated `value` (null when it
+cannot be evaluated), whether it is a single string literal (`literal: "str"`) and whether
+it is a slice.
+
+| Kind | Recognized statement form |
+|---|---|
+| `swap` | two single-subscript cells of the **same** container, right side exactly those two cells reversed (`a[i], a[j] = a[j], a[i]`) |
+| `shift` | one cell assigned from another cell of the same container whose evaluated indices are **adjacent** (`a[j + 1] = a[j]` is `right`, `a[j] = a[j + 1]` is `left`) |
+| `subscript-assign` | one target ending in a subscript (`a[0]`, `d['k']`, `rows[0]['score']`) |
+| `attribute-assign` | one target ending in an attribute (`obj.x = 1`, `self.tricks = []`) |
+| `augmented` | `x += 1`, `a[i] += 2`, `obj.n //= 2` (any Python augmented operator) |
+| `del` | `del a[0]`, `del d['k']`, `del obj.attr`, `del x` (exactly one, not a slice) |
+| `append` / `insert` / `pop` | `a.append(x)`, `a.insert(i, x)`, `a.pop()` / `a.pop(i)`, with a receiver that is a reference (no call result) and the exact arity; the call has to be the whole statement, so `x = a.pop()` is not this shape |
+
+The parser is structural, not regex-based: it scans characters, skips strings and comments,
+and chooses every split point by bracket depth. Consequences that are load-bearing:
+
+* a chain (`a[i] = b[j] = 0`) or a top-level `;` is `ambiguous`; nothing in it is
+  recognized partially;
+* everything inside a string is opaque (`a[']'] = 1`, `a[';'] = 2`, and a line that only
+  *mentions* `a[i], a[j] = a[j], a[i]` in a string or comment is not a swap);
+* a slice target (`a[1:3] = …`, `del a[1:3]`) is `unsupported`, because it covers more than
+  one cell and the diff cannot claim one cell moved;
+* a **multi-line** statement is resolved as one unit from the statement's first line to its
+  last, because the trace fires a line event for continuation lines too. If the boundaries
+  or the syntax cannot be established safely, the answer is `unknown` with a reason —
+  never a guess;
+* a mutation the parser will not model is reported as `unsupported`, not silently dropped:
+  a call-result receiver (`groups.setdefault('f', []).append('a')`), a tuple of plain names
+  (`x, y = y, x`), a slice, a parenthesised target tuple, a compound one-line suite;
+* `shift` is only claimed when **both** indices evaluate and are adjacent. Without an
+  environment, or when they are not adjacent, the same statement is a `subscript-assign`;
+  the diff may still show a change, but it is not told a cell moved.
+
+Unknown reasons are a closed set: `not-a-mutation` (a statement with no mutation shape the
+parser models — a plain variable assignment, `print`, control flow), `unsupported`,
+`ambiguous`, `malformed`, `outside-statement` (a blank/comment line, a line inside a
+multi-line string, or a line outside the source). Every `unknown` carries one; there is no
+silent skip.
+
+**Real-corpus check.** Run over every distinct `line` event in `corpus.json.gz` and
+`recognition.json.gz` (665 statements, environment taken from the line event's innermost
+frame): `unknown/not-a-mutation` 630, `append` 9, `subscript-assign` 7, `swap` 7 (six
+bubble-sort variants and `selection-sort`), `attribute-assign` 6, `unknown/unsupported` 4,
+`del` 1, `shift` 1 (`insertion-sort`, `right`). The four `unsupported` statements are
+exactly the documented cases: `groups.setdefault(...).append(...)` twice and the two
+`x, y = …` tuple assignments in `tuple-unpack`. Nothing in the corpus is silently dropped,
+and no statement is reported as a movement shape without the indices to prove adjacency.
+
 ## 9. Collections *(planned: tasks 5 and 6)*
 
 * **list / tuple** — cells by index; grow/shrink at the ends or at an inserted position once
@@ -320,7 +391,7 @@ actions their `reason` explains.
 |---|---|---|
 | 1 | vocabulary, effects, canonical targets, deterministic ids, overlay reset helper | **done** |
 | 2 | safe index-expression evaluator + separate bounds resolver | **done** |
-| 3 | statement-shape parser (`lineShape.js`) | planned |
+| 3 | statement-shape parser (`lineShape.js`) | **done** |
 | 4 | diff core: frames, calls, returns, print, error, variables | planned |
 | 5 | list/tuple diff, movement inference, ambiguity fallbacks | planned |
 | 6 | dict/set/object diff | planned |
