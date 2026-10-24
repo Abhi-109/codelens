@@ -76,7 +76,7 @@ Rules:
 - Welcome state: a few example buttons. Never an empty stage.
 
 ## 10. Reuse, do not rebuild
-`tracer-poc/tracer.py` and its tests, the 45-program corpus, `stepView` selectors, the no-hardcoding test, `docs/supported-python.md`, `tokens.css`, the shell, router, and theme system. Keep the old visualizer until the new page passes Phase 7, then delete the dead code (it stays in git history).
+`tracer-poc/tracer.py` and its tests, the 60-program corpus, `stepView` selectors, the no-hardcoding test, `docs/supported-python.md`, `tokens.css`, the shell, router, and theme system. Keep the old visualizer until the new page passes Phase 7, then delete the dead code (it stays in git history).
 
 ## 11. v1 scope
 **In v1:** generic stage (values, lists, dicts, frames, console), list motion (markers, compare, swap, shift, insert, delete, bars), recursion and call frames, objects with references, linked list, binary tree, and a chaining hash table skin.
@@ -107,3 +107,7 @@ Rules:
 | Date | Decision | By |
 |---|---|---|
 | (today) | Two-panel layout; caption line on by default (D1) | owner |
+| 2026-10-24 | Step counter counts executable source-line steps, not raw trace events; internal events stay available for animation detail. The playback cursor remains the event index, so the counter is derived, not renumbered (Phase 2). | owner |
+| 2026-10-24 | Corpus count corrected from 45 to 60 in section 10. The spec number was stale; `corpus.py`, the golden file and README all say 60, and the corpus is not changed by the correction. | owner |
+| 2026-10-24 | A return value may animate toward the console for `print(f(x))` when the trace proves the output follows the return; no landing variable is invented. Otherwise the return animation stays simpler. | owner |
+| 2026-10-24 | Sets are unordered bags of cells: their elements may appear and disappear, never move between ordered positions. | owner |

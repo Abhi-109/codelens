@@ -1,6 +1,7 @@
 # Animation visualizer: progress
 
-**Current phase:** 0 (Audit) — complete, awaiting owner review
+**Current phase:** 0 (Audit) — complete and reviewed. Phase 1 (Diff engine) is planned and
+awaiting the owner's approval; no implementation code has been written.
 **Last updated:** 2026-10-24
 
 ## Phase checklist
@@ -16,7 +17,8 @@
 ## Current phase: tasks
 | Task | Status | Commit |
 |---|---|---|
-| 0.1 Audit the real tracer, trace data, reuse surface and baseline; write `docs/animation-audit.md` | done | (this commit) |
+| 0.1 Audit the real tracer, trace data, reuse surface and baseline; write `docs/animation-audit.md` | done | `fd988ad` |
+| 0.2 Record the owner's Phase 0 decisions; correct the stale corpus count in the spec | done | (this commit) |
 
 ## Decisions made
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the
@@ -31,14 +33,30 @@
 - 2026-10-24 — **Phase 1 can test against `src/tracer/__fixtures__/recognition.json.gz`**,
   which already holds 54 real traces including bubble/selection/insertion sort and binary
   search. No corpus change is needed for the diff golden tests.
+- 2026-10-24 (owner) — **The step counter counts executable source-line steps**, not raw
+  trace events. Internal events (call, return, output, exception, unwind) stay available
+  for animation detail. **Dependency to record:** every selector and the playback cursor
+  currently take an *event* index, and the diff engine must keep doing so (a return or an
+  output chunk is its own step). The counter is therefore *derived* by mapping the event
+  cursor to its `line`-event ordinal (the `lineIndices` table in `traceIndex.js` already
+  has this). No tracer change and no renumbering are involved, so nothing outside the
+  current phase; the derived counter lands in Phase 2's control strip.
+- 2026-10-24 (owner) — **The corpus has 60 programs, not 45.** Section 10 of the spec is
+  corrected to 60 and the correction is logged in the spec's decision log. The number was
+  stale: `tracer-poc/corpus.py`, `corpus-golden.json` and `README.md` all say 60. The
+  corpus itself is not modified, and no test count changes.
+- 2026-10-24 (owner) — **Return values may travel to the console.** For `print(f(x))`, a
+  supported return value animates toward the console without inventing a landing variable.
+  Phase 1 may attach a console target to the `return` action only when the trace proves the
+  relationship (recorded `output` events between the return and the next control event);
+  otherwise the return animation is the simpler one and no destination is shown.
+- 2026-10-24 (owner) — **Sets are unordered.** Their elements appear and disappear as
+  cells; they are never animated as ordered positions, never receive index markers and
+  never produce `move`/`shift` actions.
 
 ## Open questions for the owner
-1. Does "Step 4 / 12" count trace events or `line` events? (Recommendation: events.)
-2. The spec says "45-program corpus"; the repo has 60 — confirm the spec number is stale.
-3. Should a return value with no landing variable (e.g. `print(f(x))`) animate to the
-   console, or stay on the returning frame?
-4. Are sets acceptable as "bag of cells that appear/disappear, never move", given the
-   tracer sorts them?
+None open. All four Phase 0 questions were answered on 2026-10-24 and are recorded above;
+the Phase 1 plan is waiting for approval, not for clarification.
 
 ## Known issues and limits found
 - A multi-line statement emits several `line` events with no state change (real trace:
@@ -53,12 +71,15 @@
   byte-deterministic, no fields). Names starting with `__` are hidden from `variables`.
 - The corpus has no linked list, tree, hash table, sorting or search programs; those
   fixtures live out of band (recognition fixture) or must be added in Phase 5.
-- The old page's counter shows `index + 1 / trace.length`, while `result.steps` counts line
-  events only. The new page should pick one definition (open question 1).
+- The old page's counter shows `index + 1 / trace.length` (raw events), while the owner's
+  decision is to show executable source-line steps. The new stage must derive its counter
+  from the event cursor; do not renumber the trace, and do not drop call/return/output
+  steps that the animation needs.
+- Sets are sorted by the tracer, so the diff must never look at their positions: elements
+  appear and disappear only (decided 2026-10-24).
 - Pre-existing build warning: the main JS chunk is 662 KB (> Vite's 500 KB advisory). Not a
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Wait for the owner's review of `docs/animation-audit.md`; after "go" on Phase 1, start
-`src/animation/actions.js` plus the safe evaluator, with golden tests from the corpus and
-recognition fixtures.
+Await explicit approval of the Phase 1 plan (diff engine in `src/animation/`); on approval,
+start with `src/animation/actions.js` and its vocabulary tests, then the safe evaluator.
