@@ -52,6 +52,18 @@ CORPUS = [
         ),
     },
     {
+        "name": "scalars-only",
+        "category": "basic variables",
+        "title": "Arithmetic and a branch with no collections",
+        "source": (
+            "total = 0\n"
+            "for n in range(1, 5):\n"
+            "    if n % 2 == 0:\n"
+            "        total = total + n\n"
+            "print(total)\n"
+        ),
+    },
+    {
         "name": "strings",
         "category": "strings",
         "title": "F-strings, methods and slicing",
@@ -88,6 +100,36 @@ CORPUS = [
             "print(can_enter)\n"
             "print(not can_enter, can_enter or age > 100)\n"
             "print(0 < age < 100)\n"
+        ),
+    },
+    # --- comparisons --------------------------------------------------------
+    {
+        "name": "compare-custom-result",
+        "category": "comparisons",
+        "title": "A custom comparison returning a non-boolean",
+        "source": (
+            "class Answer:\n"
+            "    def __bool__(self):\n"
+            "        return True\n"
+            "\n"
+            "class Box:\n"
+            "    def __gt__(self, other):\n"
+            "        return Answer()\n"
+            "\n"
+            "box = Box()\n"
+            "value = box > 0\n"
+            "print(type(value).__name__)\n"
+        ),
+    },
+    {
+        "name": "compare-chained",
+        "category": "comparisons",
+        "title": "A chained comparison is left uncaptured",
+        "source": (
+            "low = 1\n"
+            "high = 10\n"
+            "middle = 5\n"
+            "print(low < middle < high)\n"
         ),
     },
     # --- branches -----------------------------------------------------------
@@ -203,6 +245,32 @@ CORPUS = [
         ),
     },
     {
+        "name": "list-insert-pop",
+        "category": "mutating a list",
+        "title": "Insert at the front, pop the front, delete a slot",
+        "source": (
+            "queue = ['b', 'c']\n"
+            "queue.insert(0, 'a')\n"
+            "queue.append('d')\n"
+            "queue.pop(0)\n"
+            "del queue[1]\n"
+            "print(queue)\n"
+        ),
+    },
+    {
+        "name": "sort-orders",
+        "category": "mutating a list",
+        "title": "An already-sorted list and a reverse-sorted one",
+        "source": (
+            "ordered = [1, 2, 3]\n"
+            "ordered.sort()\n"
+            "backwards = [3, 2, 1]\n"
+            "backwards.sort()\n"
+            "backwards.reverse()\n"
+            "print(ordered, backwards)\n"
+        ),
+    },
+    {
         "name": "list-print-element",
         "category": "lists",
         "title": "Append, then print one element",
@@ -210,6 +278,30 @@ CORPUS = [
             "fruits = ['apple', 'banana']\n"
             "fruits.append('cherry')\n"
             "print(fruits[2])\n"
+        ),
+    },
+    {
+        "name": "nested-lists",
+        "category": "lists",
+        "title": "A list of lists, changed from the inside",
+        "source": (
+            "grid = [[1, 2], [3, 4]]\n"
+            "row = grid[0]\n"
+            "row[1] = 9\n"
+            "grid[1] = [5, 6]\n"
+            "print(grid, len(grid))\n"
+        ),
+    },
+    {
+        "name": "list-duplicates",
+        "category": "lists",
+        "title": "Duplicate values, and an empty list",
+        "source": (
+            "votes = ['yes', 'no', 'yes']\n"
+            "votes.sort()\n"
+            "empty = []\n"
+            "empty.append(votes[0])\n"
+            "print(votes, empty)\n"
         ),
     },
     {
@@ -245,6 +337,18 @@ CORPUS = [
             "groups.setdefault('fruit', []).append('pear')\n"
             "groups['veg'] = ['kale']\n"
             "print(groups['fruit'], len(groups))\n"
+        ),
+    },
+    {
+        "name": "dict-remove",
+        "category": "dictionaries",
+        "title": "Remove a key, then update another",
+        "source": (
+            "ages = {'Asha': 12, 'Ravi': 13, 'Meera': 11}\n"
+            "del ages['Ravi']\n"
+            "ages['Asha'] = 13\n"
+            "ages.pop('Meera')\n"
+            "print(ages)\n"
         ),
     },
     {

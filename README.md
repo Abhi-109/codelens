@@ -139,7 +139,7 @@ Python code
     │                                                            language-neutral contract)
     └──► tracer-poc/analyze.py  static AST profile, never runs ──► docs/program-profile.md
                                                                 (versioned, deterministic)
-tracer-poc/corpus.py      60 programs, one per construct    ──►  docs/supported-python.md
+tracer-poc/corpus.py      68 programs, one per construct    ──►  docs/supported-python.md
     │                                                      (what the tracer really supports,
     ▼                                                       kept in sync by the tests)
 src/tracer/              reads the JSON in the browser
@@ -211,7 +211,7 @@ after that.
 Three suites, all of which should pass on every commit:
 
 ```bash
-npm run test:tracer   # 133 Python tests: the tracer and its comparison events, the
+npm run test:tracer   # 136 Python tests: the tracer and its comparison events, the
                       # flowchart model, the static program profile and the corpus
 npm run test:js       # 698 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
@@ -243,7 +243,7 @@ npm run lint          # oxlint
 npm run build         # production build
 ```
 
-The corpus is the breadth behind those numbers: 60 programs across 33 categories
+The corpus is the breadth behind those numbers: 68 programs across 34 categories
 of Python, each traced for real (`tracer-poc/corpus.py`) and checked on both
 sides — `test_corpus.py` against the claims it makes, and `src/tracer/corpus.test.mjs`
 step by step through the UI's own functions. `docs/supported-python.md` is kept in
@@ -408,7 +408,7 @@ codelens/
 ├── tracer-poc/
 │   ├── tracer.py           # THE TRACER — single source of truth
 │   ├── analyze.py          # read-only AST program profile, never executes source
-│   ├── corpus.py           # 60 programs, one per construct category
+│   ├── corpus.py           # 68 programs, one per construct category
 │   ├── dump_corpus.py      # runs them for real; writes the golden and the fixture
 │   ├── dump_recognition.py # records search/sort/recursion fixtures and corpus profiles
 │   ├── corpus-golden.json  # recorded status, stdout and counts per program
@@ -448,7 +448,7 @@ in [docs/scope.md](docs/scope.md).
 ## Status
 
 Working end to end, and teaching: the tracer runs the bundled examples plus a
-60-program corpus covering 33 categories of Python, and the UI replays any of
+68-program corpus covering 34 categories of Python, and the UI replays any of
 them on six canvases — Adaptive, call tree, control flow, combined, timeline and
 motion — with a six-section inspector and plain-English explanations for every
 kind of step. One workspace toolbar, one canvas toolbar and one playback bar

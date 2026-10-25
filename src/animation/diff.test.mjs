@@ -675,7 +675,7 @@ test("every transition is classified: supported, or explicitly deferred", () => 
   }
 
   assert.deepEqual(failures, []);
-  assert.equal(programs.length, 114, "every program in the corpus and recognition fixtures");
+  assert.equal(programs.length, 122, "every program in the corpus and recognition fixtures");
   assert.equal(supported - supportedPairs, programs.length, "every run-start step is supported");
   assert.equal(supported + deferred, total, "every event step is classified");
   // Task 6 models dict, set and object contents, so every fixture transition
@@ -684,11 +684,12 @@ test("every transition is classified: supported, or explicitly deferred", () => 
   // groups.
   // Comparison steps are event steps too: they carry no state change, so they
   // round trip trivially and the totals grew by exactly the captured
-  // comparisons (2933 + 404).
-  assert.equal(total, 3337, "the fixtures' exact event-step count, including 114 run starts");
-  assert.equal(pairs, 3223, "consecutive state pairs: the event steps after the run starts");
-  assert.equal(supported, 3337, "event steps whose state actions round trip");
-  assert.equal(supportedPairs, 3223, "consecutive pairs whose state actions round trip");
+  // comparisons (2933 + 404), plus the 103 event steps of the eight corpus
+  // programs added for lists, dicts, sorting, comparisons and scalar-only code.
+  assert.equal(total, 3440, "the fixtures' exact event-step count, including 122 run starts");
+  assert.equal(pairs, 3318, "consecutive state pairs: the event steps after the run starts");
+  assert.equal(supported, 3440, "event steps whose state actions round trip");
+  assert.equal(supportedPairs, 3318, "consecutive pairs whose state actions round trip");
   assert.equal(deferred, 0, "consecutive pairs still owned by task 6");
   assert.deepEqual(reasons, { "task-6": 0, truncated: 0, tuple: 0, "unsupported-list": 0 });
 });

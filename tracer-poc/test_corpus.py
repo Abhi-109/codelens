@@ -224,6 +224,44 @@ class TracePropertyTests(unittest.TestCase):
                 self.assertLessEqual(len(result["trace"]), MAX_STEPS * 2 + 40)
 
 
+class ComparisonCorpusTests(unittest.TestCase):
+    """What the corpus's comparison events may and may not claim."""
+
+    def events(self, name):
+        return [e for e in run(BY_NAME[name])["trace"] if e["event"] == "compare"]
+
+    def test_an_unsupported_comparison_form_is_not_invented(self):
+        # A chained comparison is deliberately left uncaptured, so it must not
+        # gain a compare event just because the visualizer would like one.
+        self.assertEqual(self.events("compare-chained"), [])
+
+    def test_a_non_boolean_comparison_result_stays_undecided(self):
+        events = self.events("compare-custom-result")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["operator"], ">")
+        self.assertIsNone(events[0]["result"], "a non-bool result must not be truth-tested")
+
+    def test_a_comparison_cell_is_the_element_it_names(self):
+        # The cell is the visualizer's only evidence for which positions were
+        # compared, so it must hold the operand value in the same snapshot.
+        for case in CORPUS:
+            for event in run(case)["trace"]:
+                if event["event"] != "compare":
+                    continue
+                heap = event.get("heap") or {}
+                for operand in event["operands"]:
+                    cell = operand.get("cell")
+                    if cell is None:
+                        continue
+                    container = heap[cell["object_id"]]
+                    self.assertIn(container["type"], ("list", "tuple"), case["name"])
+                    self.assertEqual(
+                        container["items"][cell["index"]],
+                        operand["value"],
+                        f'{case["name"]}: cell {cell["index"]} is not the operand',
+                    )
+
+
 class SupportedDocTests(unittest.TestCase):
     """docs/supported-python.md describes exactly this corpus."""
 

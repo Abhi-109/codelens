@@ -48,6 +48,21 @@ first = words[0]
 print(first)
 `;
 
+// A dictionary program and a program with no collections at all: the canvas
+// must stay useful without a list to animate.
+const DICT = `ages = {'Asha': 12, 'Ravi': 13}
+ages['Meera'] = 11
+del ages['Ravi']
+print(ages)
+`;
+
+const SCALARS = `total = 0
+for n in range(1, 5):
+    if n % 2 == 0:
+        total = total + n
+print(total)
+`;
+
 // --- assertions -------------------------------------------------------------
 
 const failures = [];
@@ -834,7 +849,64 @@ async function playbackAndLayout(browser) {
   await sleep(300);
 }
 
-// --- D. no console errors ---------------------------------------------------
+// --- D. dictionary and no-array programs ------------------------------------
+
+async function fallbacks(browser) {
+  console.log("\n--- dictionary and no-array programs ---");
+  await openProgram(browser, DICT);
+  const dictMax = (await readStage(browser)).max;
+  await seek(browser, dictMax);
+  const dict = await readStage(browser);
+  const card = dict.objects.find((object) => object.type === "dict");
+  check(
+    Boolean(card),
+    "a dictionary program draws its dictionary",
+    dict.objects.map((object) => object.type).join(","),
+  );
+  check(
+    card?.slots.some((slot) => slot.includes("Asha")) &&
+      card?.slots.some((slot) => slot.includes("Meera")),
+    "the dictionary shows the entries that remain",
+    card?.slots.join(" | "),
+  );
+  check(
+    !dict.noValues && dict.objects.every((object) => object.type === "dict"),
+    "a dictionary program draws no list cells",
+    dict.objects.map((object) => object.type).join(","),
+  );
+  await browser.screenshot("dict");
+
+  await openProgram(browser, SCALARS);
+  const scalarMax = (await readStage(browser)).max;
+  await seek(browser, scalarMax);
+  const scalar = await readStage(browser);
+  check(scalar.noValues, "a program without collections says there is nothing to draw");
+  check(
+    scalar.objects.length === 0,
+    "a program without collections draws no value cards",
+    `${scalar.objects.length}`,
+  );
+  check(
+    scalar.variables.some((variable) => variable.includes("total")),
+    "the scalar program still shows its variables",
+    scalar.variables.join(" | "),
+  );
+  // The final module return has no line to explain, so look at the steps that do.
+  let explained = null;
+  for (let index = 0; index <= scalarMax && explained === null; index += 1) {
+    await seek(browser, index);
+    const state = await readStage(browser);
+    if (state.explanation) explained = { index, text: state.explanation };
+  }
+  check(
+    explained !== null,
+    "the scalar program still explains its steps",
+    explained ? `step ${explained.index}: ${explained.text}` : "no step had a sentence",
+  );
+  await browser.screenshot("scalars");
+}
+
+// --- E. no console errors ---------------------------------------------------
 
 async function consoleIsClean(browser) {
   const messages = await browser.consoleMessages();
@@ -895,6 +967,7 @@ async function main() {
     await interruption(browser);
     await bubbleSort(browser);
     await playbackAndLayout(browser);
+    await fallbacks(browser);
     await consoleIsClean(browser);
   } finally {
     browser?.close();

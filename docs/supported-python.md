@@ -26,6 +26,7 @@ inside Pyodide in the browser.
 | Category | What it covers | Programs | Status |
 | --- | --- | --- | --- |
 | basic variables | int, float, str, bool, None in one assignment each | `variables`, `assign-only` | traced |
+| basic variables | arithmetic and a branch with no collections at all | `scalars-only` | traced |
 | strings | f-strings, concatenation, methods, slicing | `strings` | traced |
 | numbers | integer and float arithmetic, large integers, 0.3000…004 | `numbers` | traced |
 | booleans | and, or, not, chained comparisons | `booleans` | traced |
@@ -35,10 +36,15 @@ inside Pyodide in the browser.
 | break and continue | leaving a loop early, skipping one pass | `break-continue` | traced |
 | nested loops | a loop inside a loop | `nested-loops` | traced |
 | lists | index, slice, append, len | `list-basics`, `list-print-element` | traced |
+| lists | a list of lists, changed from the inside | `nested-lists` | traced |
+| lists | duplicate values sorted, and an empty list grown by one | `list-duplicates` | traced |
 | mutating a list | sort, reverse, replace a slot, delete a slot | `list-mutation` | traced |
+| mutating a list | insert at the front, append, pop the front, delete a slot | `list-insert-pop` | traced |
+| mutating a list | an already-sorted list, and a reverse-sorted list sorted then reversed | `sort-orders` | traced |
 | tuples and unpacking | unpacking a pair and swapping two names | `tuple-unpack` | traced |
 | dictionaries | add, update, look up, iterate the items | `dict-basics` | traced |
 | dictionaries | a dictionary holding lists (the group-by pattern) | `dict-nested` | traced |
+| dictionaries | remove a key with `del` and `pop`, then update another | `dict-remove` | traced |
 | sets | membership, intersection, difference | `set-basics` | traced |
 | aliasing | two names for one list, and one dictionary kept twice in a list | `alias-shared`, `alias-dict-in-list` | traced |
 | comprehensions | list and dict comprehensions, with a filter | `comprehension` | traced |
@@ -74,6 +80,7 @@ inside Pyodide in the browser.
 | safety limits | a loop that never ends is stopped at the step limit | `limit-steps` | stopped |
 | safety limits | one enormous print is stopped at the output limit | `limit-output` | stopped |
 | safety limits | a program that waits is stopped on the clock | `limit-timeout` | stopped |
+| comparisons | a custom comparison returning a non-boolean, and a chained comparison left uncaptured | `compare-custom-result`, `compare-chained` | traced |
 
 ## Comparisons
 
@@ -90,6 +97,33 @@ that were compared instead of guessing them from the source line.
 | An operand containing `yield`, `yield from` or `await` | No `compare` event |
 
 Comparisons add events but not steps: the step counter still counts source lines.
+
+## Execution support vs. visual animation
+
+Every program in the table is executed by the real tracer and can be stepped. Lines,
+variables, calls, returns, printed output and exceptions are traced for all of them,
+including programs that never touch a collection.
+
+The motion canvas is a narrower promise. It draws a list, tuple, set, dictionary or object
+only when the trace shows that value, and it animates a change only when two real snapshots
+prove what changed:
+
+| Visual operation | When it is drawn |
+| --- | --- |
+| swap | two neighbouring cells exchange values; one verified `move.swap` per pair |
+| shift | one adjacent assignment moves a value into its neighbour's slot |
+| insert / grow | an item is added at a known index (`append`, `insert`, a longer slice) |
+| pop / delete / shrink | an item disappears from a known index (`pop()`, `pop(i)`, `del a[i]`) |
+| change | a cell, dictionary entry or object attribute keeps its place and gets a new value |
+| compare | a recorded comparison rings its two operand cells in gold; it never moves anything |
+| settled green | a completed run proves a position final (the list ends sorted and was rearranged in place); the mark survives later steps |
+
+When the evidence is not enough — a reorder with duplicate values, an ambiguous delete, a
+construct the line-shape parser does not recognise — the canvas states what it can and leaves
+the state still. It never invents a move or a cell. A program with no collection values is
+still useful: it shows the line, variables, call stack, explanation and output, and the value
+area says there is nothing to draw. A comparison operand with a negative or non-integer
+(dictionary) index has no cell to ring, so only its sentence is shown.
 
 ## Limits, and what the app says instead
 

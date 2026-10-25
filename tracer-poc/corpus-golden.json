@@ -156,6 +156,28 @@
     "status": "completed",
     "steps": 10
   },
+  "compare-chained": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 8,
+    "exception": null,
+    "frames": 1,
+    "output": "True\n",
+    "status": "completed",
+    "steps": 4
+  },
+  "compare-custom-result": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 21,
+    "exception": null,
+    "frames": 2,
+    "output": "Answer\n",
+    "status": "completed",
+    "steps": 10
+  },
   "comprehension": {
     "error_line": null,
     "error_phase": null,
@@ -186,6 +208,17 @@
     "exception": null,
     "frames": 1,
     "output": "['apple', 'pear'] 2\n",
+    "status": "completed",
+    "steps": 5
+  },
+  "dict-remove": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 9,
+    "exception": null,
+    "frames": 1,
+    "output": "{'Asha': 13}\n",
     "status": "completed",
     "steps": 5
   },
@@ -526,6 +559,28 @@
     "status": "completed",
     "steps": 5
   },
+  "list-duplicates": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 11,
+    "exception": null,
+    "frames": 1,
+    "output": "['no', 'yes', 'yes'] ['no']\n",
+    "status": "completed",
+    "steps": 5
+  },
+  "list-insert-pop": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 10,
+    "exception": null,
+    "frames": 1,
+    "output": "['b', 'd']\n",
+    "status": "completed",
+    "steps": 6
+  },
   "list-mutation": {
     "error_line": null,
     "error_phase": null,
@@ -547,6 +602,17 @@
     "output": "cherry\n",
     "status": "completed",
     "steps": 3
+  },
+  "nested-lists": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 11,
+    "exception": null,
+    "frames": 1,
+    "output": "[[1, 9], [5, 6]] 2\n",
+    "status": "completed",
+    "steps": 5
   },
   "nested-loops": {
     "error_line": null,
@@ -592,6 +658,17 @@
     "status": "completed",
     "steps": 13
   },
+  "scalars-only": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 21,
+    "exception": null,
+    "frames": 1,
+    "output": "6\n",
+    "status": "completed",
+    "steps": 13
+  },
   "scope-closure": {
     "error_line": null,
     "error_phase": null,
@@ -622,6 +699,17 @@
     "exception": null,
     "frames": 1,
     "output": "True False\n[3, 4]\n[1, 2]\n",
+    "status": "completed",
+    "steps": 6
+  },
+  "sort-orders": {
+    "error_line": null,
+    "error_phase": null,
+    "error_type": null,
+    "events": 12,
+    "exception": null,
+    "frames": 1,
+    "output": "[1, 2, 3] [3, 2, 1]\n",
     "status": "completed",
     "steps": 6
   },

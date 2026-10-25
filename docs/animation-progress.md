@@ -208,6 +208,34 @@ remaining work is unchanged: Phase 4 (frames, recursion, objects), Phase 5 (skin
 - Tests: `view.test.mjs` now has 34 tests (comparison cells, gold-vs-blue separation,
   explanations, malformed-cell refusal, backward/seek reconstruction); JS suite is **698**.
 
+## Corpus coverage notes (Workstream B)
+- **Eight programs added, for the gaps the existing 60 did not prove.** The corpus is now
+  **68 programs across 34 categories**; the new ones are `scalars-only` (arithmetic, a branch
+  and a loop with no collections), `nested-lists` (a list of lists changed from the inside),
+  `list-duplicates` (duplicate values sorted, plus an empty list grown by one),
+  `list-insert-pop` (`insert(0, …)`, `append`, `pop(0)`, `del a[1]`), `sort-orders` (an
+  already-sorted and a reverse-sorted list), `dict-remove` (`del`, `pop`, update) and the
+  `comparisons` category: `compare-custom-result` (a rich comparison returning a non-bool)
+  and `compare-chained` (a chained comparison, deliberately uncaptured).
+- **The new Python tests check the comparison claims, not just the shape.** A chained
+  comparison produces no `compare` event; a custom result stays `result: null` and is never
+  truth-tested; every operand cell holds exactly the operand value in the same snapshot.
+  `test_corpus.py` is now **136** tests.
+- **One explainer fix the new program exposed:** `list.pop(i)` and `dict.pop(key)` were
+  described as "Takes the last item out of …". A `pop` with an argument now says "Takes one
+  item out of …"; the bare `pop()` wording is unchanged.
+- **Fixture counts moved exactly, not by a floor:** 122 programs (67 corpus + 55 recognition),
+  3440 event steps, 3318 consecutive pairs, all 3440 supported, 0 deferred, all reasons 0.
+  Every new program's transitions round trip forward and backward, so the diff engine's
+  duplicate-value and reorder fallbacks stay honest without deferring a state action.
+- **Docs now separate execution support from visual animation.** `docs/supported-python.md`
+  lists the visual operations the canvas actually draws (swap, shift, insert/grow,
+  pop/delete/shrink, change, compare, settled green) and says what happens when the evidence
+  is not enough; it does not claim arbitrary Python support.
+- **Browser checks grew from 94 to 101:** the existing checks plus a dictionary program (draws
+  its dictionary and remaining entries, no list cells) and a scalar-only program (says there
+  is nothing to draw, still shows variables and an explanation), with no console errors.
+
 ## Comparison capture notes (format 3, landed)
 - The owner approved the design on 2026-10-25 with two decisions: a **dedicated `compare`
   event**, so a comparison has its own cursor position and can be shown before the mutation

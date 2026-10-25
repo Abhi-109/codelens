@@ -511,9 +511,9 @@ Rules:
   visible snapshot. It never means "skipped".
 
 **Task 6 closes the non-sequence gap. Every corpus transition is now supported.**
-The suite classifies **every** event step of the corpus and recognition fixtures: 2933 over
-114 programs, of which 114 are run-start steps and the other 2819 are consecutive state
-pairs. All 2933 event steps round trip forward and backward, including all 2819 consecutive
+The suite classifies **every** event step of the corpus and recognition fixtures: 3440 over
+122 programs, of which 122 are run-start steps and the other 3318 are consecutive state
+pairs. All 3440 event steps round trip forward and backward, including all 3318 consecutive
 pairs, so **0 pairs are deferred**. The 37 pairs deferred at task 5 were exactly
 dict/set/object content and non-sequence lifecycle changes; each now applies and reverses its
 own actions to the exact before and after state. No list transition was deferred for lack of
@@ -576,8 +576,8 @@ test. A transition explicitly deferred under section 11 is not yet a counterexam
 its frame, variable and modelled object parts must still satisfy the property.
 
 **Tasks 5a–5c and 6 prove exact inversion over every fixture transition.**
-The property is proven for all 2819 consecutive pairs (the 2933 event steps include 114
-run-start steps): all 2819 pairs round trip as whole snapshots, and all 2933 event steps are
+The property is proven for all 3318 consecutive pairs (the 3440 event steps include 122
+run-start steps): all 3318 pairs round trip as whole snapshots, and all 3440 event steps are
 supported. The 37 pairs deferred at task 5 were exactly dict/set/object content and
 non-sequence lifecycle changes; each now applies and reverses to the exact before and after
 state. The six task-4 golden programs are unchanged and still round trip in full. Movement,
@@ -642,9 +642,9 @@ non-dictionary entry change, or a middle `shrink.pop` is rejected rather than ha
 tuple-cell inverse; without it, the function cannot know a container's type.
 
 The suite runs the property on the six task-4 golden programs, on every collection program
-of the fixtures, and on **every** event step of the corpus and recognition fixtures — 2933
-over 114 programs, including 114 run starts and 2819 consecutive pairs. All 2933 event steps
-round trip forward and backward; that is every run start plus all 2819 pairs, with no
+of the fixtures, and on **every** event step of the corpus and recognition fixtures — 3440
+over 122 programs, including 122 run starts and 3318 consecutive pairs. All 3440 event steps
+round trip forward and backward; that is every run start plus all 3318 pairs, with no
 deferred pair left. Synthetic pairs check the ambiguous cases separately and require a
 highlight with no state action, so a deferred shape is never counted as supported. The
 comparison is strict deep equality of the state object of section 3: object key order is not

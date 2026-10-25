@@ -471,7 +471,13 @@ function explainLine(event, trace, index, source) {
         };
       }
       if (method === "pop") {
-        return { text: `Takes the last item out of ${receiver}.`, concept: "list" };
+        // pop() with an argument takes a named position or key, not the last item.
+        return {
+          text: args.trim()
+            ? `Takes one item out of ${receiver}.`
+            : `Takes the last item out of ${receiver}.`,
+          concept: "list",
+        };
       }
       return { text: `Runs ${method}() on the list ${receiver}.`, concept: "list" };
     }
