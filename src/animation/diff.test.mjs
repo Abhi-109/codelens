@@ -119,14 +119,23 @@ function describe(action) {
 
 /** One golden row per event: the actions of that step, joined. */
 function goldenRows({ source, trace }) {
-  return trace.map((event, index) =>
-    diffSteps(index === 0 ? null : snapshotAt(trace, index - 1), snapshotAt(trace, index), {
-      source,
-      consoleAfterReturn: consoleFollowsReturn(trace, index),
-    })
+  return trace.map((event, index) => {
+    const actions = diffSteps(
+      index === 0 ? null : snapshotAt(trace, index - 1),
+      snapshotAt(trace, index),
+      { source, consoleAfterReturn: consoleFollowsReturn(trace, index) },
+    )
       .map(describe)
-      .join(" | "),
-  );
+      .join(" | ");
+    // A comparison is its own step but changes no state, so it must produce no
+    // action. Naming it in the golden keeps that visible instead of leaving an
+    // anonymous empty row.
+    if (event?.event === "compare") {
+      assert.equal(actions, "", "a comparison step never produces a state action");
+      return "compare";
+    }
+    return actions;
+  });
 }
 
 const int = (value) => ({ type: "int", value });
@@ -148,6 +157,20 @@ function actionsAt({ source, trace }, index) {
     source,
     consoleAfterReturn: consoleFollowsReturn(trace, index),
   });
+}
+
+/**
+ * The first step whose actions describe exactly `text`.
+ *
+ * Steps are found by what they did, not by an index: `compare` steps shift
+ * positions in the trace, and a test that pins an index fails for a reason
+ * that has nothing to do with the behavior it checks.
+ */
+function stepWithActions(program, text) {
+  for (let index = 0; index < program.trace.length; index += 1) {
+    if (actionsAt(program, index).map(describe).join(" | ") === text) return index;
+  }
+  return assert.fail(`${program.name ?? "the program"} has no step with: ${text}`);
 }
 
 function roundTrip(program, index) {
@@ -233,7 +256,11 @@ test("branches, loop accumulators and reassignment are golden", () => {
     "call f1 <module> {}",
     "",
     'appear f1.marks 68',
+    // The two comparisons that pick the branch are their own steps and change
+    // nothing, so each one sits between two empty rows.
+    "compare",
     "",
+    "compare",
     "",
     'appear f1.grade "B"',
     'print "B"',
@@ -283,18 +310,23 @@ test("calls, returns and printed output are golden", () => {
     "appear f1.fact fn fact",
     "call f2 fact {n=5}",
     "",
+    "compare",
     "",
     "call f3 fact {n=4}",
     "",
+    "compare",
     "",
     "call f4 fact {n=3}",
     "",
+    "compare",
     "",
     "call f5 fact {n=2}",
     "",
+    "compare",
     "",
     "call f6 fact {n=1}",
     "",
+    "compare",
     "",
     // Nothing is printed between these returns, so they name no destination.
     "return f6 1 ->null",
@@ -650,10 +682,13 @@ test("every transition is classified: supported, or explicitly deferred", () => 
   // now round trips. These remain exact counts, not floors: a regression that
   // defers a transition fails the test instead of quietly moving between
   // groups.
-  assert.equal(total, 2933, "the fixtures' exact event-step count, including 114 run starts");
-  assert.equal(pairs, 2819, "consecutive state pairs: the event steps after the run starts");
-  assert.equal(supported, 2933, "event steps whose state actions round trip");
-  assert.equal(supportedPairs, 2819, "consecutive pairs whose state actions round trip");
+  // Comparison steps are event steps too: they carry no state change, so they
+  // round trip trivially and the totals grew by exactly the captured
+  // comparisons (2933 + 404).
+  assert.equal(total, 3337, "the fixtures' exact event-step count, including 114 run starts");
+  assert.equal(pairs, 3223, "consecutive state pairs: the event steps after the run starts");
+  assert.equal(supported, 3337, "event steps whose state actions round trip");
+  assert.equal(supportedPairs, 3223, "consecutive pairs whose state actions round trip");
   assert.equal(deferred, 0, "consecutive pairs still owned by task 6");
   assert.deepEqual(reasons, { "task-6": 0, truncated: 0, tuple: 0, "unsupported-list": 0 });
 });
@@ -998,10 +1033,12 @@ test("truncated lists use visible changes and an explicit truncated fallback", (
   const changes = listActions.filter((action) => action.kind === "change");
   assert.ok(changes.length > 0, "the fixture really changes visible cells");
   assert.ok(changes.every((action) => action.reason === "truncated"));
-  assert.equal(
-    goldenRows(truncated)[5],
+  const truncatedRows = goldenRows(truncated);
+  const swapRow = truncatedRows.indexOf(
     "change o1[0] 35 -> 34 (truncated) | change o1[1] 34 -> 35 (truncated)",
   );
+  assert.notEqual(swapRow, -1, "the fixture still changes cells with the truncated reason");
+  assert.equal(truncated.trace[swapRow].event, "line", "a state step, not a comparison");
   for (let index = 0; index < truncated.trace.length; index += 1) {
     roundTrip(truncated, index);
   }
@@ -1574,13 +1611,19 @@ test("malformed keyed entry and attribute actions are refused", () => {
 
 test("state-proven tail growth is explicit and reversible", () => {
   const sort = recognitionProgram("merge-sort");
-  assert.deepEqual(actionsAt(sort, 42).map(describe), [
+  assert.deepEqual(actionsAt(sort, stepWithActions(sort, "grow.append o7[1] 43 (unknown-shape)")).map(describe), [
     "grow.append o7[1] 43 (unknown-shape)",
   ]);
-  assert.deepEqual(actionsAt(sort, 142).map(describe), [
-    "grow.append o18[2] 10 (unknown-shape)",
-    "grow.append o18[3] 82 (unknown-shape)",
-  ]);
+  assert.deepEqual(
+    actionsAt(
+      sort,
+      stepWithActions(
+        sort,
+        "grow.append o18[2] 10 (unknown-shape) | grow.append o18[3] 82 (unknown-shape)",
+      ),
+    ).map(describe),
+    ["grow.append o18[2] 10 (unknown-shape)", "grow.append o18[3] 82 (unknown-shape)"],
+  );
   for (let index = 0; index < sort.trace.length; index += 1) roundTrip(sort, index);
 });
 
@@ -1872,7 +1915,10 @@ test("insertion sort shifts are adjacent moves that round trip exactly", () => {
     assert.notEqual(move.from, null);
     assert.notEqual(move.to, null);
   }
-  assert.deepEqual(actionsAt(shifting, 9).map(describe), ["move.shift o1[1] [0, 1]"]);
+  assert.deepEqual(
+    actionsAt(shifting, stepWithActions(shifting, "move.shift o1[1] [0, 1]")).map(describe),
+    ["move.shift o1[1] [0, 1]"],
+  );
   for (let index = 0; index < shifting.trace.length; index += 1) roundTrip(shifting, index);
 });
 

@@ -486,6 +486,32 @@ test("a false if inside a loop is not described as True when control returns to 
   );
 });
 
+test("a comparison step names its operands, its operator and the real answer", () => {
+  const compare = (step, operator, left, right, result) => ({
+    step,
+    event: "compare",
+    function: "<module>",
+    frame_id: 1,
+    line: 2,
+    operator,
+    operands: [{ cell: null, value: left }, { cell: null, value: right }],
+    result,
+    heap: {},
+  });
+  const trace = [state(0, "line"), compare(1, ">=", int(68), int(90), false)];
+  assert.equal(explainStep(trace, 1).text, "Python compares 68 >= 90 and gets False.");
+  assert.equal(explainStep(trace, 1).concept, "condition");
+  assert.match(explainTransition(trace, 1), /Line 2 is still running: Python works out this comparison/);
+
+  // The trace records no plain bool for the comparison, so the sentence says
+  // exactly that instead of turning the value into a made-up True or False.
+  const odd = [state(0, "line"), compare(1, "==", str("a"), int(1), null)];
+  assert.equal(
+    explainStep(odd, 1).text,
+    'Python compares "a" == 1, and the comparison gives no plain True or False to record.',
+  );
+});
+
 test("a caught exception says it was handled, while an uncaught one stops the run", () => {
   const source = "try:\n    x = 1 / 0\nexcept ZeroDivisionError:\n    x = 0\n";
   const caught = {

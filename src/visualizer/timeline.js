@@ -32,6 +32,7 @@ function kindOf(event, code, changed) {
   if (event?.event === "return") return "return";
   if (event?.event === "output") return "output";
   if (event?.event === "input") return "input";
+  if (event?.event === "compare") return "compare";
   if (["exception", "unwind", "error"].includes(event?.event)) return "error";
   if (event?.event === "step_limit" || event?.event === "timeout" || event?.event === "output_limit") {
     return "error";
@@ -43,6 +44,16 @@ function kindOf(event, code, changed) {
   return "line";
 }
 
+/** The comparison a compare step recorded: two real operands, an operator, and the answer. */
+function comparisonOf(event) {
+  const heap = event?.heap ?? {};
+  const shown = (operand) => (operand ? showValue(operand.value, heap) : "?");
+  const pair = `${shown(event?.operands?.[0])} ${event?.operator ?? "?"} ${shown(event?.operands?.[1])}`;
+  return event?.result === true || event?.result === false
+    ? `${pair} → ${event.result ? "True" : "False"}`
+    : pair;
+}
+
 function labelOf(event, kind, code, changes) {
   if (kind === "call") {
     return event.function === "<module>" ? "start" : `call ${event.function}()`;
@@ -50,6 +61,7 @@ function labelOf(event, kind, code, changes) {
   if (kind === "return") return `return ${event.function}()`;
   if (kind === "output") return "print";
   if (kind === "input") return "input";
+  if (kind === "compare") return "compare";
   if (kind === "error") {
     return event.exception?.type ?? event.type ?? (event.event === "unwind" ? "unwind" : "error");
   }
@@ -66,6 +78,7 @@ function labelOf(event, kind, code, changes) {
 
 function codeOf(event, lineText, label) {
   if (event?.event === "line") return lineText || label;
+  if (event?.event === "compare") return comparisonOf(event);
   if (event?.event === "output") return String(event.text ?? "").trim() || "(blank output)";
   if (event?.event === "input") return `input() → ${String(event.text ?? "")}`;
   if (event?.event === "call") return `${event.function}()`;

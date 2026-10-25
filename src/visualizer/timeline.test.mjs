@@ -81,6 +81,32 @@ test("event types are distinguishable and derived from the trace", () => {
   assert.match(rows[6].code, /ZeroDivisionError: division by zero/);
 });
 
+test("a comparison row shows the operands, operator and answer from the trace", () => {
+  const trace = [
+    event(0, "line", { line: 2 }),
+    {
+      ...event(1, "compare", { line: 2, variables: { x: int(1) } }),
+      operator: ">=",
+      operands: [{ cell: null, value: int(1) }, { cell: null, value: int(2) }],
+      result: false,
+    },
+    {
+      // A comparison that produced no plain bool says only what it compared.
+      ...event(2, "compare", { line: 2 }),
+      operator: "==",
+      operands: [{ cell: null, value: int(1) }, { cell: null, value: int(2) }],
+      result: null,
+    },
+  ];
+  const rows = timelineRows(trace, SOURCE);
+  assert.equal(rows[1].kind, "compare");
+  assert.equal(rows[1].label, "compare");
+  assert.equal(rows[1].code, "1 >= 2 → False");
+  assert.equal(rows[1].line, 2);
+  assert.equal(rows[1].notable, true, "a compare step is worth seeing with only-changes on");
+  assert.equal(rows[2].code, "1 == 2");
+});
+
 test("the output column is a real tail of what had been printed", () => {
   const trace = [
     event(0, "line", { line: 1 }),

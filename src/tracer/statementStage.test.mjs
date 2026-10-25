@@ -21,6 +21,20 @@ const EMPTY = JSON.parse(
   gunzipSync(readFileSync(new URL("./__fixtures__/empty-source.json.gz", import.meta.url))),
 );
 
+/**
+ * The index of the n-th recorded line event on `line`. Steps are located by
+ * what the trace says is on screen, so inserting an event on an earlier line
+ * cannot quietly point a test at a different step.
+ */
+function lineStep(name, line, nth = 0) {
+  const found = [];
+  CORPUS[name].trace.forEach((event, index) => {
+    if (event.event === "line" && event.line === line) found.push(index);
+  });
+  assert.ok(found[nth] !== undefined, `${name} has no line-${line} step #${nth}`);
+  return found[nth];
+}
+
 function stageFor(name, index) {
   const entry = CORPUS[name];
   const trace = entry.trace;
@@ -56,7 +70,7 @@ test("a false if shows the observed outcome, the skipped body, and the next reac
 });
 
 test("a true elif shows its taken body and the later else as unreached", () => {
-  const { stage, context } = stageFor("if-elif-else", 3);
+  const { stage, context } = stageFor("if-elif-else", lineStep("if-elif-else", 4));
   assert.equal(stage.display, "68 >= 60");
   assert.equal(stage.outcome, "true");
   assert.deepEqual(
@@ -73,7 +87,7 @@ test("a true elif shows its taken body and the later else as unreached", () => {
 });
 
 test("an assignment stage carries the recorded value change", () => {
-  const { stage, context } = stageFor("if-elif-else", 4);
+  const { stage, context } = stageFor("if-elif-else", lineStep("if-elif-else", 5));
   assert.equal(stage.kind, "assignment");
   assert.equal(stage.statement, "grade = 'B'");
   assert.deepEqual(stage.changes, [
@@ -89,7 +103,7 @@ test("an assignment stage carries the recorded value change", () => {
 });
 
 test("a print line uses the text the trace actually wrote", () => {
-  const { stage, context } = stageFor("if-elif-else", 5);
+  const { stage, context } = stageFor("if-elif-else", lineStep("if-elif-else", 8));
   assert.equal(stage.kind, "print");
   assert.equal(stage.printed, "B");
   assert.equal(stage.nextLine, null);
@@ -126,19 +140,39 @@ test("a body assignment knows which loop round it belongs to", () => {
 });
 
 test("a while loop shows a true check and its false exit", () => {
-  const trueCheck = stageFor("while-loop", 2);
+  const trueCheck = stageFor("while-loop", lineStep("while-loop", 2));
   assert.equal(trueCheck.stage.loopKind, "while");
   assert.equal(trueCheck.stage.display, "3 > 0");
   assert.equal(trueCheck.stage.outcome, "true");
   assert.equal(trueCheck.stage.iteration, 1);
   assert.equal(validateStatementStage(trueCheck.stage, trueCheck.context).valid, true);
 
-  const falseCheck = stageFor("while-loop", 17);
+  const falseCheck = stageFor("while-loop", lineStep("while-loop", 2, 3));
   assert.equal(falseCheck.stage.display, "0 > 0");
   assert.equal(falseCheck.stage.outcome, "false");
   assert.equal(falseCheck.stage.iteration, 4);
   assert.equal(falseCheck.stage.nextLine, 6);
   assert.equal(validateStatementStage(falseCheck.stage, falseCheck.context).valid, true);
+});
+
+test("a compare step shows the operands and the answer the trace recorded", () => {
+  const branchTrace = CORPUS["if-elif-else"].trace;
+  const branchIndex = branchTrace.findIndex((event) => event.event === "compare");
+  const branch = stageFor("if-elif-else", branchIndex);
+  assert.equal(branch.stage.kind, "branch");
+  assert.equal(branch.stage.display, "68 >= 90");
+  assert.equal(branch.stage.outcome, "false");
+  // The branch being decided is the current one, not an already-checked one.
+  assert.equal(branch.stage.branches[0].state, "current");
+  assert.equal(validateStatementStage(branch.stage, branch.context).valid, true);
+
+  // A comparison that is not a condition still gets its own real stage.
+  const plain = stageFor("booleans", 4);
+  assert.equal(plain.stage.kind, "step");
+  assert.equal(plain.stage.label, "Compare");
+  assert.equal(plain.stage.display, "20 >= 18");
+  assert.equal(plain.stage.outcome, "true");
+  assert.equal(validateStatementStage(plain.stage, plain.context).valid, true);
 });
 
 test("the validator rejects a changed branch outcome or loop item", () => {
@@ -156,9 +190,9 @@ test("the validator rejects a changed branch outcome or loop item", () => {
 test("the generic adapter ships a stage that passes the scene validator", () => {
   for (const [name, index] of [
     ["if-elif-else", 2],
-    ["if-elif-else", 3],
+    ["if-elif-else", lineStep("if-elif-else", 4)],
     ["for-loop", 3],
-    ["while-loop", 17],
+    ["while-loop", lineStep("while-loop", 2, 3)],
     ["variables", 1],
   ]) {
     const entry = CORPUS[name];
@@ -177,14 +211,14 @@ test("the generic adapter ships a stage that passes the scene validator", () => 
 
 test("fallback steps name the operation instead of always saying Step", () => {
   for (const [name, index, label] of [
-    ["break-continue", 15, "Continue"],
-    ["break-continue", 31, "Break"],
-    ["function-basic", 1, "Function definition"],
-    ["class-basic", 1, "Class definition"],
-    ["import-module", 1, "Import"],
-    ["exception-caught", 2, "Try block"],
-    ["exception-reraise", 8, "Exception handler"],
-    ["generator", 4, "Yield"],
+    ["break-continue", lineStep("break-continue", 3), "Continue"],
+    ["break-continue", lineStep("break-continue", 5), "Break"],
+    ["function-basic", lineStep("function-basic", 1), "Function definition"],
+    ["class-basic", lineStep("class-basic", 1), "Class definition"],
+    ["import-module", lineStep("import-module", 1), "Import"],
+    ["exception-caught", lineStep("exception-caught", 4), "Try block"],
+    ["exception-reraise", lineStep("exception-reraise", 4), "Exception handler"],
+    ["generator", lineStep("generator", 2), "Yield"],
   ]) {
     const { stage, context } = stageFor(name, index);
     assert.equal(stage.kind, "step", `${name} step ${index}`);

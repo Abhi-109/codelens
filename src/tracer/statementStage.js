@@ -138,6 +138,28 @@ function variablesOf(view) {
   return frameIn(view?.before, view?.frameId ?? view?.frame?.frameId ?? null)?.variables ?? {};
 }
 
+/**
+ * The comparison a compare step recorded, in the learner's terms, or null.
+ * The operands and the outcome come from the event itself: nothing is
+ * re-evaluated and nothing is inferred from the line that ran next.
+ *
+ * @returns {{ display: string, outcome: string|null, operands: Array<{text: string, cell: Object|null}> }|null}
+ */
+function comparisonOf(event) {
+  if (!isObject(event) || event.event !== "compare") return null;
+  const heap = isObject(event.heap) ? event.heap : {};
+  const operands = (Array.isArray(event.operands) ? event.operands : []).slice(0, 2).map((operand) => ({
+    text: valueText(operand?.value, heap),
+    cell: isObject(operand?.cell) ? operand.cell : null,
+  }));
+  const operator = isString(event.operator) ? event.operator : "?";
+  return {
+    display: `${operands[0]?.text ?? "?"} ${operator} ${operands[1]?.text ?? "?"}`,
+    outcome: event.result === true ? "true" : event.result === false ? "false" : null,
+    operands,
+  };
+}
+
 function heapOf(view) {
   return isObject(view?.before?.heap) ? view.before.heap : isObject(view?.heap) ? view.heap : {};
 }
@@ -315,7 +337,12 @@ function branchStage(view, source, trace, traceIndex) {
     const seen = observed.get(node.line);
     if (!seen) continue;
     shown.set(node.line, {
-      state: seen.eventIndex === view.index ? "current" : "checked",
+      // A comparison on this very line is that branch being decided, even though
+      // the line event that reached it was recorded one step earlier.
+      state:
+        seen.eventIndex === view.index || (view.kind === "compare" && node.line === view.line)
+          ? "current"
+          : "checked",
       outcome: seen.outcome,
     });
   }
@@ -436,6 +463,42 @@ function stepLabel(text) {
   return STEP_LABELS[statementKind(text)] ?? "Step";
 }
 
+/**
+ * A compare step: the line's own stage, with the recorded comparison in place
+ * of a reconstruction. A condition or loop header keeps its branch/loop stage
+ * (so the body and the chain are still there) and takes the real operand text
+ * and outcome from the event; any other line shows the comparison itself.
+ */
+function compareStage(view, source, trace, traceIndex) {
+  const comparison = comparisonOf(view.event);
+  if (!comparison) return null;
+  const info = lineInfo(source, view.line);
+  const inner =
+    /^(?:if|elif|else)\b/.test(info.text) || /^(?:for|while)\b/.test(info.text)
+      ? buildStageForLine(view, source, trace, traceIndex)
+      : null;
+  if (inner && (inner.kind === "branch" || inner.kind === "loop")) {
+    inner.display = comparison.display;
+    if (comparison.outcome) inner.outcome = comparison.outcome;
+    return inner;
+  }
+  const stage = baseStage(view, traceIndex, "step", "Compare", info.text || null);
+  stage.display = comparison.display;
+  stage.outcome = comparison.outcome;
+  stage.values = valuesOf(variablesOf(view), heapOf(view), Object.keys(variablesOf(view)));
+  stage.loopContext = loopContextFor(view, source, trace);
+  return stage;
+}
+
+/** The stage the highlighted line would get as an ordinary line step, or null. */
+function buildStageForLine(view, source, trace, traceIndex) {
+  const info = lineInfo(source, view.line);
+  if (/^(?:if|elif)\b/.test(info.text)) return branchStage(view, source, trace, traceIndex);
+  if (/^else\b/.test(info.text)) return branchStage(view, source, trace, traceIndex);
+  if (/^(?:for|while)\b/.test(info.text)) return loopStage(view, source, trace, traceIndex);
+  return null;
+}
+
 function baseStage(view, traceIndex, kind, label, statement) {
   return {
     kind,
@@ -550,6 +613,7 @@ export function buildStatementStage(context = {}) {
     return stage;
   }
   if (event.event === "call") return callStage(view, traceIndex);
+  if (event.event === "compare") return compareStage(view, source, trace, traceIndex);
   if (event.event === "return") {
     return event.function === "<module>"
       ? completionStage(view, traceIndex)

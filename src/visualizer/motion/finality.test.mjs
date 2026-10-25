@@ -38,6 +38,24 @@ function settled(plan) {
   return plan.finalized.flatMap((group) => group.indices);
 }
 
+/**
+ * The first step whose list holds exactly these values.
+ *
+ * Anchoring on the recorded contents rather than a step number keeps these
+ * tests about finality: a new event type shifts indices without changing what
+ * the program did.
+ */
+function firstStepWithValues(p, values) {
+  const wanted = values.join(",");
+  for (let index = 0; index < p.trace.length; index += 1) {
+    const items = stateOf(snapshotAt(p.trace, index)).heap?.o1?.items;
+    if (Array.isArray(items) && items.map((item) => item.value).join(",") === wanted) {
+      return index;
+    }
+  }
+  return assert.fail(`${p.name} never holds ${wanted}`);
+}
+
 /** The last step that still draws the list, i.e. the visible end of the run. */
 function lastVisibleIndex(trace) {
   for (let index = trace.length - 1; index >= 0; index -= 1) {
@@ -60,15 +78,18 @@ test("a settled cell already holds the value its position ends with", () => {
 
   // [4, 2, 5, 1, 3]: the trailing 3 is trivially "in order" and 5 is not at the
   // end yet, so no position is claimed until the first pass really finishes.
-  assert.deepEqual(settled(planAt(p, 2)), []);
-  assert.deepEqual(valuesAt(2), [4, 2, 5, 1, 3]);
+  const beforeAnyPass = firstStepWithValues(p, [4, 2, 5, 1, 3]);
+  assert.deepEqual(settled(planAt(p, beforeAnyPass)), []);
+  assert.deepEqual(valuesAt(beforeAnyPass), [4, 2, 5, 1, 3]);
 
   // After pass 1 the array is [2, 4, 1, 3, 5]: 5 is home for good.
-  assert.deepEqual(settled(planAt(p, 14)), [4]);
+  assert.deepEqual(settled(planAt(p, firstStepWithValues(p, [2, 4, 1, 3, 5]))), [4]);
   // After pass 2, [2, 1, 3, 4, 5]: the settled tail has grown to three cells.
-  assert.deepEqual(settled(planAt(p, 24)), [2, 3, 4]);
+  assert.deepEqual(settled(planAt(p, firstStepWithValues(p, [2, 1, 3, 4, 5]))), [2, 3, 4]);
   // The run's own final array, [1, 2, 3, 4, 5], leaves nothing unsettled.
-  assert.deepEqual(settled(planAt(p, 29)), [0, 1, 2, 3, 4]);
+  assert.deepEqual(settled(planAt(p, firstStepWithValues(p, [1, 2, 3, 4, 5]))), [
+    0, 1, 2, 3, 4,
+  ]);
 
   for (let index = 0; index < p.trace.length; index += 1) {
     if (!stateOf(snapshotAt(p.trace, index)).heap?.o1?.items) continue;
@@ -163,10 +184,11 @@ test("a duplicate value is settled by position, not by matching the outcome", ()
   // [1, 3, 3, 2] with the outcome [1, 2, 3, 3]: only the leading 1 is proven.
   // The 3 sitting at index 2 already equals its final value, but the boundary
   // does not reach it, so it is not marked.
-  assert.deepEqual(settled(planAt(p, 6)), [0]);
-  const items = stateOf(snapshotAt(p.trace, 6)).heap.o1.items;
+  const partial = firstStepWithValues(p, [1, 3, 3, 2]);
+  assert.deepEqual(settled(planAt(p, partial)), [0]);
+  const items = stateOf(snapshotAt(p.trace, partial)).heap.o1.items;
   assert.equal(items[2].value, 3, "the unmarked cell really does hold its final value");
-  assert.deepEqual(settled(planAt(p, 18)), [0, 1, 2, 3]);
+  assert.deepEqual(settled(planAt(p, firstStepWithValues(p, [1, 2, 3, 3]))), [0, 1, 2, 3]);
 });
 
 test("a run that did not finish proves no outcome at all", () => {
@@ -223,19 +245,22 @@ test("an untouched, grown, truncated or unsorted list is never marked", () => {
 
 test("the same position proves the same cells however the cursor reached it", () => {
   const p = program("bubble-sort");
-  const forward = planAt(p, 24, 23);
-  const backward = planAt(p, 24, 25);
-  const seek = planAt(p, 24, null);
+  const middle = firstStepWithValues(p, [2, 1, 3, 4, 5]);
+  const forward = planAt(p, middle, middle - 1);
+  const backward = planAt(p, middle, middle + 1);
+  const seek = planAt(p, middle, null);
   assert.deepEqual(backward.finalized, forward.finalized);
   assert.deepEqual(seek.finalized, forward.finalized);
 
   // Stepping back from a fully settled array must not keep the future cells.
-  const at14 = planAt(p, 14, 13);
-  assert.deepEqual(settled(at14), [4]);
-  const backTo14 = planAt(p, 14, 35);
-  assert.equal(settled(planAt(p, 35, 34)).length, 5);
-  assert.deepEqual(backTo14.finalized, at14.finalized);
-  assert.deepEqual(settled(backTo14), [4]);
+  const onePass = firstStepWithValues(p, [2, 4, 1, 3, 5]);
+  const atOnePass = planAt(p, onePass, onePass - 1);
+  assert.deepEqual(settled(atOnePass), [4]);
+  const fullySettled = lastVisibleIndex(p.trace);
+  const backToOnePass = planAt(p, onePass, fullySettled);
+  assert.equal(settled(planAt(p, fullySettled, fullySettled - 1)).length, 5);
+  assert.deepEqual(backToOnePass.finalized, atOnePass.finalized);
+  assert.deepEqual(settled(backToOnePass), [4]);
 });
 
 test("a reset has nothing to show, because the first step proves no outcome", () => {

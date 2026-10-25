@@ -368,8 +368,14 @@ test("a function can return from more than one exit", () => {
       `the return on line ${line} ran`,
     );
   }
-  assert.match(getStepView(trace, 6, source).explanation.aboutToHappen, /hands back 'negative'/);
-  assert.match(getStepView(trace, 7, source).explanation.aboutToHappen, /hands back "negative"/);
+  // The line event and the return event it produces are consecutive steps; a
+  // comparison inside the return expression would sit between them, so the pair
+  // is located from the recorded return rather than a fixed index.
+  const first = trace.findIndex(
+    (event) => event.event === "return" && event.function === "classify",
+  );
+  assert.match(getStepView(trace, first - 1, source).explanation.aboutToHappen, /hands back 'negative'/);
+  assert.match(getStepView(trace, first, source).explanation.aboutToHappen, /hands back "negative"/);
 });
 
 test("every step builds a valid scene for the adapter recognition chose", () => {

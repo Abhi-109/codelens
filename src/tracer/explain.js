@@ -670,6 +670,8 @@ function explainEvent(event, trace, index, source) {
         text: `The error spreads outward, so ${event.function}() stops without finishing its work.`,
         concept: "error",
       };
+    case "compare":
+      return explainCompare(event);
     case "output": {
       const chunk = String(event.text ?? "");
       const printed = short(
@@ -712,6 +714,28 @@ function explainEvent(event, trace, index, source) {
     default:
       return { text: `Step ${index + 1}.`, concept: null };
   }
+}
+
+/**
+ * One comparison, in the trace's own words: the two values, the operator, and
+ * the outcome the comparison really produced. When the trace recorded no plain
+ * True or False (a custom comparison returning something else, or one that
+ * raised) the sentence says so rather than guessing an answer.
+ */
+function explainCompare(event) {
+  const left = short(showValue(event.operands?.[0]?.value, event.heap));
+  const right = short(showValue(event.operands?.[1]?.value, event.heap));
+  const pair = `${left} ${event.operator ?? "?"} ${right}`;
+  if (event.result === true || event.result === false) {
+    return {
+      text: `Python compares ${pair} and gets ${event.result ? "True" : "False"}.`,
+      concept: "condition",
+    };
+  }
+  return {
+    text: `Python compares ${pair}, and the comparison gives no plain True or False to record.`,
+    concept: "condition",
+  };
 }
 
 /**
@@ -834,6 +858,14 @@ export function explainTransition(trace, index, source = "") {
   if (event.event === "return") {
     if (event.function === "<module>") return "The last line finished, so the program ends.";
     return `${event.function}() reached a return, so its result goes back and the caller carries on.`;
+  }
+
+  // A comparison is part of the line above it that is still running: the line
+  // event was recorded first, then this value-level step inside it.
+  if (event.event === "compare") {
+    return event.line != null
+      ? `Line ${event.line} is still running: Python works out this comparison before it decides what to do next.`
+      : "Python works out a comparison here before it carries on.";
   }
 
   // From here on there is no branch to explain — control is here because the
