@@ -213,13 +213,14 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 133 Python tests: the tracer and its comparison events, the
                       # flowchart model, the static program profile and the corpus
-npm run test:js       # 697 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 698 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6
                       # dict/set/object contents and lifecycle), the pure motion
                       # plan (stable nodes, operations, seeks, reduced motion and
                       # cancellation), the settled-position evidence, the
-                      # recorded-comparison display and its operand cells, the swap
+                      # recorded-comparison display and its operand cells, the
+                      # one-sentence operation explanations, the swap
                       # choreography (curves, arcs, one duration per pair),
                       # DOM-free motion view and its real-
                       # action-to-render mapping (persistent keys, verified moves,

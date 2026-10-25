@@ -137,13 +137,54 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-Stage 5 R1–R4 are in: labeled cells replace the bars, verified operations ring the cells they
-touch, the interrupted-move measurement order is fixed, and the canvas now uses its width with
-a single step head (line, operation, source). Comparison steps now use the format-3 event: the
-head names the two operands, the operator and the recorded outcome, and the recorded operand
-cells get the active ring without pretending a mutation happened. The R3 measurement fix, the
-R4 layout and the new comparison treatment still need a real browser check; this environment
-has no browser automation. Nothing is pushed.
+The comparison and swap presentation is now browser-validated (see Stage 7 notes below). The
+remaining work is unchanged: Phase 4 (frames, recursion, objects), Phase 5 (skins), Phase 6
+(hardening) and Phase 7 (validation, polish, cleanup) are still open. Nothing is pushed.
+
+## Motion-first Stage 7 notes (comparison and swap presentation, browser-validated)
+- **Two rings, two meanings.** A recorded comparison's operand cells now carry `is-compare`
+  (`--warn`, the palette's amber) while a verified swap keeps `is-active` (`--accent`). A
+  comparison is evidence, not a mutation: it adds no action, move, ghost or `is-active` cell.
+  Both rings switch instantly, because the shared 140 ms colour fade outlasted a 4x swap and
+  left moving cells unmarked for most of the trip; the settled green stays a separate inset
+  ring and, when a cell is both active and proven final, the operation's colour is drawn as an
+  outer ring around the green. The compare index label is gold only when the cell is not also
+  settled.
+- **One explanation, built from the same plan as the head.** `motionView.explanation` comes
+  from `operationFeedback`, never from source text. A comparison uses the recorded operator,
+  operands and boolean result (`4 is greater than 2.`); a non-boolean result gets "produced no
+  True or False", and an unknown operator falls back to the recorded symbols. A swap says
+  `4 and 2 exchange places.`; shift, insert, remove, change, call and return each get one
+  sentence from the verified action. The array and the sentence are wrapped in `.motion-data`,
+  so the sentence sits directly under the array instead of at the foot of the canvas.
+- **Browser validation** used headless Chrome through a zero-dependency CDP harness (no npm
+  dependency added), on the brief's bubble-sort program at 1440x960 and 720x900:
+  - step 5 shows gold on 4 and 2, `Compare 4 > 2 → True`, `4 is greater than 2.`, and the
+    array stays `[4,2,5,1,3]` with no transform; step 9 is the false comparison, gold on 4
+    and 5, with no movement.
+  - adjacent 6 -> 7 moves both cells along mirrored arcs (about 175 px apart) with the blue
+    ring on the first frame, values attached to their cells on every sampled frame, the
+    explanation present from the first frame, and no residual transform or ghost afterwards.
+  - 4x speed reduced the move from 18 to 6 sampled frames and settled in about 180 ms.
+    Next, Back and a slider seek mid-move left no transform, no stale ring and no stale
+    sentence; Back reversed the swap and restored the pre-swap array. Backward playback
+    (7 -> 6) animated the reverse swap with the same blue pair.
+  - step 18 layers the blue outer ring over the green inset ring; step 22 keeps the settled
+    index green while the two operands are gold; the final state is entirely green and
+    `[1,2,3,4,5]`.
+  - light and dark themes keep gold, blue and green distinct; reduced motion produced zero
+    transforms but kept the static rings and the sentence; a 24-cell list stayed on one row
+    and scrolled horizontally; long strings stayed inside their cells with the full text in
+    `title`; the 720 px layout had no page overflow. No console errors were logged.
+  - a long variable chip in the call strip could push the stage wider than its pane at
+    720 px, adding an unnecessary horizontal scrollbar; the chip row and pill now shrink and
+    the value ellipsizes inside the pill (full text remains in its title).
+- **Limits unchanged:** a negative-index or dict-subscript operand still rings nothing, a
+  raising comparison shows operands and no verdict, and chained comparisons / `yield` /
+  `await` operands are still uncaptured. The browser checks were headless Chrome, not a
+  physical device.
+- Tests: `view.test.mjs` now has 34 tests (comparison cells, gold-vs-blue separation,
+  explanations, malformed-cell refusal, backward/seek reconstruction); JS suite is **698**.
 
 ## Comparison capture notes (format 3, landed)
 - The owner approved the design on 2026-10-25 with two decisions: a **dedicated `compare`
