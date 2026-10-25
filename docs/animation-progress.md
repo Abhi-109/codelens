@@ -169,6 +169,15 @@ remaining work is unchanged: Phase 4 (frames, recursion, objects), Phase 5 (skin
     Next, Back and a slider seek mid-move left no transform, no stale ring and no stale
     sentence; Back reversed the swap and restored the pre-swap array. Backward playback
     (7 -> 6) animated the reverse swap with the same blue pair.
+  - **Second interruption defect, found here and fixed.** R3 moved the measurement ahead of
+    `cancelAll` inside one effect, but React runs the *previous* effect's cleanup first, and
+    that cleanup still called `cancelAll`. So the next step's measurement ran on already
+    cancelled elements and read layout slots, not live positions: a swap interrupted by an
+    adjacent swap jumped to the full prior cell offset. The cleanup now only invalidates the
+    controller; each effect cancels the previous set after measuring. Measured with two
+    adjacent swaps of `[1,2,3]`: across the interruption the value at index 0 stayed at
+    `788.6px` and the value at index 1 at `677.9px` (identical before and after, slot offset
+    111px); the old code drew each value `57.7px` further on before reversing it.
   - step 18 layers the blue outer ring over the green inset ring; step 22 keeps the settled
     index green while the two operands are gold; the final state is entirely green and
     `[1,2,3,4,5]`.
@@ -387,8 +396,9 @@ remaining work is unchanged: Phase 4 (frames, recursion, objects), Phase 5 (skin
   target with `animate` false, and reduced motion drops every ghost.
 - Existing tests already cover reverse plans, seek/reset, reduced motion and stale controller
   tickets. The measurement order is inside a DOM layout effect, and the suite is node-only with
-  no jsdom dependency, so this fix has no regression test; it is code-reviewed and still needs
-  a browser check. JS suite stays at **663 tests**.
+  no jsdom dependency, so this fix has no regression test. Browser-checked later in Stage 7:
+  the in-effect order was right, but the effect cleanup still cancelled first, so an adjacent
+  swap still snapped; see the second interruption defect in the Stage 7 notes.
 
 ## Motion-first Stage 5 notes (verified operation highlighting, R2)
 - `flagsFor` now also builds an `active` set, exposed per slot as `active` and in the DOM as

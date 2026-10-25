@@ -203,17 +203,19 @@ export default function MotionStage({ plan }) {
     // Measure before cancelling. A running animation holds a transform, so this
     // is where each element actually is; cancelling first would snap an
     // interrupted move back to its layout slot and the next step would jump.
-    // The stored map also keeps the last rect of elements that just left the
-    // DOM, so their ghost can fade out from where it really was.
+    // This is also why the previous effect's cleanup only invalidates the
+    // controller: cancelling there would run before these measurements and undo
+    // the whole point. The stored map keeps the last rect of elements that just
+    // left the DOM, so their ghost can fade out from where it really was.
     const previousRects = new Map(positions.current);
     for (const [key, element] of nodeRefs.current) {
       if (element?.isConnected) previousRects.set(key, element.getBoundingClientRect());
     }
 
     // One plan owns the canvas at a time: every effect cancels the previous
-    // set before it starts its own, so a burst of steps at high speed replaces
-    // animations instead of queueing them, and a stale completion cannot settle
-    // the controller or move the cursor.
+    // set - after measuring - before it starts its own, so a burst of steps at
+    // high speed replaces animations instead of queueing them, and a stale
+    // completion cannot settle the controller or move the cursor.
     const cancelAll = () => {
       const running = animations.current;
       animations.current = [];
@@ -246,10 +248,7 @@ export default function MotionStage({ plan }) {
     }
 
     if (!view.animate) {
-      return () => {
-        cancelAll();
-        motionController.invalidate();
-      };
+      return () => motionController.invalidate();
     }
 
     const play = (element, frames, options = {}) => {
@@ -393,10 +392,7 @@ export default function MotionStage({ plan }) {
       }
     }
 
-    return () => {
-      cancelAll();
-      motionController.invalidate();
-    };
+    return () => motionController.invalidate();
   }, [plan, view]);
 
   if (!view) {
