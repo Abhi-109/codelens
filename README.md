@@ -249,12 +249,20 @@ sides — `test_corpus.py` against the claims it makes, and `src/tracer/corpus.t
 step by step through the UI's own functions. `docs/supported-python.md` is kept in
 sync by the same tests, so it cannot promise what the tracer does not do.
 
-There are also two opt-in checks that need a local Pyodide install:
+There are also three opt-in checks:
 
 ```bash
 npm run test:pyodide  # sanity-check the Web Worker against real Pyodide
 npm run check:explain # verify every example's trace explains cleanly
+npm run check:browser # drive the real app in headless Chrome (no npm dependency)
 ```
+
+`check:browser` starts its own dev server and headless Chrome, then checks the motion
+canvas against real layout: consecutive swaps, an interrupted swap at 1x and 4x, mid-move
+Back and slider seeks, a burst of steps, comparisons, persistent green positions, themes,
+reduced motion, and short and long arrays. It needs Chrome or Edge; set `CHROME_PATH` if it
+is not in a standard location. It is the only test that can exercise the effect ordering in
+`MotionStage.jsx`, so it is the regression test for the interruption fix.
 
 ## Project structure
 

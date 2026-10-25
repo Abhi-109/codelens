@@ -178,6 +178,19 @@ remaining work is unchanged: Phase 4 (frames, recursion, objects), Phase 5 (skin
     adjacent swaps of `[1,2,3]`: across the interruption the value at index 0 stayed at
     `788.6px` and the value at index 1 at `677.9px` (identical before and after, slot offset
     111px); the old code drew each value `57.7px` further on before reversing it.
+  - **The interruption fix now has a repeatable regression test.** The CDP harness lives in
+    `tools/browser-check/` (no npm dependency) and runs as `npm run check:browser`: it starts
+    its own Vite server on a free port and headless Chrome, then drives the real app. The
+    interruption check is self-calibrating rather than sleep-based — it polls the live
+    transform until the swap has actually travelled, clicks Next mid-move, and requires each
+    value's drawn `left` to move by less than half the distance still left to travel (at most
+    one animation frame with the fix). It runs at 1x and 4x, plus mid-move Back against an
+    undisturbed reference, a slider seek, and reset. 94 checks in total.
+  - **Negative control:** re-adding `cancelAll()` to the effect cleanup makes exactly the four
+    continuity checks fail (value 1 and 2, at 1x and 4x); restoring the fix makes all 94 pass.
+    The harness is the only test that exercises this effect ordering: `npm run test:js` is
+    node-only and the project has no jsdom, so a unit test could only inspect source text,
+    which the brief rules out.
   - step 18 layers the blue outer ring over the green inset ring; step 22 keeps the settled
     index green while the two operands are gold; the final state is entirely green and
     `[1,2,3,4,5]`.
