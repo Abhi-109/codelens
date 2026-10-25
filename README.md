@@ -261,7 +261,7 @@ npm run check:explain # verify every example's trace explains cleanly
 codelens/
 ├── docs/
 │   ├── scope.md            # what CodeLens is, who it is for, what is in and out of v1
-│   ├── trace-format.md     # the trace JSON contract (format version 2)
+│   ├── trace-format.md     # the trace JSON contract (format version 3)
 │   ├── supported-python.md # what the tracer really supports, kept in sync by tests
 │   ├── graph-diagnosis.md  # why the old graph did not teach, and the rebuild plan
 │   ├── ui-diagnosis.md     # per-panel purpose, and the "line about to run" convention

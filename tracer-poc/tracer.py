@@ -7,7 +7,7 @@ JSON-friendly dictionary:
     result = run_trace(source, max_steps=1500, max_seconds=5.0, inputs=None)
 
 Top-level result
-    format_version  int        Always 2 for this version of the format
+    format_version  int        Always 3 for this version of the format
     status          str        completed | error | step_limit | timeout |
                                output_limit | internal_error
     steps           int        Number of "line" events recorded
