@@ -144,6 +144,41 @@ still need a real browser check; this environment has no browser automation. Com
 visualisation has no trace data; the smallest viable design for capturing operands and outcomes
 is reported and awaits a separate architectural decision. Nothing is pushed.
 
+## Comparison capture notes (proof of concept, not wired in)
+- Starting point: the trace has no comparison event and no operand record. `programProfile.js`
+  has static comparison *sites* (line plus operand labels taken from the AST), and
+  `sortingAdapter.js` turns those into highlights by reading the frame's variables at that
+  line. That is exactly the source-text-plus-variables derivation the new brief rules out.
+- `tracer-poc/comparisons.py` is the requested proof of concept, deliberately outside
+  `tracer.py`, so **no trace-format change has happened**. `instrument(source)` rewrites a
+  single `Compare` node into `__codelens_compare__("op", line, left, right)` and a subscript
+  operand into `__codelens_cell__(container, index)`, which reads the element once and keeps
+  where it came from. The helper returns the object the comparison really produced.
+- Why the rewrite preserves semantics: operands stay left-to-right and once each; the
+  comparison runs once through `operator` dispatch; the result object is returned unchanged,
+  so a custom non-bool result is never truth-tested (only `is True` / `is False` are checked,
+  and those cannot run user code); only a single comparison is wrapped, so `and`/`or` and
+  chained comparisons keep their own short-circuit; exceptions propagate with type, message and
+  user source line unchanged; every new node copies the location of the node it replaces, so
+  the user `line`-event sequence is identical to the untouched program.
+- Left unsupported on purpose: chained comparisons, comparisons whose operands contain
+  `yield` / `yield from` / `await`, and slices or multi-dimensional subscripts as cells. A
+  comparison that raises reports its operands and operator with `result: None` instead of
+  inventing an outcome.
+- Tests: 14 in `test_comparisons.py`. Each runs the program twice - as written and
+  instrumented - and requires identical output, identical values left in scope and the same
+  exception type, message and user line. Focused cases: ordinary/identity/membership
+  operators, side-effecting operands and indices (evaluated once, in order), a multi-line
+  comparison's start line, short-circuit and chained-comparison guards, an exception from the
+  comparison itself, a custom `__gt__` returning a non-bool whose `__bool__` must never run,
+  several comparisons on one line, an eight-program corpus, and a `sys.settrace` check that the
+  user `line` events are unchanged. Python suite is **125 tests**.
+- **Proposed, not taken:** emit a `compare` event
+  `{step, event, function, frame_id, line, operator, operands, result}` from the tracer, bump
+  `format_version` to 3, document it in `docs/trace-format.md`, then map it in `diff.js` /
+  `plan.js` to an active-operand highlight and a "compare 5 > 2" label. That is a
+  trace-format change, so it waits for the owner's go-ahead (spec §13).
+
 ## Motion-first Stage 6 notes (persistent settled positions)
 - **The trace has no field that says "this position is final".** No event carries intent,
   and a state alone cannot prove it: "this cell has not changed lately" is not evidence, and
