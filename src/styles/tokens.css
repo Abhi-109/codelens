@@ -108,13 +108,8 @@
   --btn-primary-fg: #ffffff;
   --btn-primary-hover-bg: #2a2e37;
 
-  /* Hero: the one gradient left in the product, on the landing headline. */
-  --hero-grad-from: #2f57d6;
-  --hero-grad-to: #6d28d9;
-
-  /* Hero background wash: a single quiet bloom, not a light show. */
+  /* Hero: one quiet bloom, no gradient headline. */
   --hero-wash-a: rgb(47 87 214 / 7%);
-  --hero-wash-b: rgb(109 40 217 / 4%);
 
   /* Execution-graph edge colours, by meaning. The return path is the same
      teal as --teal, for the same reason: it has to clear 4.5:1, because the
@@ -187,13 +182,8 @@
   --btn-primary-fg: #ffffff;
   --btn-primary-hover-bg: #2f6afe;
 
-  /* Hero: blue -> violet, the one gradient in the product. */
-  --hero-grad-from: #5b9dff;
-  --hero-grad-to: #a78bfa;
-
-  /* Hero background wash: one soft bloom. */
+  /* Hero: one quiet bloom, no gradient headline. */
   --hero-wash-a: rgb(91 157 255 / 9%);
-  --hero-wash-b: rgb(167 139 250 / 5%);
 
   --edge-call: #a78bfa;
   --edge-return: #22d3c5;

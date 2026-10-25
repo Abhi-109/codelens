@@ -77,8 +77,28 @@ export const AVAILABLE_LANGUAGE = LANGUAGES.filter((lang) => lang.status === "av
 
 /** The site's four homepage features; the last one is honestly "soon". */
 export const FEATURES = [
-  { id: "execution", title: "Step-by-step execution", soon: false },
-  { id: "variables", title: "Visualise variables", soon: false },
-  { id: "calls", title: "Function call stack", soon: false },
-  { id: "languages", title: "Supports multiple languages", soon: true },
+  {
+    id: "execution",
+    title: "Step-by-step execution",
+    body: "Move forward and back through a real run, one recorded step at a time.",
+    soon: false,
+  },
+  {
+    id: "variables",
+    title: "Visualise variables",
+    body: "Lists, dicts, sets and objects drawn as they change, not as a text dump.",
+    soon: false,
+  },
+  {
+    id: "calls",
+    title: "Function call stack",
+    body: "See every open call, its depth and the value it hands back.",
+    soon: false,
+  },
+  {
+    id: "languages",
+    title: "Supports multiple languages",
+    body: "Python runs today. Other languages are planned, not promised.",
+    soon: true,
+  },
 ];

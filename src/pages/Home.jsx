@@ -1,6 +1,6 @@
 /* Home: the landing page.
  *
- * The preview card is not a screenshot and not a fake trace. preview-fixture
+ * The preview is not a screenshot and not a fake trace. preview-fixture
  * .json is a recording of a real run of a built-in example (regenerate it
  * with `npm run fixtures:preview`), and preview.js turns that recording into
  * frames with getStepView - the very function the visualizer's panels read.
@@ -122,147 +122,160 @@ function HeroPreview() {
 
   // An index can only ever point at a real frame.
   const frame = FRAMES[index] ?? FRAMES[0];
+  // The trace's own record of what this step changed: a value lights up only
+  // when the recording says it moved.
+  const changed = new Map((frame.changes ?? []).map((change) => [change.name, change]));
 
   return (
     <figure className="home-preview" ref={hostRef}>
-      <div className="preview-main">
-        <div className="preview-head">
+      <div className="preview-frame">
+        <div className="preview-bar">
           <span className="preview-lang">
             <span className="preview-dot" aria-hidden="true" />
             Python
           </span>
           <span className="preview-file">example.py</span>
+
+          <div className="preview-player">
+            <button
+              type="button"
+              className="pv-play"
+              onClick={() => setWantPlay((play) => !play)}
+              aria-label={wantPlay ? "Pause the preview" : "Play the preview"}
+              title={wantPlay ? "Pause" : "Play"}
+            >
+              {wantPlay ? (
+                <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="currentColor">
+                  <rect x="4" y="3" width="3" height="10" rx="1" />
+                  <rect x="9" y="3" width="3" height="10" rx="1" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="currentColor">
+                  <path d="M5 3.4 12.2 8 5 12.6Z" />
+                </svg>
+              )}
+            </button>
+            <button
+              type="button"
+              className="pv-btn"
+              onClick={() => setIndex((current) => previousFrameIndex(current, TOTAL))}
+              aria-label="Previous step"
+              title="Previous step"
+            >
+              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="currentColor">
+                <path d="M4 3.4 11.2 8 4 12.6Z" />
+                <rect x="11.5" y="3.4" width="1.6" height="9.2" rx="0.8" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="pv-btn"
+              onClick={() => setIndex((current) => nextFrameIndex(current, TOTAL))}
+              aria-label="Next step"
+              title="Next step"
+            >
+              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" fill="currentColor">
+                <path d="M12 3.4 4.8 8 12 12.6Z" />
+                <rect x="2.9" y="3.4" width="1.6" height="9.2" rx="0.8" />
+              </svg>
+            </button>
+            <span className="pv-step" aria-live="off">
+              {index + 1} / {TOTAL}
+            </span>
+          </div>
         </div>
 
-        <ol className="preview-code">
-          {SOURCE_LINES.map((text, i) => {
-            const number = i + 1;
-            const current = frame.line === number;
-            const segments = current ? markedLine(text, frame.values) : [{ text, name: null }];
-            return (
-              <li
-                key={number}
-                className={current ? "pv-line pv-current" : "pv-line"}
-                aria-current={current ? "step" : undefined}
-              >
-                <span className="pv-num" aria-hidden="true">
-                  {number}
-                </span>
-                <code className="pv-text">
-                  {segments.length === 0
-                    ? "\u00A0"
-                    : segments.map((segment, s) => (
-                        <span
-                          key={s}
-                          className={segment.name ? "pv-ident" : undefined}
-                          title={segment.name ? `${segment.name} = ${frame.values[segment.name]}` : undefined}
-                        >
-                          {segment.text}
-                        </span>
-                      ))}
-                </code>
-              </li>
-            );
-          })}
-        </ol>
-
-        <div className="preview-player">
-          <button
-            type="button"
-            className="pv-play"
-            onClick={() => setWantPlay((play) => !play)}
-            aria-label={wantPlay ? "Pause the preview" : "Play the preview"}
-            title={wantPlay ? "Pause" : "Play"}
-          >
-            {wantPlay ? (
-              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="currentColor">
-                <rect x="4" y="3" width="3" height="10" rx="1" />
-                <rect x="9" y="3" width="3" height="10" rx="1" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="currentColor">
-                <path d="M5 3.4 12.2 8 5 12.6Z" />
-              </svg>
-            )}
-          </button>
-          <button
-            type="button"
-            className="pv-btn"
-            onClick={() => setIndex((current) => previousFrameIndex(current, TOTAL))}
-            aria-label="Previous step"
-            title="Previous step"
-          >
-            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="currentColor">
-              <path d="M4 3.4 11.2 8 4 12.6Z" />
-              <rect x="11.5" y="3.4" width="1.6" height="9.2" rx="0.8" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="pv-btn"
-            onClick={() => setIndex((current) => nextFrameIndex(current, TOTAL))}
-            aria-label="Next step"
-            title="Next step"
-          >
-            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="currentColor">
-              <path d="M12 3.4 4.8 8 12 12.6Z" />
-              <rect x="2.9" y="3.4" width="1.6" height="9.2" rx="0.8" />
-            </svg>
-          </button>
-          <span className="pv-step">
-            Step {index + 1} / {TOTAL}
-          </span>
-        </div>
-      </div>
-
-      <div className="preview-cards">
-        <section className="pv-card">
-          <h3 className="pv-card-title">Variables</h3>
-          {Object.keys(frame.values).length === 0 ? (
-            <p className="pv-empty">(none yet)</p>
-          ) : (
-            <ul className="pv-list">
-              {Object.entries(frame.values).map(([name, value]) => (
-                <li key={name} className="pv-row">
-                  <span className="pv-name">{name}</span>
-                  <span className="pv-eq" aria-hidden="true">
-                    =
+        <div className="preview-body">
+          <ol className="preview-code" aria-label="Program with the current line marked">
+            {SOURCE_LINES.map((text, i) => {
+              const number = i + 1;
+              const current = frame.line === number;
+              const segments = current ? markedLine(text, frame.values) : [{ text, name: null }];
+              return (
+                <li
+                  key={number}
+                  className={current ? "pv-line pv-current" : "pv-line"}
+                  aria-current={current ? "step" : undefined}
+                >
+                  <span className="pv-num" aria-hidden="true">
+                    {number}
                   </span>
-                  <span className="pv-value">{value}</span>
+                  <code className="pv-text">
+                    {segments.length === 0
+                      ? "\u00A0"
+                      : segments.map((segment, s) => (
+                          <span
+                            key={s}
+                            className={segment.name ? "pv-ident" : undefined}
+                            title={segment.name ? `${segment.name} = ${frame.values[segment.name]}` : undefined}
+                          >
+                            {segment.text}
+                          </span>
+                        ))}
+                  </code>
                 </li>
-              ))}
-            </ul>
-          )}
-        </section>
+              );
+            })}
+          </ol>
 
-        <section className="pv-card">
-          <h3 className="pv-card-title">Call Stack</h3>
-          <ul className="pv-list">
-            {frame.callStack.map((entry) => (
-              <li
-                key={entry.frameId}
-                className={entry.isTop ? "pv-frame pv-frame-top" : "pv-frame"}
-                aria-current={entry.isTop ? "true" : undefined}
-              >
-                {entry.function === "<module>" ? "<module>" : `${entry.function}()`}
-                {entry.callNumber > 1 && <span className="pv-callno"> #{entry.callNumber}</span>}
-              </li>
-            ))}
-          </ul>
-        </section>
+          <div className="preview-facts">
+            <section className="pv-fact">
+              <h3 className="pv-card-title">Values</h3>
+              {Object.keys(frame.values).length === 0 ? (
+                <p className="pv-empty">Nothing assigned yet</p>
+              ) : (
+                <ul className="pv-list">
+                  {Object.entries(frame.values).map(([name, value]) => {
+                    const move = changed.get(name);
+                    return (
+                      <li key={name} className={move ? "pv-row is-changed" : "pv-row"}>
+                        <span className="pv-name">{name}</span>
+                        <span className="pv-eq" aria-hidden="true">
+                          =
+                        </span>
+                        <span
+                          className="pv-value"
+                          title={move ? `was ${move.from ?? "unset"}` : undefined}
+                        >
+                          {value}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
 
-        <section className="pv-card">
-          <h3 className="pv-card-title">Output</h3>
-          {frame.output ? (
-            <pre className="pv-output">{frame.output}</pre>
-          ) : (
-            <p className="pv-empty">(nothing printed yet)</p>
-          )}
-        </section>
+            <section className="pv-fact">
+              <h3 className="pv-card-title">Call stack</h3>
+              <ul className="pv-list">
+                {frame.callStack.map((entry) => (
+                  <li
+                    key={entry.frameId}
+                    className={entry.isTop ? "pv-frame pv-frame-top" : "pv-frame"}
+                    aria-current={entry.isTop ? "true" : undefined}
+                  >
+                    {entry.function === "<module>" ? "<module>" : `${entry.function}()`}
+                    {entry.callNumber > 1 && <span className="pv-callno"> #{entry.callNumber}</span>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="pv-fact">
+              <h3 className="pv-card-title">Output</h3>
+              {frame.output ? (
+                <pre className="pv-output">{frame.output}</pre>
+              ) : (
+                <p className="pv-empty">Nothing printed yet</p>
+              )}
+            </section>
+          </div>
+        </div>
       </div>
 
       <figcaption className="preview-note">
-        A real run of a built-in example, replayed step by step — every value comes from the
+        A real run of a built-in example, replayed step by step. Every value comes from the
         execution engine's own trace.
       </figcaption>
     </figure>
@@ -279,37 +292,27 @@ export default function Home() {
 
   return (
     <div className="page-home">
-      <div className="home-bg" aria-hidden="true">
-        <svg className="home-waves" viewBox="0 0 1440 320" preserveAspectRatio="none">
-          <path d="M0 190C240 110 480 270 720 190S1200 110 1440 190" />
-          <path d="M0 240C240 160 480 320 720 240S1200 160 1440 240" />
-          <path d="M0 140C240 60 480 220 720 140S1200 60 1440 140" />
-        </svg>
-      </div>
-
       <section className="home-hero">
         <div className="home-copy">
-          <span className="home-eyebrow home-eyebrow-brand">
+          <span className="home-eyebrow">
             <BrandMark className="home-eyebrow-mark" decorative />
-            See your code think.
+            See your code think
           </span>
           <h1 className="home-title">
-            See your code
-            <br />
-            <span className="home-title-accent">come to life.</span>
+            Watch your code run,
+            <span className="home-title-line">one step at a time.</span>
           </h1>
           <p className="home-lede">
-            CodeLens shows you how a program executes, one step at a time: which line runs next,
-            what every variable holds, which calls are open, and what got printed — with a
-            plain-English explanation at every step.
+            CodeLens shows which line runs next, what every variable holds, which calls are
+            open, and what got printed — with a plain-English explanation at every step.
           </p>
           <div className="home-actions">
             <Link to="/get-started" className="btn btn-primary">
-              Start Visualizing
+              Start visualizing
               <span aria-hidden="true">→</span>
             </Link>
             <a href="#features" className="btn">
-              Explore Features
+              Explore features
             </a>
           </div>
         </div>
@@ -323,10 +326,13 @@ export default function Home() {
             <span className="home-feature-icon" aria-hidden="true">
               {ICONS[feature.id]}
             </span>
-            <p className="home-feature-title">
-              {feature.title}
-              {feature.soon && <span className="home-feature-soon"> (soon)</span>}
-            </p>
+            <div>
+              <p className="home-feature-title">
+                {feature.title}
+                {feature.soon && <span className="home-feature-soon"> (soon)</span>}
+              </p>
+              <p className="home-feature-body">{feature.body}</p>
+            </div>
           </div>
         ))}
       </section>

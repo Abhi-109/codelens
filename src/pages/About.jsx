@@ -19,7 +19,7 @@ const FACTS = [
   },
   {
     title: 'Tested against a broad corpus',
-    body: 'The tracer is checked against 45 programs across 32 categories of Python — loops, recursion, classes, exceptions, limits and more — on both the Python and JavaScript sides.',
+    body: 'The tracer is checked against 68 programs across 34 categories of Python — loops, recursion, classes, exceptions, limits and more — on both the Python and JavaScript sides.',
   },
 ];
 

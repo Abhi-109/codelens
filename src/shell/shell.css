@@ -10,8 +10,10 @@
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 7px 14px;
+  min-height: var(--control-md);
+  padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
@@ -124,8 +126,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--control-md);
+  height: var(--control-md);
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -143,8 +145,8 @@
   display: none;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--control-md);
+  height: var(--control-md);
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -268,16 +270,17 @@
 
 .page-title {
   margin: 0;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
-  letter-spacing: -0.4px;
+  letter-spacing: -0.5px;
   color: var(--text-h);
 }
 
 .page-subtitle {
   margin: var(--space-2) 0 0;
-  max-width: 60ch;
+  max-width: 62ch;
   font-size: 15px;
+  line-height: 1.55;
   color: var(--text);
 }
 

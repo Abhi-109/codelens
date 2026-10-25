@@ -24,8 +24,8 @@ export default function GetStarted() {
     <div className="lang-page">
       <PageHeader
         crumbs={[{ label: "Home", to: "/" }, { label: "Choose a language" }]}
-        title="Choose a Programming Language"
-        subtitle="Select a language to start visualizing your code. More languages coming soon!"
+        title="Choose a programming language"
+        subtitle="Python runs today. Pick it to open the visualizer; the rest are plans, not promises."
       />
 
       <div className="lang-grid">

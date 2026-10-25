@@ -548,6 +548,28 @@ remaining work is unchanged: Phase 4 (frames, recursion, objects), Phase 5 (skin
   their column. Covers positives, negatives (label above the baseline) and zero, with 18 px
   reserved above the plot for the tallest bar's label.
 
+## Task 7 Stage 6 notes (landing and site pages)
+- The landing hero now shows the product instead of decorating it: one framed preview with
+  the recorded code on the left and Values / Call stack / Output on the right, separated by
+  hairlines rather than nested cards. A value takes the accent only when the trace's own
+  `changes` names it, so the hero cannot imply a change that did not happen.
+- Removed the dark-mode wave lines, the drifting connector dashes, the floating preview, the
+  gradient headline and the pill eyebrow. The headline is flat ink plus one flat accent line,
+  and the eyebrow is a mono label beside the brand mark.
+- Tokens: `--hero-grad-from`/`--hero-grad-to` and `--hero-wash-b` are gone; one quiet
+  `--hero-wash-a` bloom remains. Nothing else in the product used them.
+- Shared chrome tightened: `.btn` now uses `min-height: var(--control-md)` so buttons line up
+  with the shell's icon buttons, which also take the control height; page titles are 28px.
+- The feature strip gained one honest sentence per feature (the titles and the `soon` flag
+  the tests pin are unchanged), and the language cards lost their pill badges and filled
+  in-card button: a mono status label, an accent "Start with Python" line, and a live border.
+- Docs now lays five links on one row at desktop, Learn caps its lesson list at 760px, and
+  About is a 2x2 grid. The About copy's corpus count was stale (45/32); it now says 68
+  programs across 34 categories, which is what the fixture holds.
+- Verified with headless Chrome at 1440x960 and 720px in both themes: no horizontal overflow,
+  hero copy and preview aligned, the preview's changed value highlights at the recorded step,
+  and no console errors. `npm run test:js` (705 pass), `npm run lint`, `npm run build` pass.
+
 ## Task 7 Stage 5 notes (general Python in the motion canvas)
 - Call depth is now printed on every nested frame (`depth 1`, `depth 2`, ...), from the
   frame's position in the recorded stack. The deepest frame stays the current one, so a
