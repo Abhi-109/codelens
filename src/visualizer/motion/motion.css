@@ -322,6 +322,20 @@
   white-space: nowrap;
 }
 
+/* State colours change by meaning, not by jump: the operation's blue ring and
+ * the settled green fade in and out, so one step reads as one event instead of
+ * two flashes. Colour only - never layout - and the shared cursor still decides
+ * what is true; this only says how the change is shown. Reduced motion turns it
+ * off below. */
+.motion-slot.motion-cell,
+.motion-cell-index {
+  transition:
+    border-color 140ms ease-out,
+    box-shadow 140ms ease-out,
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
 /* The cell's own border and fill are declared above, so the shared slot states
  * need restating at cell specificity to keep the change flash and the verified
  * highlight visible. */
@@ -495,6 +509,8 @@
   .motion-frame,
   .motion-object,
   .motion-slot,
+  .motion-slot.motion-cell,
+  .motion-cell-index,
   .motion-var {
     transition: none;
   }

@@ -1,13 +1,11 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 
+import { MOTION_ARC, MOTION_EASING, moveKeyframes } from "./choreography.js";
 import { createMotionController, motionTargetKey } from "./plan.js";
 import { motionView } from "./view.js";
 import "./motion.css";
 
-const EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 const EXIT_MS = 180;
-/** A swap arcs this far above the straight line between the two cells. */
-const SWAP_LIFT = 12;
 
 function registerIn(map, key, node) {
   if (node) map.current.set(key, node);
@@ -211,6 +209,10 @@ export default function MotionStage({ plan }) {
       if (element?.isConnected) previousRects.set(key, element.getBoundingClientRect());
     }
 
+    // One plan owns the canvas at a time: every effect cancels the previous
+    // set before it starts its own, so a burst of steps at high speed replaces
+    // animations instead of queueing them, and a stale completion cannot settle
+    // the controller or move the cursor.
     const cancelAll = () => {
       const running = animations.current;
       animations.current = [];
@@ -253,7 +255,7 @@ export default function MotionStage({ plan }) {
       if (!element?.animate) return null;
       const animation = element.animate(frames, {
         duration: Math.max(1, Math.round(options.duration ?? view.durationMs ?? 1)),
-        easing: options.easing ?? EASE,
+        easing: options.easing ?? MOTION_EASING.move,
       });
       animations.current.push(animation);
       animation.finished
@@ -263,26 +265,19 @@ export default function MotionStage({ plan }) {
     };
 
     const explicit = new Set();
-    const animateMove = (key, fromRect, lift = 0) => {
+    const animateMove = (key, fromRect, arc = 0) => {
       if (!fromRect || explicit.has(key)) return;
       const element = nodeRefs.current.get(key);
       const toRect = currentRects.get(key);
       if (!element || !toRect) return;
-      const dx = fromRect.left - toRect.left;
-      const dy = fromRect.top - toRect.top;
-      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+      // The start frame is the live measurement, so an interrupted move keeps
+      // the position the eye last saw; the end frame is the layout slot, so the
+      // element always lands exactly where the recorded state puts it.
+      const frames = moveKeyframes(fromRect.left - toRect.left, fromRect.top - toRect.top, {
+        arc,
+      });
+      if (!frames) return;
       explicit.add(key);
-      const frames =
-        lift > 0
-          ? [
-              { transform: `translate(${dx}px, ${dy}px)` },
-              { transform: `translate(${dx / 2}px, ${dy / 2 - lift}px)` },
-              { transform: "translate(0, 0)" },
-            ]
-          : [
-              { transform: `translate(${dx}px, ${dy}px)` },
-              { transform: "translate(0, 0)" },
-            ];
       play(element, frames);
     };
 
@@ -290,15 +285,18 @@ export default function MotionStage({ plan }) {
       if (!Array.isArray(move.indices)) continue;
       if (move.motion === "swap" && move.indices.length === 2) {
         const [i, j] = move.indices;
+        // Both cells travel opposite ways with the same duration and easing, so
+        // the arc's side falls out of the direction and they curve past each
+        // other instead of overlapping on one path.
         animateMove(
           cellKey(move.objectId, i),
           previousRects.get(cellKey(move.objectId, j)),
-          SWAP_LIFT,
+          MOTION_ARC.swap,
         );
         animateMove(
           cellKey(move.objectId, j),
           previousRects.get(cellKey(move.objectId, i)),
-          SWAP_LIFT,
+          MOTION_ARC.swap,
         );
       } else if (move.motion === "shift" && move.indices.length === 2) {
         const [origin, destination] = move.indices;
@@ -337,10 +335,14 @@ export default function MotionStage({ plan }) {
     for (const key of entering) {
       const element = nodeRefs.current.get(key);
       if (!element) continue;
-      play(element, [
-        { opacity: 0, transform: "scale(0.96)" },
-        { opacity: 1, transform: "scale(1)" },
-      ]);
+      play(
+        element,
+        [
+          { opacity: 0, transform: "scale(0.96)" },
+          { opacity: 1, transform: "scale(1)" },
+        ],
+        { easing: MOTION_EASING.enter },
+      );
     }
 
     for (const key of view.changed) {
@@ -349,6 +351,7 @@ export default function MotionStage({ plan }) {
       if (!element) continue;
       play(element, [{ opacity: 0.45 }, { opacity: 1 }], {
         duration: Math.min(view.durationMs || 180, 220),
+        easing: MOTION_EASING.fade,
       });
     }
 
@@ -376,7 +379,7 @@ export default function MotionStage({ plan }) {
           { opacity: 1, transform: "scale(1)" },
           { opacity: 0, transform: "scale(0.94)" },
         ],
-        { duration: EXIT_MS },
+        { duration: EXIT_MS, easing: MOTION_EASING.fade },
       );
       if (animation) {
         animation.finished

@@ -190,6 +190,43 @@ is reported and awaits a separate architectural decision. Nothing is pushed.
 - No tracer, trace-format, action-vocabulary, diff, cursor, dependency or other-canvas
   change. Untouched programs keep uncoloured cells.
 
+## Motion-first Stage 6 notes (animation refinements)
+- Audit first, as asked. `MotionStage.jsx` already measured the live rects before cancelling
+  (the R3 fix) and then FLIPped cells with one shared easing, a 12 px vertical arc for both
+  swap cells, and `view.durationMs` as the single length; the controller superseded stale
+  tickets and every effect cancelled the previous animation set. Nothing kept a second
+  source of truth: the cursor still owned the state.
+- `src/visualizer/motion/choreography.js` is the new pure part: three role curves (move,
+  fade, enter), the arc size, and `moveKeyframes(dx, dy, { arc })`. The first keyframe is
+  always the measured offset and the last is always `translate(0, 0)`, so an interrupted move
+  continues from where the eye last saw it and every move lands exactly on its layout slot.
+- Swap paths are coordinated by direction, not by algorithm: the bow is perpendicular to
+  travel, so the cell moving right passes above the row and the one moving left passes below
+  it, with one duration and one easing for both. The bow is capped at half the distance and
+  at 10 px, and a move under 0.5 px is not animated at all.
+- Easing is one curve per role. Movement decelerates and never overshoots (a cell bouncing
+  past its slot reads as a bug), fades use the even curve, entrances use the grow curve, and
+  the value pulse takes the fade curve.
+- Colour changes get their own 140 ms ease-out transition on border, ring, fill and the index
+  label, so the blue operation ring and the settled green fade instead of flashing.
+  `prefers-reduced-motion` turns that off, and `planMotion` already zeroes every duration and
+  drops every ghost, so reduced motion still moves nothing.
+- Rapid playback, reverse playback and seeks: mechanism unchanged, now stated where it
+  matters. Every effect cancels the previous set before starting its own, so at most one plan
+  is in flight, a burst of steps replaces animations instead of queueing them, and a stale
+  `finished` cannot settle the controller. A seek or reset is still rendered directly with
+  `animate: false` (spec §6/§8); the jump is the recorded target state rather than a stale
+  transform, because the whole set was cancelled first.
+- Tests: 9 in `choreography.test.mjs`, on real bubble-sort plans plus measured-offset
+  geometry: exact start/end offsets, no animation for sub-pixel moves, mirrored swap bows of
+  equal magnitude, the bow cap, the three role curves, one duration for both swap cells at
+  0.5x/1x/2x/4x with an 80 ms floor, the same verified pair forward and backward, direct
+  rendering for seek/reset/reduced motion, and the plan state still equal to the recorded
+  target. JS suite is **688 tests**.
+- **Not visually validated.** This environment has no browser automation and the suite is
+  node-only, so the curves, the arcs and the colour transitions are verified in the model
+  only. The manual checks are listed under "Next action".
+
 ## Motion-first Stage 5 notes (canvas focus and step head, R4)
 - Layout cause, fixed at both levels: `.motion-object` was still `flex: 0 1 300px`, so a
   sequence could never use more than a 300 px basis even after the cells replaced the bars;
