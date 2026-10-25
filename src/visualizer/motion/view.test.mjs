@@ -12,7 +12,7 @@ import { gunzipSync } from "node:zlib";
 import { snapshotAt, stateOf } from "../../animation/diff.js";
 import { showValue } from "../../tracer/values.js";
 import { MOTION_OPERATION, motionNodes, planMotion } from "./plan.js";
-import { comparisonOf, motionView } from "./view.js";
+import { comparisonOf, motionView, returnOf } from "./view.js";
 
 const read = (path) =>
   JSON.parse(gunzipSync(readFileSync(new URL(path, import.meta.url))).toString());
@@ -1050,4 +1050,137 @@ test("a settled position survives the swap that follows it", () => {
   for (const slot of settled) {
     assert.ok(nextSettled.has(slot.key), `step ${index + 1} lost the settled ${slot.key}`);
   }
+});
+
+test("a returned value rides on the frame the recording returned from", () => {
+  const at = findPlan("function-print-return", (plan) => returnOf(plan) !== null);
+  const returned = returnOf(at.plan);
+  assert.equal(returned.function, "report");
+  assert.equal(returned.text, "42");
+
+  const view = motionView(at.plan);
+  const frame = view.frames.find((candidate) => candidate.returned !== null);
+  assert.ok(frame, "the returning frame is on screen at its return step");
+  assert.equal(frame.function, "report");
+  assert.equal(frame.returned.text, "42");
+  assert.equal(
+    view.frames.filter((candidate) => candidate.returned !== null).length,
+    1,
+    "only the frame the recording names carries the value",
+  );
+  assert.equal(view.feedback.kind, "return");
+  assert.equal(view.feedback.text, "return 42");
+});
+
+test("a call step that hands nothing back still says it returned", () => {
+  const at = findPlan("recursion", (plan) => {
+    const returned = returnOf(plan);
+    return returned !== null && returned.function === "<module>";
+  });
+  const view = motionView(at.plan);
+  assert.equal(returnOf(at.plan).text, "None");
+  assert.match(view.feedback.text, /^return/);
+});
+
+test("nested calls carry the recorded stack depth, deepest last and current", () => {
+  const at = findPlan("recursion", (plan) => plan.nodes.frames.length >= 3);
+  const view = motionView(at.plan);
+  assert.deepEqual(
+    view.frames.map((frame) => frame.depth),
+    view.frames.map((_, index) => index),
+    "depth is the frame's position in the recorded stack",
+  );
+  assert.equal(view.frames[0].function, "<module>");
+  assert.ok(view.frames.slice(1).every((frame) => frame.function === "fact"));
+  assert.equal(
+    view.frames.filter((frame) => frame.current).length,
+    1,
+    "exactly one frame is running",
+  );
+  assert.equal(view.frames.at(-1).current, true);
+});
+
+test("an exception says whether a handler catches it", () => {
+  const handled = findPlan(
+    "exception-custom",
+    (plan) => plan.event === "exception" && plan.exceptionOutcome === "handled",
+  );
+  const caught = motionView(handled.plan).feedback;
+  assert.equal(caught.kind, "error");
+  assert.equal(caught.text, "Raises TooBig");
+  assert.match(caught.explanation, /catches it, so the program can continue/);
+
+  const propagated = findPlan(
+    "exception-custom",
+    (plan) => plan.event === "exception" && plan.exceptionOutcome === "propagated",
+  );
+  assert.match(
+    motionView(propagated.plan).feedback.explanation,
+    /No handler caught it here, so it passes outward/,
+  );
+
+  const uncaught = findPlan(
+    "error-division",
+    (plan) => plan.event === "exception" && plan.exceptionOutcome === "uncaught",
+  );
+  const stopped = motionView(uncaught.plan).feedback;
+  assert.equal(stopped.text, "Raises ZeroDivisionError");
+  assert.match(stopped.explanation, /Nothing catches it, so the run ends/);
+});
+
+test("an unwind and the final error name the frame and the stop", () => {
+  const unwind = findPlan("error-division", (plan) => plan.event === "unwind");
+  const leaving = motionView(unwind.plan).feedback;
+  assert.equal(leaving.kind, "error");
+  assert.equal(leaving.text, "Error leaves divide");
+  assert.match(leaving.explanation, /passes out of divide\(\), so that call stops without finishing/);
+
+  const end = findPlan("error-division", (plan) => plan.event === "error");
+  const stopped = motionView(end.plan).feedback;
+  assert.equal(stopped.kind, "error");
+  assert.equal(stopped.text, "Stops: ZeroDivisionError");
+  assert.match(stopped.explanation, /The run ended with ZeroDivisionError/);
+});
+
+test("a seeked step still names its exception and its return value", () => {
+  // A seek has no transition actions, so these facts must come from the
+  // recorded event itself or the step would go blank on the way back.
+  const p = program("exception-custom");
+  const exceptionIndex = p.trace.findIndex(
+    (event, index) => event.event === "exception" && index === 15,
+  );
+  const exceptionPlan = planMotion(p.trace, exceptionIndex, {
+    source: p.source,
+    previousIndex: null,
+  });
+  const caught = motionView(exceptionPlan).feedback;
+  assert.equal(caught.text, "Raises TooBig");
+  assert.match(caught.explanation, /catches it/);
+
+  const q = program("function-print-return");
+  const returnIndex = q.trace.findIndex((event) => event.event === "return");
+  const returnPlan = planMotion(q.trace, returnIndex, { source: q.source, previousIndex: null });
+  assert.equal(returnOf(returnPlan).text, "42");
+  const view = motionView(returnPlan);
+  assert.equal(view.feedback.text, "return 42");
+  assert.equal(
+    view.frames.find((frame) => frame.function === "report")?.returned?.text,
+    "42",
+  );
+});
+
+test("a scalar-only program keeps its values in the call strip", () => {
+  const at = findPlan(
+    "recursion",
+    (plan) =>
+      plan.nodes.objects.length === 0 &&
+      plan.nodes.frames.some((frame) => frame.variables.some((variable) => variable.name === "n")),
+  );
+  const view = motionView(at.plan);
+  assert.equal(view.objects.length, 0);
+  const scalar = view.frames
+    .flatMap((frame) => frame.variables)
+    .find((variable) => variable.name === "n");
+  assert.ok(scalar, "the scalar argument is on screen in a frame");
+  assert.equal(scalar.valueType, "int");
 });

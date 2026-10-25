@@ -84,6 +84,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A raised error is a stop, not a data change. */
+.motion-event.is-error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
 .motion-source {
   flex: 1 1 100%;
   overflow: hidden;
@@ -129,8 +135,9 @@
 
 .motion-frame-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px;
+  gap: 2px 6px;
   min-width: 0;
 }
 
@@ -150,6 +157,20 @@
   flex: none;
   font: 10.5px/1.4 var(--mono);
   color: var(--text);
+}
+
+/* Depth and a returned value are recorded facts about the call, printed in
+ * the strip rather than invented as a badge. */
+.motion-frame-depth {
+  flex: none;
+  font: 10.5px/1.4 var(--mono);
+  color: var(--text);
+}
+
+.motion-frame-return {
+  flex: none;
+  font: 600 11.5px/1.4 var(--mono);
+  color: var(--text-h);
 }
 
 .motion-vars {
@@ -198,6 +219,17 @@
   font-size: 11px;
   line-height: 1.45;
   color: var(--text);
+}
+
+/* A scalar-only program is still a program: point at where its values are
+ * instead of leaving the canvas with a bare sentence. */
+.motion-data .motion-no-values {
+  max-width: 46ch;
+  margin: 0 auto;
+  padding: var(--space-6) 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  text-align: center;
 }
 
 /* One sentence about what the step means, directly under the data it describes.

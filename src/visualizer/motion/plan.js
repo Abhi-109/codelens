@@ -27,6 +27,7 @@ import {
   stateOf,
 } from "../../animation/diff.js";
 import { namesById, objectLabel } from "../../tracer/objects.js";
+import { getTraceIndex } from "../../tracer/traceIndex.js";
 import { showValue } from "../../tracer/values.js";
 import { isSpeed } from "../playback.js";
 import { finalizedCells } from "./finality.js";
@@ -342,6 +343,37 @@ export function planMotion(
     index,
     step: next.step,
     event: next.event ?? null,
+    // Only an exception step has an outcome to report, and it comes from the
+    // trace's own lookahead: handled, propagated, uncaught, or still raised.
+    exceptionOutcome:
+      next.event === "exception" ? getTraceIndex(trace).exceptionOutcome(index) : null,
+    // The function the event itself names, when it names one. An unwind has no
+    // action to carry it, and its sentence needs it.
+    eventFunction: typeof next.function === "string" ? next.function : null,
+    // Overlay facts come from the recorded event, not from the transition's
+    // actions: a seek has no actions, and the step must still say what happened.
+    returned:
+      next.event === "return"
+        ? {
+            frameId: Number.isInteger(next.frame_id) ? next.frame_id : null,
+            function: typeof next.function === "string" ? next.function : null,
+            value: next.return_value ?? null,
+          }
+        : null,
+    recordedError:
+      next.event === "exception"
+        ? {
+            type: next.exception?.type ?? null,
+            message: next.exception?.message ?? null,
+            phase: null,
+          }
+        : next.event === "error"
+          ? {
+              type: next.type ?? null,
+              message: next.message ?? null,
+              phase: next.phase ?? null,
+            }
+          : null,
     compareEvent: raw?.event === "compare" ? raw : null,
     line,
     lineText,

@@ -548,8 +548,29 @@ remaining work is unchanged: Phase 4 (frames, recursion, objects), Phase 5 (skin
   their column. Covers positives, negatives (label above the baseline) and zero, with 18 px
   reserved above the plot for the tallest bar's label.
 
-## Task 7 Stage 4 notes (premium workspace: tokens, shell, editor, stage)
-- Palette retuned to charcoal (`--bg #0e1014`) and warm paper (`--bg #f7f7f4`); the old
+## Task 7 Stage 5 notes (general Python in the motion canvas)
+- Call depth is now printed on every nested frame (`depth 1`, `depth 2`, ...), from the
+  frame's position in the recorded stack. The deepest frame stays the current one, so a
+  recursive descent is readable without a separate call-tree canvas.
+- A `return` step prints the value the call handed back (`→ 42`) on the frame that returned,
+  and the headline reads `return 42`. Both come from the recorded `return_value`; nothing is
+  inferred from the caller's state.
+- A raised error now has its own headline and sentence, and the sentence distinguishes what
+  happened next: a matching `except` block catches it, no handler caught it here so it passes
+  outward, or nothing catches it and the run ends. `unwind` names the frame it leaves, and the
+  final `error` step names the type and says the run ended. The wording matches the
+  explanation card.
+- These overlay facts (`returned`, `recordedError`, `exceptionOutcome`, `eventFunction`) are
+  carried on the plan from the **recorded event**, not from the transition's actions. A seek
+  has no actions, so reading them from actions made a seeked return or exception go blank.
+  The regression is pinned by a test that plans with `previousIndex: null`.
+- A scalar-only step says where its values are ("Scalar values stay in the call strip above")
+  instead of leaving the canvas with a bare sentence.
+- Tests in `view.test.mjs` cover the returning frame and its value, a `None` return, stack
+  depth and the single current frame, caught vs propagated vs uncaught wording, unwind and
+  final error wording, the seeked case, and scalar-only state. JS suite is **705 tests**.
+
+## Task 7 Stage 4 notes (premium workspace: tokens, shell, editor, stage)- Palette retuned to charcoal (`--bg #0e1014`) and warm paper (`--bg #f7f7f4`); the old
   navy/lavender pair read as a different product. Every changed pair is measured by
   `styles/contrast.test.mjs`, including the new gold below.
 - Execution colour now has one meaning each: blue acts (`--accent`), **gold compares**

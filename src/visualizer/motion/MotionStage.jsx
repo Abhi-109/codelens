@@ -150,9 +150,19 @@ function FrameCard({ frame, registerNode, registerVariable }) {
     >
       <header className="motion-frame-head">
         <span className="motion-fn">{frame.function}</span>
+        {frame.depth > 0 ? (
+          <span className="motion-frame-depth" title={`call depth ${frame.depth}`}>
+            depth {frame.depth}
+          </span>
+        ) : null}
         {frame.callLine === null ? null : (
           <span className="motion-frame-line">line {frame.callLine}</span>
         )}
+        {frame.returned ? (
+          <span className="motion-frame-return" title="the value this call returned">
+            → {frame.returned.text ?? "returns"}
+          </span>
+        ) : null}
       </header>
       {frame.variables.length > 0 ? (
         <div className="motion-vars">
@@ -450,7 +460,10 @@ export default function MotionStage({ plan }) {
             ))}
           </section>
         ) : (
-          <p className="motion-no-values">No list, dictionary, set or object values at this step.</p>
+          <p className="motion-no-values">
+            Scalar values stay in the call strip above; lists, dicts, sets and objects appear
+            here.
+          </p>
         )}
 
         {view.explanation ? <p className="motion-explain">{view.explanation}</p> : null}

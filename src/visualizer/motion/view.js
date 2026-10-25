@@ -86,6 +86,102 @@ export function comparisonOf(plan) {
   };
 }
 
+/**
+ * The return this step recorded, or null.
+ *
+ * A return event carries the value the call handed back, and its action names
+ * the frame. The frame is still on screen at that step, so the value can be
+ * shown on it; the next step removes the frame and the caller's variable shows
+ * where the value went.
+ *
+ * @param {Object|null} plan a plan from `planMotion`
+ * @returns {{frameId: number|null, function: string|null, text: string|null}|null}
+ */
+export function returnOf(plan) {
+  const recorded = plan?.returned;
+  if (!recorded) return null;
+  const value = recorded.value ?? null;
+  return {
+    frameId: recorded.frameId,
+    function: recorded.function,
+    text: value ? showValue(value, plan.state?.heap ?? {}) : null,
+  };
+}
+
+/** The error facts the recorded event carries, or null. */
+function errorOf(plan) {
+  return plan?.recordedError ?? null;
+}
+
+/**
+ * What a raised error means, from the trace's own lookahead.
+ *
+ * The distinction the learner needs is whether anything catches it: a matching
+ * `except` block means the program continues, an unwind means it leaves this
+ * frame, and no handler at all means the run ends. The wording matches the
+ * explanation card, so the two panels cannot tell different stories.
+ */
+function errorFeedback(plan) {
+  if (!plan) return null;
+  if (plan.event === "exception") {
+    const error = errorOf(plan);
+    const type = error?.type ?? "an error";
+    const message = error?.message ?? "";
+    const named = message ? `${type}: ${message}` : type;
+    if (plan.exceptionOutcome === "handled") {
+      return {
+        kind: "error",
+        text: `Raises ${type}`,
+        explanation: `Python raises ${named}. A matching except block catches it, so the program can continue.`,
+      };
+    }
+    if (plan.exceptionOutcome === "propagated") {
+      return {
+        kind: "error",
+        text: `Raises ${type}`,
+        explanation: `Python raises ${named}. No handler caught it here, so it passes outward to the caller.`,
+      };
+    }
+    if (plan.exceptionOutcome === "uncaught") {
+      return {
+        kind: "error",
+        text: `Raises ${type}`,
+        explanation: `Python raises ${named}. Nothing catches it, so the run ends with this error.`,
+      };
+    }
+    return {
+      kind: "error",
+      text: `Raises ${type}`,
+      explanation: `Python raises ${named}.`,
+    };
+  }
+  if (plan.event === "unwind") {
+    const name = plan.eventFunction;
+    return {
+      kind: "error",
+      text: name ? `Error leaves ${name}` : "Error spreads",
+      explanation:
+        name && name !== "<module>"
+          ? `The error passes out of ${name}(), so that call stops without finishing its work.`
+          : "The error reaches the end of the program.",
+    };
+  }
+  if (plan.event === "error") {
+    const error = errorOf(plan);
+    const type = error?.type ?? "an error";
+    const message = error?.message ?? "";
+    return {
+      kind: "error",
+      text: error?.phase === "compile" ? `Cannot run: ${type}` : `Stops: ${type}`,
+      explanation:
+        error?.phase === "compile"
+          ? `Python rejected the code before anything ran${message ? `: ${message}` : ""}.`
+          : `The run ended with ${type}${message ? `: ${message}` : ""}.`,
+    };
+  }
+  return null;
+}
+
 function flagsFor(plan) {
   const entering = new Set();
   const exiting = new Set();
@@ -166,11 +262,17 @@ function slotView(slot, flags) {
   };
 }
 
-function frameView(frame, flags) {
+function frameView(frame, flags, returned) {
+  const ownsReturn =
+    returned !== null &&
+    (returned.frameId !== null
+      ? returned.frameId === frame.frameId
+      : returned.function === frame.function);
   return {
     ...frame,
     entering: flags.entering.has(frame.key),
     highlighted: flags.highlighted.has(frame.key),
+    returned: ownsReturn ? returned : null,
     variables: frame.variables.map((variable) => variableView(variable, flags)),
   };
 }
@@ -198,6 +300,9 @@ function objectView(object, flags) {
  */
 export function operationFeedback(plan) {
   if (!plan) return null;
+  // A raised error is the step's meaning, whatever else it changed.
+  const error = errorFeedback(plan);
+  if (error) return error;
   // A recorded comparison is a real step of its own, so it gets its own
   // headline even though it produced no state action.
   const comparison = comparisonOf(plan);
@@ -321,13 +426,13 @@ export function operationFeedback(plan) {
     };
   }
 
-  const returned = find((operation) => operation.action?.kind === "return");
+  const returned = plan.returned;
   if (returned) {
-    const value = returned.action.payload?.value;
+    const value = returned.value ? showValue(returned.value, plan.state?.heap ?? {}) : null;
     return {
       kind: "return",
-      text: value ? `return ${toText(value)}` : "return",
-      explanation: value ? `The call hands back ${toText(value)}.` : "The call finishes.",
+      text: value ? `return ${value}` : "return",
+      explanation: value ? `The call hands back ${value}.` : "The call finishes.",
     };
   }
 
@@ -364,6 +469,7 @@ export function motionView(plan) {
   const previous = flatten(previousNodes);
   const flags = flagsFor(plan);
   const feedback = operationFeedback(plan);
+  const returned = returnOf(plan);
 
   // A seek, reset, hold or reduced-motion presentation renders the exact
   // target directly. Only a real adjacent animation may show a removed node.
@@ -388,7 +494,7 @@ export function motionView(plan) {
     feedback,
     comparison: comparisonOf(plan),
     explanation: feedback?.explanation ?? null,
-    frames: plan.nodes.frames.map((frame) => frameView(frame, flags)),
+    frames: plan.nodes.frames.map((frame) => frameView(frame, flags, returned)),
     objects: plan.nodes.objects.map((object) => objectView(object, flags)),
     ghosts,
     moves: flags.moves,
