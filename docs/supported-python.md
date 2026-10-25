@@ -10,7 +10,7 @@ construct is not in the table, it has no test behind it — the tracer may still
 handle it, but only the trace itself is promised, never a particular
 explanation.
 
-Trace format version 2 (`docs/trace-format.md`), traced by `tracer-poc/tracer.py`
+Trace format version 3 (`docs/trace-format.md`), traced by `tracer-poc/tracer.py`
 inside Pyodide in the browser.
 
 ## Statuses
@@ -74,6 +74,22 @@ inside Pyodide in the browser.
 | safety limits | a loop that never ends is stopped at the step limit | `limit-steps` | stopped |
 | safety limits | one enormous print is stopped at the output limit | `limit-output` | stopped |
 | safety limits | a program that waits is stopped on the clock | `limit-timeout` | stopped |
+
+## Comparisons
+
+A comparison is recorded as its own event with its two operands, the operator and, when it
+really produced one, a boolean outcome. That is what lets the visualizer mark the two cells
+that were compared instead of guessing them from the source line.
+
+| Case | What you get |
+| --- | --- |
+| `a > b`, `a[i] < a[j]`, `x in xs`, `a is b` | One `compare` event per evaluation, with both operands and their cells |
+| A custom rich comparison | The operands and operator, `result: null`; the object it returned is never truth-tested |
+| A comparison that raises | The operands and operator, `result: null`, then the exception events |
+| A chained comparison (`a < b < c`) | No `compare` event; the comparison runs exactly as written |
+| An operand containing `yield`, `yield from` or `await` | No `compare` event |
+
+Comparisons add events but not steps: the step counter still counts source lines.
 
 ## Limits, and what the app says instead
 

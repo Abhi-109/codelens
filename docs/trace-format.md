@@ -1,4 +1,4 @@
-# CodeLens Trace Format (version 2)
+# CodeLens Trace Format (version 3)
 
 ## 1. Overview
 
@@ -10,7 +10,7 @@ The tracer that produces this format lives in `tracer-poc/tracer.py`.
 
 | Field | Type | Description |
 |---|---|---|
-| `format_version` | Integer | Always `2` for this version of the format |
+| `format_version` | Integer | Always `3` for this version of the format |
 | `status` | String | Overall execution status (see below) |
 | `steps` | Integer | Number of `line` events recorded |
 | `trace` | Array | Ordered list of execution events |
@@ -48,6 +48,7 @@ The tracer that produces this format lives in `tracer-poc/tracer.py`.
 | `unwind` | A frame exited because an exception propagated out of it |
 | `output` | Text was written to standard output |
 | `input` | The program read a value with `input()` |
+| `compare` | One supported comparison ran (operands, operator, outcome) |
 | `step_limit` | The step limit stopped the run |
 | `timeout` | The time limit stopped the run |
 | `output_limit` | The output limit stopped the run |
@@ -95,6 +96,31 @@ Each entry in `frames`:
 
 Input is echoed into `output` like a real terminal, so `output` always tells the whole story of what the user would see.
 
+### Comparison events
+
+`compare` records one comparison that really ran. It has its own cursor position, so a reader can see the two operands and the outcome *before* the mutation that may follow. It carries **no state snapshot**: a comparison changes no state, so the visible state is still the previous `line` event's snapshot.
+
+| Field | Type | Description |
+|---|---|---|
+| `step` | Integer | Index of this event in `trace` |
+| `event` | String | `compare` |
+| `function` | String or null | Function the comparison ran in; `<module>` at module level |
+| `frame_id` | Integer or null | Frame the comparison ran in |
+| `line` | Integer | Source line of the comparison itself; for a multi-line expression, the line it starts on |
+| `operator` | String | `<`, `<=`, `>`, `>=`, `==`, `!=`, `is`, `is not`, `in`, `not in` |
+| `operands` | Array | Exactly two, in evaluation order: `{value, cell}` |
+| `result` | Boolean or null | `true` or `false` only when the comparison produced that bool; `null` for an object result (a custom rich comparison) or a comparison that raised |
+| `heap` | Object | Only the objects the operand values reference, so every `value` reference resolves inside this event |
+
+`cell` is `{object_id, index}` when the operand was read with a subscript from a container the trace already knows (`numbers[j]`), and `null` otherwise. That is the evidence a pair of list positions was compared: the tracer never infers a position from neighbouring elements or from the source text.
+
+What is captured, and what is not:
+
+* a single comparison is captured whole. **Chained comparisons are not captured** (`a < b < c`): splitting the node would change how many times each operand is evaluated and break its short-circuit;
+* comparisons whose operands contain `yield`, `yield from` or `await` are not captured;
+* operands are evaluated once, in source order, and the comparison runs once. The result object is returned untouched, so a comparison whose result is not a bool is never truth-tested just to display it;
+* a comparison that raises still records its operands and operator with `result: null`, and the exception follows as its own events.
+
 ### Limit events
 
 `step_limit`, `timeout`, and `output_limit` carry `step`, `event`, `message`, and `limit`. The `error` event carries `step`, `event`, and the fields of the top-level `error` object.
@@ -141,6 +167,7 @@ Object ids are stable within a run: `o1`, `o2`, and so on, assigned in first-see
 - **One-step lag.** A `line` event fires *before* its line runs, so its `variables` show the state *before* the line takes effect. This is deliberate: the visualizer can highlight the line about to run and show what it will read.
 - **Determinism.** Sets are listed in sorted order, so the same program always produces the same trace.
 - **Frame ordering.** `frames` is oldest first, matching a call stack drawn bottom-up.
+- **Comparisons sit between lines.** A `compare` event comes after the `line` event of the line that ran it and before the next `line` event. It changes no state, so the state at a `compare` index is the previous state-bearing event's snapshot, and `steps` (which counts `line` events) is unaffected.
 
 ## 6. Limits
 
@@ -152,6 +179,10 @@ Object ids are stable within a run: `o1`, `o2`, and so on, assigned in first-see
 | Characters per string | 120 | Longer values are truncated |
 | Heap objects per snapshot | 150 | Further objects become `other` with `repr: "…"` |
 | Output characters | 10,000 | An `output_limit` stop |
+
+Comparisons add events, not steps: a loop whose condition is a comparison produces one
+`compare` event per check. Those events carry only their operands, never a full
+snapshot, which keeps that growth small.
 
 These limits keep traces small enough to visualize and stop runaway programs. The step limit is not a time limit and does not by itself guarantee protection against every possible form of resource exhaustion; a bare `except:` or `except BaseException:` in user code can swallow the stop, so the tracer should run inside a Web Worker that can be terminated on a timeout.
 

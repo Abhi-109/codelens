@@ -185,5 +185,136 @@ class TracerTests(unittest.TestCase):
         json.dumps(r)
 
 
+class ComparisonEventTests(unittest.TestCase):
+    """Compare events: real operands, real operator, never an invented outcome."""
+
+    def test_a_comparison_gets_its_own_step_between_the_two_lines(self):
+        r = run_trace("xs = [5, 2]\nif xs[0] > xs[1]:\n    pass\n")
+        self.assertEqual(r["format_version"], 3)
+        compares = events(r, "compare")
+        self.assertEqual(len(compares), 1)
+        compare = compares[0]
+        self.assertEqual(compare["operator"], ">")
+        self.assertEqual(compare["line"], 2)
+        self.assertIs(compare["result"], True)
+        # It sits after the line event of the line that ran it, before the next.
+        self.assertEqual(r["trace"][compare["step"] - 1]["event"], "line")
+        self.assertEqual(r["trace"][compare["step"] - 1]["line"], 2)
+        self.assertEqual(r["trace"][compare["step"] + 1]["event"], "line")
+        # The operands and the cells they came from are the recorded ones.
+        xs_id = r["trace"][compare["step"] - 1]["frames"][-1]["variables"]["xs"]["id"]
+        self.assertEqual(
+            [
+                (operand["cell"]["object_id"], operand["cell"]["index"])
+                for operand in compare["operands"]
+            ],
+            [(xs_id, 0), (xs_id, 1)],
+        )
+        self.assertEqual(
+            [operand["value"] for operand in compare["operands"]],
+            [{"type": "int", "value": 5}, {"type": "int", "value": 2}],
+        )
+        # A comparison changes no state, so it carries no snapshot of its own.
+        self.assertNotIn("frames", compare)
+        self.assertEqual(compare["heap"], {})
+        self.assertEqual(r["steps"], sum(1 for e in r["trace"] if e["event"] == "line"))
+
+    def test_a_swap_is_preceded_by_the_comparison_that_caused_it(self):
+        src = (
+            "numbers = [4, 2]\n"
+            "if numbers[0] > numbers[1]:\n"
+            "    numbers[0], numbers[1] = numbers[1], numbers[0]\n"
+        )
+        r = run_trace(src)
+        compare = events(r, "compare")[0]
+        self.assertIs(compare["result"], True)
+        object_id = compare["operands"][0]["cell"]["object_id"]
+        # The swap itself shows up in the next recorded state.
+        swapped = next(
+            event
+            for event in r["trace"]
+            if [item.get("value") for item in event["heap"].get(object_id, {}).get("items", [])]
+            == [2, 4]
+        )
+        self.assertGreater(swapped["step"], compare["step"])
+        self.assertEqual(swapped["line"], 3)
+
+    def test_a_non_boolean_result_is_recorded_without_a_verdict(self):
+        src = (
+            "class Result:\n"
+            "    def __init__(self):\n"
+            "        self.tests = 0\n"
+            "    def __bool__(self):\n"
+            "        self.tests += 1\n"
+            "        return True\n"
+            "class Thing:\n"
+            "    def __gt__(self, other):\n"
+            "        return Result()\n"
+            "value = Thing() > 0\n"
+            "print(value.tests)\n"
+        )
+        r = run_trace(src)
+        compare = events(r, "compare")[0]
+        self.assertIsNone(compare["result"], "a non-bool result must stay undecided")
+        self.assertEqual(r["output"], "0\n", "the tracer truth-tested the result")
+
+    def test_a_comparison_that_raises_keeps_its_operands_and_no_outcome(self):
+        r = run_trace('a = 1\nb = "x"\nc = a > b\n')
+        compare = events(r, "compare")[0]
+        self.assertIsNone(compare["result"])
+        self.assertEqual(compare["operator"], ">")
+        self.assertEqual(
+            [operand["value"] for operand in compare["operands"]],
+            [{"type": "int", "value": 1}, {"type": "str", "value": "x"}],
+        )
+        self.assertEqual(r["status"], "error")
+        self.assertEqual(r["error"]["type"], "TypeError")
+        self.assertEqual(r["error"]["line"], 3)
+        self.assertGreater(events(r, "exception")[0]["step"], compare["step"])
+
+    def test_chained_comparisons_are_not_captured(self):
+        r = run_trace("x = 1 < 2 < 3\n")
+        self.assertEqual(events(r, "compare"), [])
+        self.assertEqual(r["status"], "completed")
+        self.assertEqual(
+            events(r, "return")[-1]["frames"][-1]["variables"]["x"],
+            {"type": "bool", "value": True},
+        )
+
+    def test_operands_are_evaluated_once_and_in_order(self):
+        src = (
+            "log = []\n"
+            "def take(value):\n"
+            "    log.append(value)\n"
+            "    return value\n"
+            "ok = take(5) > take(2)\n"
+            "print(log)\n"
+        )
+        r = run_trace(src)
+        self.assertEqual(r["output"], "[5, 2]\n")
+        compare = events(r, "compare")[0]
+        self.assertEqual(
+            [operand["value"]["value"] for operand in compare["operands"]], [5, 2]
+        )
+
+    def test_membership_and_identity_keep_their_own_meaning(self):
+        r = run_trace("xs = [1, 2]\na = 2 in xs\nb = xs is xs\n")
+        compares = events(r, "compare")
+        self.assertEqual([c["operator"] for c in compares], ["in", "is"])
+        self.assertEqual([c["result"] for c in compares], [True, True])
+        list_operand = compares[1]["operands"][0]["value"]
+        self.assertEqual(list_operand["type"], "ref")
+        self.assertIn(list_operand["id"], compares[1]["heap"], "the operand ref must resolve")
+
+    def test_comparisons_do_not_consume_steps(self):
+        r = run_trace("n = 0\nwhile n < 3:\n    n = n + 1\n")
+        compares = events(r, "compare")
+        self.assertEqual(len(compares), 4, "three true checks and the closing false one")
+        self.assertEqual(r["steps"], sum(1 for e in r["trace"] if e["event"] == "line"))
+        self.assertEqual(r["steps"], 8)
+        for compare in compares:
+            self.assertNotIn("frames", compare)
+
+
 if __name__ == "__main__":
     unittest.main()

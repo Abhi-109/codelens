@@ -29,10 +29,18 @@ const EXPECTED = {
 
 const pyodide = await loadPyodide();
 pyodide.FS.writeFile("/tracer.py", readFileSync(join(tracerDir, "tracer.py"), "utf8"));
+pyodide.FS.writeFile(
+  "/comparisons.py",
+  readFileSync(join(tracerDir, "comparisons.py"), "utf8"),
+);
 pyodide.FS.writeFile("/flowchart.py", readFileSync(join(tracerDir, "flowchart.py"), "utf8"));
 pyodide.FS.writeFile("/analyze.py", readFileSync(join(tracerDir, "analyze.py"), "utf8"));
 await pyodide.runPythonAsync(
   "import sys, importlib.util\n"
+    + "cmp_spec = importlib.util.spec_from_file_location('comparisons', '/comparisons.py')\n"
+    + "cmp = importlib.util.module_from_spec(cmp_spec)\n"
+    + "sys.modules['comparisons'] = cmp\n"
+    + "cmp_spec.loader.exec_module(cmp)\n"
     + "spec = importlib.util.spec_from_file_location('tracer', '/tracer.py')\n"
     + "tracer = importlib.util.module_from_spec(spec)\n"
     + "spec.loader.exec_module(tracer)\n"
@@ -65,11 +73,19 @@ let failed = 0;
 for (const name of Object.keys(EXPECTED).sort()) {
   const source = readFileSync(join(exampleDir, name), "utf8");
   const parsed = JSON.parse(runTraceJson(source));
-  const ok = parsed.status === "completed" && parsed.output === EXPECTED[name];
+  const compares = parsed.trace.filter((event) => event.event === "compare");
+  const ok =
+    parsed.status === "completed" &&
+    parsed.output === EXPECTED[name] &&
+    // The rewrite runs inside Pyodide too, so the browser gets format 3 with
+    // real comparisons rather than a silently different runtime.
+    parsed.format_version === 3 &&
+    (name !== "09_bubble_sort.py" || compares.length > 0);
   if (!ok) failed += 1;
   const detail = ok
-    ? `${parsed.steps} steps`
-    : `status=${parsed.status} output=${JSON.stringify(parsed.output)}`;
+    ? `${parsed.steps} steps, ${compares.length} compares`
+    : `status=${parsed.status} output=${JSON.stringify(parsed.output)} `
+      + `version=${parsed.format_version} compares=${compares.length}`;
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}  (${detail})`);
 
   const flow = JSON.parse(buildFlowchartJson(source));

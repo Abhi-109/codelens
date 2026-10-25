@@ -211,9 +211,8 @@ after that.
 Three suites, all of which should pass on every commit:
 
 ```bash
-npm run test:tracer   # 125 Python tests: the tracer, the comparison-capture proof of
-                      # concept, the flowchart model, the static program profile and the
-                      # corpus
+npm run test:tracer   # 133 Python tests: the tracer and its comparison events, the
+                      # flowchart model, the static program profile and the corpus
 npm run test:js       # 688 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6

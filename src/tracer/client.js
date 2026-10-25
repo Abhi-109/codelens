@@ -4,6 +4,7 @@
 // profile) load the same way.
 
 import tracerSource from "../../tracer-poc/tracer.py?raw";
+import comparisonsSource from "../../tracer-poc/comparisons.py?raw";
 import flowchartSource from "../../tracer-poc/flowchart.py?raw";
 import analyzeSource from "../../tracer-poc/analyze.py?raw";
 
@@ -45,6 +46,7 @@ function ensureWorker() {
   worker.postMessage({
     type: "init",
     tracerSource,
+    comparisonsSource,
     flowchartSource,
     analyzeSource,
     indexURL: INDEX_URL,

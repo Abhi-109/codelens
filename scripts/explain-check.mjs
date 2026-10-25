@@ -32,8 +32,16 @@ const EXAMPLES = [
 
 const pyodide = await loadPyodide();
 pyodide.FS.writeFile("/tracer.py", readFileSync(join(tracerDir, "tracer.py"), "utf8"));
+pyodide.FS.writeFile(
+  "/comparisons.py",
+  readFileSync(join(tracerDir, "comparisons.py"), "utf8"),
+);
 await pyodide.runPythonAsync(
   "import sys, importlib.util\n"
+    + "cmp_spec = importlib.util.spec_from_file_location('comparisons', '/comparisons.py')\n"
+    + "cmp = importlib.util.module_from_spec(cmp_spec)\n"
+    + "sys.modules['comparisons'] = cmp\n"
+    + "cmp_spec.loader.exec_module(cmp)\n"
     + "spec = importlib.util.spec_from_file_location('tracer', '/tracer.py')\n"
     + "tracer = importlib.util.module_from_spec(spec)\n"
     + "spec.loader.exec_module(tracer)\n"

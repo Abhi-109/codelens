@@ -1,5 +1,5 @@
 """
-CodeLens tracer (trace format version 2)
+CodeLens tracer (trace format version 3)
 
 Runs a string of Python source code and records everything that happens as a
 JSON-friendly dictionary:
@@ -23,6 +23,11 @@ Events (every event has "step", its index in the trace, and "event")
     unwind      a frame exited because an exception propagated out of it
     output      text was printed          (text, frame_id, line)
     input       the program read a value  (prompt, text, frame_id, line)
+    compare     one supported comparison ran (operator, operands, result, line).
+                It carries its own cursor position so the operands and the
+                outcome can be shown before the mutation that follows it. No
+                frames or state heap: a comparison changes no state, so the
+                current snapshot is still the previous line event's.
     step_limit / timeout / output_limit   a safety limit stopped the run
     error       the run ended with an error
 
@@ -45,6 +50,11 @@ Notes and known limits
       step-limit stop. Run this inside a Web Worker and terminate it on a
       timeout as a second line of defence.
     * Sets are listed in sorted order so traces are deterministic.
+    * Comparisons are captured by rewriting the user's syntax tree before it is
+      compiled (see comparisons.py): operands keep their order and are evaluated
+      once, the comparison runs once, and its own result object is returned. The
+      rewrite adds no line events, and it is the only instrumentation the tracer
+      performs on user code.
 """
 
 import ast
@@ -58,7 +68,9 @@ import time
 import types
 from contextlib import redirect_stdout
 
-FORMAT_VERSION = 2
+import comparisons
+
+FORMAT_VERSION = 3
 FLOWCHART_VERSION = 1
 USER_FILE = "<user>"
 
@@ -107,6 +119,16 @@ class _Values:
             self._ids[key] = f"o{len(self._ids) + 1}"
             self._keep.append(obj)
         return self._ids[key]
+
+    def existing_id(self, obj):
+        """The id this object already has, or None if no snapshot has shown it.
+
+        Used for a comparison's operand cell: a container the trace has never
+        serialized is not a cell the canvas can draw, and allocating an id for a
+        short-lived temporary (a literal inside a hot loop) would only grow the
+        id table.
+        """
+        return self._ids.get(id(obj))
 
     def value(self, obj, heap):
         kind = type(obj)
@@ -423,6 +445,56 @@ class _Tracer:
             "prompt": prompt, "text": text, "frame_id": frame_id, "line": line,
         })
 
+    def compare(self, operator_text, line, left, right):
+        """Sink for an instrumented comparison; returns its real result.
+
+        The event is appended *before* the comparison runs, so a comparison that
+        raises still shows its operands and operator with `result: None` instead
+        of a fabricated outcome. Describing the operands can never change what
+        the program does: if the tracer cannot describe them, it records nothing
+        and the comparison runs anyway.
+        """
+        event = None
+        try:
+            event = self._compare_event(operator_text, line, left, right)
+        except Exception:  # introspection must not become a user-visible error
+            event = None
+        result = comparisons.compare_values(operator_text, left, right)
+        if event is not None:
+            event["result"] = comparisons.outcome(result)
+        return result
+
+    def _compare_event(self, operator_text, line, left, right):
+        heap = {}
+        operands = []
+        for operand in (left, right):
+            cell = None
+            if isinstance(operand, comparisons.Operand) and operand.container is not None:
+                object_id = self.values.existing_id(operand.container)
+                if object_id is not None:
+                    cell = {"object_id": object_id, "index": operand.index}
+            operands.append({
+                "value": self.values.value(comparisons.operand_value(operand), heap),
+                "cell": cell,
+            })
+        entry = self.stack[-1] if self.stack else None
+        # No frames and no state heap: a comparison changes no state, so the
+        # renderer keeps showing the previous line event's snapshot and these
+        # events stay small in a long trace.
+        event = {
+            "step": len(self.trace),
+            "event": "compare",
+            "function": entry["function"] if entry else None,
+            "frame_id": entry["frame_id"] if entry else None,
+            "line": line,
+            "operator": operator_text,
+            "operands": operands,
+            "result": None,
+            "heap": heap,
+        }
+        self.trace.append(event)
+        return event
+
 
 def _error_line(tb):
     """Line number, in the user's code, where the exception happened."""
@@ -453,9 +525,11 @@ def run_trace(source, max_steps=1500, max_seconds=5.0, inputs=None):
     def add_error_event():
         tracer.trace.append({"step": len(tracer.trace), "event": "error", **error})
 
-    # Syntax errors are reported before anything runs.
+    # Syntax errors are reported before anything runs. The tree is rewritten for
+    # comparison capture first; every new node keeps the location of the node it
+    # replaces, so line events and tracebacks still point at the same source.
     try:
-        code = compile(source, USER_FILE, "exec")
+        code = compile(comparisons.instrument(source), USER_FILE, "exec")
     except (SyntaxError, ValueError) as exc:
         status = "error"
         error = {
@@ -484,7 +558,7 @@ def run_trace(source, max_steps=1500, max_seconds=5.0, inputs=None):
     try:
         sys.settrace(tracer)
         with redirect_stdout(output):
-            exec(code, {"__name__": "__main__"})
+            exec(code, {"__name__": "__main__", **comparisons.namespace(tracer.compare)})
     except _StopTrace as stop:
         status = stop.reason
         extra = {"limit": stop.limit} if stop.limit is not None else {}

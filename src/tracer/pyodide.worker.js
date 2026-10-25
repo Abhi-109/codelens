@@ -21,11 +21,19 @@ function getPyodide() {
       );
       const pyodide = await loadPyodide({ indexURL: init.indexURL });
       pyodide.FS.writeFile("/tracer.py", init.tracerSource);
+      pyodide.FS.writeFile("/comparisons.py", init.comparisonsSource);
       pyodide.FS.writeFile("/flowchart.py", init.flowchartSource);
       pyodide.FS.writeFile("/analyze.py", init.analyzeSource);
       await pyodide.runPythonAsync(`
 import importlib.util
 import json
+import sys
+
+# comparisons.py is imported by tracer.py, so it is loaded and registered first.
+cmp_spec = importlib.util.spec_from_file_location("comparisons", "/comparisons.py")
+cmp = importlib.util.module_from_spec(cmp_spec)
+sys.modules["comparisons"] = cmp
+cmp_spec.loader.exec_module(cmp)
 
 spec = importlib.util.spec_from_file_location("tracer", "/tracer.py")
 tracer = importlib.util.module_from_spec(spec)

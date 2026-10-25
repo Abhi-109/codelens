@@ -1,5 +1,10 @@
 """
-Comparison capture (proof of concept; not yet part of the trace format).
+Comparison capture for the CodeLens tracer (trace format version 3).
+
+The tracer imports this module, rewrites the user's tree with `instrument`
+before compiling it, and passes `tracer.compare` as the sink, so each supported
+comparison becomes its own `compare` event. `Recorder` below is the same shape
+without a tracer attached, which is what the semantics tests use.
 
 Why this exists
     A trace records state, not intent. Nothing in it says which two values a
@@ -46,7 +51,7 @@ Known limitations
     * an operand is held by reference until its record is consumed, which can
       keep a temporary alive slightly longer.
 
-Usage (the caller owns policy; this module never touches the tracer)
+Usage (this module never touches the tracer; the caller owns policy)
     tree = instrument(source)
     code = compile(tree, "<user>", "exec")
     recorder = Recorder()
@@ -108,7 +113,8 @@ def read_cell(container, index):
     return Operand(container[index], container, index)
 
 
-def _value(operand):
+def operand_value(operand):
+    """The real value of an operand, whether or not it came from a cell."""
     return operand.value if isinstance(operand, Operand) else operand
 
 
@@ -118,7 +124,7 @@ def _cell(operand):
     return {"container": operand.container, "index": operand.index, "value": operand.value}
 
 
-def _outcome(result):
+def outcome(result):
     """True or False only when the comparison really produced that bool."""
     if result is True:
         return True
@@ -127,6 +133,11 @@ def _outcome(result):
     # Any other object is a comparison result we must not interpret. `is`
     # checks never call __bool__ or __eq__, so nothing here can run user code.
     return None
+
+
+def compare_values(operator_text, left, right):
+    """Perform the comparison the program asked for, exactly once."""
+    return _FUNCTIONS[operator_text](operand_value(left), operand_value(right))
 
 
 class Recorder:
@@ -139,16 +150,16 @@ class Recorder:
         record = {
             "operator": operator_text,
             "line": line,
-            "left": _value(left),
-            "right": _value(right),
+            "left": operand_value(left),
+            "right": operand_value(right),
             "cells": [cell for cell in (_cell(left), _cell(right)) if cell is not None],
             "result": None,
         }
         # Recorded before the comparison runs: an exception raised *by* the
         # comparison therefore still shows its operands, with no invented result.
         self.records.append(record)
-        result = _FUNCTIONS[operator_text](_value(left), _value(right))
-        record["result"] = _outcome(result)
+        result = compare_values(operator_text, left, right)
+        record["result"] = outcome(result)
         return result
 
 

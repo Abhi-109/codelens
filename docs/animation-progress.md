@@ -144,6 +144,43 @@ still need a real browser check; this environment has no browser automation. Com
 visualisation has no trace data; the smallest viable design for capturing operands and outcomes
 is reported and awaits a separate architectural decision. Nothing is pushed.
 
+## Comparison capture notes (format 3, landed)
+- The owner approved the design on 2026-10-25 with two decisions: a **dedicated `compare`
+  event**, so a comparison has its own cursor position and can be shown before the mutation
+  that follows, and the `format_version` 2 -> 3 bump **in the same commit** as the event, its
+  schema documentation and its tests.
+- `tracer-poc/comparisons.py` is now the tracer's own instrumentation rather than a POC:
+  `run_trace` rewrites the tree with `instrument` and passes `tracer.compare` as the sink.
+  `pyodide.worker.js` loads `/comparisons.py` and registers it in `sys.modules` before
+  `tracer.py`, which imports it; `client.js` passes the source through the existing init
+  message, so the browser path is the same one file the Python tests use.
+- The event is `{step, event: "compare", function, frame_id, line, operator, operands,
+  result, heap}`. It carries **no frames and no state snapshot**: a comparison changes no
+  state, so the renderer keeps the previous line event's snapshot, and each event stays small
+  in a long trace. `operands` are exactly two `{value, cell}` entries in evaluation order.
+  `cell` is `{object_id, index}` only when the operand was a subscript on a container the
+  trace already knows; the id is looked up without allocating a new one, so a temporary list
+  inside a loop does not grow the id table.
+- `result` is `true` or `false` only when the comparison produced that bool. It is `null` for
+  a custom rich comparison's object result (the tracer checks `is True` / `is False`, which
+  cannot run user code) and `null` when the comparison raised, in which case the operands and
+  operator are still recorded and the exception follows as its own events.
+- Steps are untouched: `steps` still counts `line` events, and a `compare` event sits between
+  the line event of the line that ran it and the next line event.
+- Corpora: the corpus golden was regenerated (only `events` moved; every `steps`, `status`,
+  output, error line and exception is unchanged), and `test_corpus.py` now validates compare
+  events like any other event (operator from the closed set, exactly two operands, resolvable
+  operand references, no snapshot, a real boolean or null result).
+- Tests: 8 in `test_tracer.py` (`ComparisonEventTests`): the event's position between lines,
+  the operands and cells matching the snapshot, the swap that follows a true comparison, a
+  non-bool result left undecided, a raising comparison keeping its operands, chained
+  comparisons not captured, operands evaluated once in order, membership/identity operators,
+  and comparisons not consuming steps. Python suite is **133 tests**.
+- **Deliberately not done yet:** the two vendored JS fixtures are still format 2, so the app
+  tests keep running on the old event sequence and the motion canvas has no compare
+  treatment. Regenerating them shifts every index-pinned JS test, so it lands with the
+  renderer commit that actually draws comparisons.
+
 ## Comparison capture notes (proof of concept, not wired in)
 - Starting point: the trace has no comparison event and no operand record. `programProfile.js`
   has static comparison *sites* (line plus operand labels taken from the AST), and

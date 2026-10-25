@@ -32,9 +32,11 @@ VALUE_TYPES = {
 }
 CONTAINER_TYPES = {"list", "tuple", "set", "dict", "object"}
 EVENT_TYPES = {
-    "call", "line", "return", "exception", "unwind", "output", "input",
+    "call", "line", "return", "exception", "unwind", "output", "input", "compare",
     "step_limit", "timeout", "output_limit", "error",
 }
+# docs/trace-format.md section 3: the operators a compare event can carry.
+COMPARE_OPERATORS = {"<", "<=", ">", ">=", "==", "!=", "is", "is not", "in", "not in"}
 STATES = {"completed", "error", "step_limit", "timeout", "output_limit", "internal_error"}
 LIMIT_EVENTS = {"step_limit": "step_limit", "timeout": "timeout", "output_limit": "output_limit"}
 BY_NAME = {case["name"]: case for case in CORPUS}
@@ -230,7 +232,9 @@ class SupportedDocTests(unittest.TestCase):
         cls.text = SUPPORTED_DOC.read_text(encoding="utf-8")
 
     def test_the_document_exists_and_names_the_version_it_describes(self):
-        self.assertIn("Trace format version 2", self.text)
+        import tracer
+
+        self.assertIn(f"Trace format version {tracer.FORMAT_VERSION}", self.text)
 
     def test_every_category_in_the_corpus_is_documented_with_a_program(self):
         for category in sorted({case["category"] for case in CORPUS}):
@@ -278,6 +282,22 @@ def check_event(test, case, event, index=None):
     for frame in event.get("frames") or []:
         for value in (frame.get("variables") or {}).values():
             check_ref(test, event, value)
+    if event["event"] == "compare":
+        test.assertIn(event.get("operator"), COMPARE_OPERATORS, where)
+        test.assertIsInstance(event.get("operator"), str, where)
+        test.assertIsNone(event.get("frames"), f"{where}: a comparison carries no state snapshot")
+        result = event.get("result")
+        test.assertTrue(result is True or result is False or result is None, where)
+        operands = event.get("operands")
+        test.assertIsInstance(operands, list, where)
+        test.assertEqual(len(operands), 2, where)
+        for operand in operands:
+            test.assertIn(operand["value"]["type"], VALUE_TYPES, where)
+            check_ref(test, event, operand["value"])
+            cell = operand.get("cell")
+            if cell is not None:
+                test.assertRegex(cell["object_id"], r"^o\d+$", where)
+                test.assertIsInstance(cell["index"], int, where)
 
 
 def check_ref(test, event, value):
