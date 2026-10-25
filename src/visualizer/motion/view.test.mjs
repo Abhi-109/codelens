@@ -513,6 +513,7 @@ const moveOf = (plan, motion) =>
   );
 
 const activeCells = (view) => allSlots(view).filter((slot) => slot.active);
+const compareCells = (view) => allSlots(view).filter((slot) => slot.compare);
 const keysOf = (slots) => slots.map((slot) => slot.key).sort();
 const indicesOf = (slots) => slots.map((slot) => slot.index).sort((a, b) => a - b);
 
@@ -600,13 +601,15 @@ test("no recorded operation or comparison means no active cell, on any fixture",
     (candidate) => candidate.index > 0 && candidate.operations.length === 0,
   );
   assert.deepEqual(activeCells(motionView(held.plan)), []);
+  assert.deepEqual(compareCells(motionView(held.plan)), []);
 
   for (const name of MATRIX) {
     const p = program(name);
     for (let index = 1; index < p.trace.length; index += 1) {
       const plan = planAt(p, index);
       if (!plan) continue;
-      const named = new Set(comparisonOf(plan)?.cells ?? []);
+      const recordedCompare = new Set(comparisonOf(plan)?.cells ?? []);
+      const named = new Set(recordedCompare);
       for (const operation of plan.operations) {
         if (operation.op === MOTION_OPERATION.move) {
           for (const cell of operation.action?.payload?.indices ?? []) {
@@ -618,6 +621,12 @@ test("no recorded operation or comparison means no active cell, on any fixture",
       }
       for (const slot of activeCells(motionView(plan))) {
         assert.ok(named.has(slot.key), `${name} step ${index} invents ${slot.key}`);
+      }
+      for (const slot of compareCells(motionView(plan))) {
+        assert.ok(
+          recordedCompare.has(slot.key),
+          `${name} step ${index} invents comparison cell ${slot.key}`,
+        );
       }
     }
   }
@@ -632,10 +641,14 @@ test("a verified swap reports the real indices and the values that move", () => 
   const before = plan.previousState.heap[swap.action.target.objectId].items;
 
   assert.equal(view.feedback.kind, "swap");
-  assert.ok(view.feedback.text.startsWith(`swap [${left}]`), view.feedback.text);
+  assert.ok(view.feedback.text.startsWith(`Swap [${left}]`), view.feedback.text);
   assert.ok(view.feedback.text.includes(`↔ [${right}]`), view.feedback.text);
   assert.ok(view.feedback.text.includes(showValue(before[left], plan.previousState.heap)));
   assert.ok(view.feedback.text.includes(showValue(before[right], plan.previousState.heap)));
+  assert.equal(
+    view.explanation,
+    `${showValue(before[left], plan.previousState.heap)} and ${showValue(before[right], plan.previousState.heap)} exchange places.`,
+  );
 
   // Backward playback replays the same verified pair, so it is still a swap.
   const backwardPlan = planMotion(p.trace, index - 1, {
@@ -648,8 +661,15 @@ test("a verified swap reports the real indices and the values that move", () => 
   assert.ok(backSwap, "the inverse of a swap is the same swap");
   assert.deepEqual(backSwap.action.payload.indices, [left, right]);
   assert.equal(backward.feedback.kind, "swap");
-  assert.ok(backward.feedback.text.startsWith(`swap [${left}]`), backward.feedback.text);
+  assert.ok(backward.feedback.text.startsWith(`Swap [${left}]`), backward.feedback.text);
   assert.ok(backward.feedback.text.includes(`↔ [${right}]`), backward.feedback.text);
+  for (const value of [
+    showValue(before[left], plan.previousState.heap),
+    showValue(before[right], plan.previousState.heap),
+  ]) {
+    assert.ok(backward.explanation.includes(value), backward.explanation);
+  }
+  assert.match(backward.explanation, / exchange places\.$/);
 });
 
 test("shifts, appends and removals use the recorded index and value", () => {
@@ -661,6 +681,10 @@ test("shifts, appends and removals use the recorded index and value", () => {
   assert.equal(
     shiftView.feedback.text,
     `shift [${origin}] ${showValue(shift.action.to, shifted.plan.previousState.heap)} → [${destination}]`,
+  );
+  assert.equal(
+    shiftView.explanation,
+    `The value at index ${origin} moves to index ${destination}.`,
   );
 
   const appended = findPlan("list-basics", (candidate) =>
@@ -701,6 +725,13 @@ test("value changes, calls and returns say exactly what the trace proves", () =>
   assert.equal(cellView.feedback.kind, "change");
   assert.ok(cellView.feedback.text.startsWith(`[${cellOp.target.index}] `), cellView.feedback.text);
   assert.ok(cellView.feedback.text.includes("→"), cellView.feedback.text);
+  assert.equal(
+    cellView.explanation,
+    `The value at index ${cellOp.target.index} changed from ${showValue(
+      cellOp.action.from,
+      cellChange.plan.previousState.heap,
+    )} to ${showValue(cellOp.action.to, cellChange.plan.state.heap)}.`,
+  );
 
   const variableChange = findPlan("bubble-sort", (candidate) =>
     candidate.operations.some(
@@ -738,6 +769,10 @@ test("value changes, calls and returns say exactly what the trace proves", () =>
   const callOp = called.plan.operations.find((operation) => operation.action?.kind === "call");
   assert.equal(motionView(called.plan).feedback.kind, "call");
   assert.equal(motionView(called.plan).feedback.text, `call ${callOp.action.payload.function}`);
+  assert.equal(
+    motionView(called.plan).explanation,
+    `${callOp.action.payload.function}() starts running.`,
+  );
 
   const returned = findPlan("function-basic", (candidate) =>
     candidate.operations.some((operation) => operation.action?.kind === "return"),
@@ -832,7 +867,8 @@ test("a recorded comparison rings its cells and reports only what it compared", 
       .join(` ${event.operator} `);
 
     assert.equal(view.feedback.kind, "compare");
-    assert.equal(view.feedback.text, `compare ${pair}${event.result ? " → True" : " → False"}`);
+    assert.equal(view.feedback.text, `Compare ${pair}${event.result ? " → True" : " → False"}`);
+    assert.ok(view.explanation.endsWith("."), view.explanation);
     assert.equal(view.line, event.line, "the head names the compared line");
     assert.equal(view.lineText, p.source.split(/\r?\n/)[event.line - 1].trim());
 
@@ -842,6 +878,7 @@ test("a recorded comparison rings its cells and reports only what it compared", 
     assert.deepEqual(view.changed, []);
     assert.deepEqual(view.ghosts, []);
     assert.equal(view.animate, false);
+    assert.deepEqual(keysOf(activeCells(view)), [], "a comparison is not the blue operation");
 
     // Only the operand cells at visible list positions are ringed.
     const expected = event.operands.flatMap((operand) => {
@@ -852,8 +889,28 @@ test("a recorded comparison rings its cells and reports only what it compared", 
       if (cell.index >= object.items.length) return [];
       return [`cell:${cell.object_id}:${cell.index}`];
     });
-    assert.deepEqual(keysOf(activeCells(view)), [...new Set(expected)].sort());
+    assert.deepEqual(keysOf(compareCells(view)), [...new Set(expected)].sort());
   }
+
+  assert.equal(
+    motionView(compares[0].plan).explanation,
+    "4 is greater than 2.",
+    "the sentence is built from the recorded operands and operator",
+  );
+  const falseCompare = compares.find(({ plan }) => plan.compareEvent.result === false);
+  assert.equal(motionView(falseCompare.plan).explanation, "4 is not greater than 5.");
+});
+
+test("a comparison is gold evidence, a swap is the blue operation", () => {
+  const compare = comparePlans("bubble-sort")[0];
+  const compareView = motionView(compare.plan);
+  assert.deepEqual(keysOf(activeCells(compareView)), [], "a compare step is never a swap");
+  assert.ok(compareCells(compareView).length > 0, "the operands are ringed");
+
+  const { plan } = findPlan("bubble-sort", (candidate) => Boolean(moveOf(candidate, "swap")));
+  const swapView = motionView(plan);
+  assert.deepEqual(compareCells(swapView), [], "a swap carries no comparison ring");
+  assert.ok(activeCells(swapView).length > 0, "the swapped cells are the operation");
 });
 
 test("a comparison with no recorded verdict invents no answer", () => {
@@ -864,7 +921,8 @@ test("a comparison with no recorded verdict invents no answer", () => {
   const view = motionView(nullResult.plan);
   assert.equal(view.feedback.kind, "compare");
   assert.ok(!view.feedback.text.includes("→"), view.feedback.text);
-  assert.deepEqual(keysOf(activeCells(view)), ["cell:o1:0", "cell:o1:1"]);
+  assert.match(view.explanation, /produced no True or False\.$/);
+  assert.deepEqual(keysOf(compareCells(view)), ["cell:o1:0", "cell:o1:1"]);
 });
 
 test("a comparison prints a referenced operand from its own recorded heap", () => {
@@ -880,8 +938,9 @@ test("a comparison prints a referenced operand from its own recorded heap", () =
   const view = motionView(planAt(p, found));
 
   assert.ok(view.feedback.text.includes(pair), view.feedback.text);
+  assert.match(view.explanation, / is in /);
   assert.deepEqual(
-    activeCells(view),
+    compareCells(view),
     [],
     "a membership operand has no cell, so nothing is ringed",
   );
@@ -894,7 +953,8 @@ test("backward playback and seeking reconstruct the same comparison", () => {
     const other = motionView(planAt(p, index, { previousIndex }));
     assert.equal(other.feedback.kind, "compare");
     assert.equal(other.feedback.text, expected.feedback.text);
-    assert.deepEqual(keysOf(activeCells(other)), keysOf(activeCells(expected)));
+    assert.equal(other.explanation, expected.explanation);
+    assert.deepEqual(keysOf(compareCells(other)), keysOf(compareCells(expected)));
     assert.deepEqual(other.moves, []);
     assert.deepEqual(other.changed, []);
   }
@@ -911,16 +971,16 @@ test("a comparison never rings a cell its own evidence cannot place", () => {
       operands: [{ ...event.operands[0], cell }, event.operands[1]],
     },
   });
-  const active = (cell) => keysOf(activeCells(motionView(withFirstCell(cell))));
+  const compare = (cell) => keysOf(compareCells(motionView(withFirstCell(cell))));
 
-  assert.deepEqual(active(null), [second], "a scalar operand names no cell");
-  assert.deepEqual(active({ object_id: "o1", index: -1 }), [second]);
-  assert.deepEqual(active({ object_id: "o1", index: 1.5 }), [second]);
-  assert.deepEqual(active({ object_id: "o999", index: 0 }), [second]);
-  assert.deepEqual(active({ object_id: "o1", index: 999 }), [second]);
+  assert.deepEqual(compare(null), [second], "a scalar operand names no cell");
+  assert.deepEqual(compare({ object_id: "o1", index: -1 }), [second]);
+  assert.deepEqual(compare({ object_id: "o1", index: 1.5 }), [second]);
+  assert.deepEqual(compare({ object_id: "o999", index: 0 }), [second]);
+  assert.deepEqual(compare({ object_id: "o1", index: 999 }), [second]);
   assert.deepEqual(
-    active(event.operands[0].cell),
-    keysOf(activeCells(motionView(base))),
+    compare(event.operands[0].cell),
+    keysOf(compareCells(motionView(base))),
     "the untouched evidence still rings both cells",
   );
 });

@@ -25,18 +25,32 @@ function flatten(nodes) {
   return map;
 }
 
+/** How one recorded operator reads in a sentence, for a true and a false result. */
+const COMPARE_WORDS = Object.freeze({
+  ">": ["is greater than", "is not greater than"],
+  ">=": ["is at least", "is less than"],
+  "<": ["is less than", "is not less than"],
+  "<=": ["is at most", "is greater than"],
+  "==": ["equals", "does not equal"],
+  "!=": ["does not equal", "equals"],
+  is: ["is the same object as", "is not the same object as"],
+  "is not": ["is not the same object as", "is the same object as"],
+  in: ["is in", "is not in"],
+  "not in": ["is not in", "is in"],
+});
+
 /**
  * The comparison this step recorded, or null.
  *
  * A `compare` event is the only evidence of which two values met: its operands,
  * operator and bool-or-null result come straight from the recording, and its
- * own heap resolves any operand that is a reference. The operand cells become
- * active rings only when they still name a visible list or tuple position in
- * the state on screen; a cellless operand (a scalar, a set membership, a dict
- * value) highlights nothing rather than guessing a position.
+ * own heap resolves any operand that is a reference. The operand cells get the
+ * gold comparison ring only when they still name a visible list or tuple
+ * position in the state on screen; a cellless operand (a scalar, a set
+ * membership, a dict value) highlights nothing rather than guessing a position.
  *
  * @param {Object|null} plan a plan from `planMotion`
- * @returns {{text: string, cells: string[]}|null}
+ * @returns {{text: string, explanation: string, cells: string[]}|null}
  */
 export function comparisonOf(plan) {
   const event = plan?.compareEvent;
@@ -53,9 +67,21 @@ export function comparisonOf(plan) {
     if (cell.index >= (object.items?.length ?? 0)) continue;
     cells.push(motionTargetKey({ kind: "cell", objectId: cell.object_id, index: cell.index }));
   }
+  const left = showValue(operands[0]?.value, heap);
+  const right = showValue(operands[1]?.value, heap);
   const verdict = typeof event.result === "boolean" ? (event.result ? " → True" : " → False") : "";
+  const words = COMPARE_WORDS[event.operator];
+  let explanation;
+  if (typeof event.result === "boolean") {
+    explanation = words
+      ? `${left} ${words[event.result ? 0 : 1]} ${right}.`
+      : `The comparison ${left} ${event.operator} ${right} is ${event.result ? "True" : "False"}.`;
+  } else {
+    explanation = `The comparison ${left} ${event.operator} ${right} produced no True or False.`;
+  }
   return {
-    text: `compare ${showValue(operands[0]?.value, heap)} ${event.operator} ${showValue(operands[1]?.value, heap)}${verdict}`,
+    text: `Compare ${left} ${event.operator} ${right}${verdict}`,
+    explanation,
     cells,
   };
 }
@@ -66,13 +92,14 @@ function flagsFor(plan) {
   const changed = new Set();
   const highlighted = new Set();
   const active = new Set();
+  const compare = new Set();
   const settled = new Set();
   const moves = [];
 
   // A comparison changes no state, so it has no action to carry its operand
-  // cells. The recorded cells are evidence all the same: ring them, but never
-  // report a mutation.
-  for (const key of comparisonOf(plan)?.cells ?? []) active.add(key);
+  // cells. The recorded cells are evidence all the same: ring them in the
+  // comparison's own color, but never report a mutation or a move.
+  for (const key of comparisonOf(plan)?.cells ?? []) compare.add(key);
 
   // Settled cells are not an operation: no action produced them, and they
   // survive every later step where the recording still proves them. They are
@@ -112,7 +139,7 @@ function flagsFor(plan) {
     }
   }
 
-  return { entering, exiting, changed, highlighted, active, settled, moves };
+  return { entering, exiting, changed, highlighted, active, compare, settled, moves };
 }
 
 function variableView(variable, flags) {
@@ -131,6 +158,8 @@ function slotView(slot, flags) {
     changed: flags.changed.has(slot.key),
     highlighted: flags.highlighted.has(slot.key),
     active: flags.active.has(slot.key),
+    // A recorded comparison's operand: gold, and never a mutation flag.
+    compare: flags.compare.has(slot.key),
     // Proven by the recording, not by this step's actions, so a swap that
     // starts now never clears a position settled earlier.
     settled: flags.settled.has(slot.key),
@@ -172,7 +201,9 @@ export function operationFeedback(plan) {
   // A recorded comparison is a real step of its own, so it gets its own
   // headline even though it produced no state action.
   const comparison = comparisonOf(plan);
-  if (comparison) return { kind: "compare", text: comparison.text };
+  if (comparison) {
+    return { kind: "compare", text: comparison.text, explanation: comparison.explanation };
+  }
   const operations = Array.isArray(plan.operations) ? plan.operations : [];
   // `from` values exist in the state the animation starts from; `to` values in
   // the target state. Reading each from its own heap keeps a newly created
@@ -195,8 +226,11 @@ export function operationFeedback(plan) {
     return {
       kind: "swap",
       text: items
-        ? `swap [${left}] ${fromText(items[left])} ↔ [${right}] ${fromText(items[right])}`
-        : `swap [${left}] ↔ [${right}]`,
+        ? `Swap [${left}] ${fromText(items[left])} ↔ [${right}] ${fromText(items[right])}`
+        : `Swap [${left}] ↔ [${right}]`,
+      explanation: items
+        ? `${fromText(items[left])} and ${fromText(items[right])} exchange places.`
+        : `The cells at indices ${left} and ${right} exchange places.`,
     };
   }
 
@@ -208,6 +242,7 @@ export function operationFeedback(plan) {
     return {
       kind: "shift",
       text: `shift [${origin}] ${toText(shift.action.to)} → [${destination}]`,
+      explanation: `The value at index ${origin} moves to index ${destination}.`,
     };
   }
 
@@ -219,6 +254,7 @@ export function operationFeedback(plan) {
     return {
       kind: "insert",
       text: `${verb} [${grew.action.target.index}] ${toText(grew.action.to)}`,
+      explanation: `The value ${toText(grew.action.to)} enters at index ${grew.action.target.index}.`,
     };
   }
 
@@ -230,6 +266,7 @@ export function operationFeedback(plan) {
     return {
       kind: "remove",
       text: `${verb} [${shrank.action.target.index}] ${fromText(shrank.action.from)}`,
+      explanation: `The value ${fromText(shrank.action.from)} leaves index ${shrank.action.target.index}.`,
     };
   }
 
@@ -245,28 +282,53 @@ export function operationFeedback(plan) {
     const from = fromText(changed.action?.from);
     const to = toText(changed.action?.to);
     if (target.kind === "cell") {
-      return { kind: "change", text: `[${target.index}] ${from} → ${to}` };
+      return {
+        kind: "change",
+        text: `[${target.index}] ${from} → ${to}`,
+        explanation: `The value at index ${target.index} changed from ${from} to ${to}.`,
+      };
     }
     if (target.kind === "attribute") {
-      return { kind: "change", text: `${target.name} ${from} → ${to}` };
+      return {
+        kind: "change",
+        text: `${target.name} ${from} → ${to}`,
+        explanation: `${target.name} changed from ${from} to ${to}.`,
+      };
     }
     if (target.kind === "entry") {
-      return { kind: "change", text: `${showValue(target.key, after)} ${from} → ${to}` };
+      return {
+        kind: "change",
+        text: `${showValue(target.key, after)} ${from} → ${to}`,
+        explanation: `${showValue(target.key, after)} changed from ${from} to ${to}.`,
+      };
     }
-    return { kind: "change", text: `${from} → ${to}` };
+    return {
+      kind: "change",
+      text: `${from} → ${to}`,
+      explanation: `The value changed from ${from} to ${to}.`,
+    };
   }
 
   const called = find(
     (operation) => operation.op === MOTION_OPERATION.enter && operation.action?.kind === "call",
   );
   if (called) {
-    return { kind: "call", text: `call ${called.action.payload?.function ?? "function"}` };
+    const name = called.action.payload?.function ?? "function";
+    return {
+      kind: "call",
+      text: `call ${name}`,
+      explanation: `${name}() starts running.`,
+    };
   }
 
   const returned = find((operation) => operation.action?.kind === "return");
   if (returned) {
     const value = returned.action.payload?.value;
-    return { kind: "return", text: value ? `return ${toText(value)}` : "return" };
+    return {
+      kind: "return",
+      text: value ? `return ${toText(value)}` : "return",
+      explanation: value ? `The call hands back ${toText(value)}.` : "The call finishes.",
+    };
   }
 
   const frameLeft = find(
@@ -274,7 +336,11 @@ export function operationFeedback(plan) {
   );
   if (frameLeft) {
     const name = frameLeft.action?.from?.function;
-    return { kind: "return", text: name ? `return from ${name}` : "call ends" };
+    return {
+      kind: "return",
+      text: name ? `return from ${name}` : "call ends",
+      explanation: name ? `${name}() finishes.` : "The call finishes.",
+    };
   }
 
   // Nothing proven to describe: a plain line step, or a step that only moved a
@@ -297,6 +363,7 @@ export function motionView(plan) {
   const previousNodes = plan.previousState ? motionNodes(plan.previousState) : null;
   const previous = flatten(previousNodes);
   const flags = flagsFor(plan);
+  const feedback = operationFeedback(plan);
 
   // A seek, reset, hold or reduced-motion presentation renders the exact
   // target directly. Only a real adjacent animation may show a removed node.
@@ -318,8 +385,9 @@ export function motionView(plan) {
     animate: plan.animate,
     durationMs: plan.durationMs,
     mode: plan.mode,
-    feedback: operationFeedback(plan),
+    feedback,
     comparison: comparisonOf(plan),
+    explanation: feedback?.explanation ?? null,
     frames: plan.nodes.frames.map((frame) => frameView(frame, flags)),
     objects: plan.nodes.objects.map((object) => objectView(object, flags)),
     ghosts,

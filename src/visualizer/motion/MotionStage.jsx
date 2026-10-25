@@ -75,6 +75,7 @@ function Slot({ slot, registerNode }) {
         slot.changed && "is-changed",
         slot.highlighted && "is-highlighted",
         slot.active && "is-active",
+        slot.compare && "is-compare",
         slot.settled && "is-settled",
         slot.entering && "is-entering",
       )}
@@ -438,20 +439,26 @@ export default function MotionStage({ plan }) {
         </section>
       ) : null}
 
-      {view.objects.length > 0 ? (
-        <section className="motion-objects" aria-label="Values">
-          {view.objects.map((object) => (
-            <ObjectCard
-              key={object.key}
-              object={object}
-              registerNode={(node) => registerIn(nodeRefs, object.key, node)}
-              registerSlot={(key, node) => registerIn(nodeRefs, key, node)}
-            />
-          ))}
-        </section>
-      ) : (
-        <p className="motion-no-values">No list, dictionary, set or object values at this step.</p>
-      )}
+      {/* The data and the sentence about it are one group, so the explanation
+          sits directly under the array instead of at the foot of the canvas. */}
+      <div className="motion-data">
+        {view.objects.length > 0 ? (
+          <section className="motion-objects" aria-label="Values">
+            {view.objects.map((object) => (
+              <ObjectCard
+                key={object.key}
+                object={object}
+                registerNode={(node) => registerIn(nodeRefs, object.key, node)}
+                registerSlot={(key, node) => registerIn(nodeRefs, key, node)}
+              />
+            ))}
+          </section>
+        ) : (
+          <p className="motion-no-values">No list, dictionary, set or object values at this step.</p>
+        )}
+
+        {view.explanation ? <p className="motion-explain">{view.explanation}</p> : null}
+      </div>
 
       {view.ghosts.length > 0 ? (
         <div className="motion-ghost-layer" aria-hidden="true">

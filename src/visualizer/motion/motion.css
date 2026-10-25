@@ -74,10 +74,13 @@
   color: var(--accent);
 }
 
-/* A recorded comparison is evidence, not a mutation: same one-line head, with
- * the emphasis on the values rather than the operation's accent weight. */
+/* A recorded comparison is evidence, not a mutation: gold names the two values
+ * that met, while the accent blue stays reserved for the operation acting on
+ * the data. The palette's amber (`--warn`) is the only gold, and it clears the
+ * 3:1 a graphic needs in both themes. */
 .motion-event.is-compare {
-  color: var(--text-h);
+  color: var(--warn);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -147,13 +150,16 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  min-width: 0;
 }
 
 .motion-var {
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
+  min-width: 0;
   max-width: 100%;
+  overflow: hidden;
   padding: 0 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
@@ -188,10 +194,32 @@
   color: var(--text);
 }
 
+/* One sentence about what the step means, directly under the data it describes.
+ * It is built from the same plan as the step head, so the two cannot disagree. */
+.motion-explain {
+  flex: none;
+  max-width: 72ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-h);
+}
+
+/* The data and its one-sentence explanation travel together: the group is
+ * centred in the canvas, and the sentence stays directly under the array. */
+.motion-data {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 0;
+}
+
 /* A row of value cards; a long sequence stays on one line and scrolls. */
 .motion-objects {
   display: flex;
-  flex: 1;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   align-items: flex-start;
   align-content: safe center;
@@ -373,14 +401,45 @@
 /* The verified operation's cells. A ring, not a fill: the fill is the change
  * flash, so a swap reads as two ringed cells moving, not two repainted values.
  * The operation takes the ring back while it runs - it is the thing happening -
- * and the settled green stays legible on the index label underneath. */
+ * and the settled green stays legible on the index label underneath.
+ *
+ * The ring switches instantly: the shared slot transition fades colour over
+ * 140ms, which is longer than a 4x swap, so a fader would leave the moving
+ * cells unmarked for most of their trip. The value colour still fades. */
 .motion-slot.motion-cell.is-active {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out;
 }
 
-.motion-slot.motion-cell.is-active.is-settled .motion-cell-index {
-  color: var(--ok);
+/* A recorded comparison's operands: the same ring in gold, because a
+ * comparison inspects values and changes none of them. */
+.motion-slot.motion-cell.is-compare {
+  border-color: var(--warn);
+  box-shadow: inset 0 0 0 1px var(--warn);
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+/* The gold index label only when the comparison is the only thing to say.
+ * A proven final position keeps its green label, with the gold ring still
+ * outside it. */
+.motion-slot.motion-cell.is-compare:not(.is-settled) .motion-cell-index {
+  color: var(--warn);
+}
+
+/* A cell can be both the operation happening now and a position the recording
+ * already proved final. Keep the green inset ring and put the operation's
+ * colour around it, so neither state is hidden. */
+.motion-slot.motion-cell.is-active.is-settled {
+  box-shadow: inset 0 0 0 1px var(--ok), 0 0 0 2px var(--accent);
+}
+
+.motion-slot.motion-cell.is-compare.is-settled {
+  box-shadow: inset 0 0 0 1px var(--ok), 0 0 0 2px var(--warn);
 }
 
 .motion-slot {
