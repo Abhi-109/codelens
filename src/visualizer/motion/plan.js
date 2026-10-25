@@ -334,6 +334,24 @@ export function planMotion(
   }
 
   const operations = actions.map((action) => operationFor(action, timing));
+  // A seek, reset or hold has no animation, but the step still needs a
+  // headline. Diff the recorded step just before it (index - 1) for
+  // description only: the canvas still renders the target directly, and a
+  // jump never replays a path the user did not take.
+  let feedbackActions = actions;
+  let feedbackState = previousState;
+  if (transition !== MOTION_TRANSITION.forward && transition !== MOTION_TRANSITION.backward) {
+    const beforeStep = index > 0 ? snapshotAt(trace, index - 1) : null;
+    if (beforeStep) {
+      feedbackActions = diffSteps(beforeStep, next, {
+        source,
+        consoleAfterReturn: consoleFollowsReturn(trace, index),
+      });
+      feedbackState = stateOf(beforeStep);
+    }
+  }
+  const feedbackOperations =
+    feedbackActions === actions ? operations : feedbackActions.map((action) => operationFor(action, timing));
   const durationMs = operations.reduce(
     (longest, operation) => Math.max(longest, operation.durationMs),
     0,
@@ -396,6 +414,10 @@ export function planMotion(
     stateActions: stateActions(actions),
     overlays: actions.filter((action) => action.effect === "overlay"),
     operations,
+    // What the step did, for the headline. Same as `operations` on an adjacent
+    // step; on a seek it is the recorded step's own diff, with no animation.
+    feedbackOperations,
+    feedbackPreviousState: feedbackState,
     nodes: motionNodes(state),
   };
 }

@@ -1169,6 +1169,40 @@ test("a seeked step still names its exception and its return value", () => {
   );
 });
 
+test("a seeked mutation still names its step without replaying it", () => {
+  // Jumping straight to a swap plans no animation, but "no data change" would
+  // be a false statement about a step the recording says swapped two values.
+  const p = program("bubble-sort");
+  let swapIndex = -1;
+  for (let index = 2; index < p.trace.length; index += 1) {
+    if (motionView(planAt(p, index)).feedback?.kind === "swap") {
+      swapIndex = index;
+      break;
+    }
+  }
+  assert.ok(swapIndex > 0, "the fixture has a real swap to seek to");
+
+  const seek = planMotion(p.trace, swapIndex, { source: p.source, previousIndex: 0 });
+  assert.equal(seek.transition, "seek");
+  assert.deepEqual(seek.operations, [], "a seek still plans no animation");
+  assert.equal(seek.animate, false);
+  const view = motionView(seek);
+  assert.equal(view.feedback.kind, "swap");
+  assert.match(view.feedback.text, /^Swap \[\d+\] /);
+
+  // A seeked step that really changed nothing keeps saying so.
+  const quiet = findPlan(
+    "bubble-sort",
+    (candidate) =>
+      candidate &&
+      candidate.index > 2 &&
+      motionView(candidate).feedback?.text === "no data change",
+  );
+  const quietSeek = planMotion(p.trace, quiet.index, { source: p.source, previousIndex: 0 });
+  assert.equal(motionView(quietSeek).feedback.kind, "neutral");
+  assert.equal(motionView(quietSeek).feedback.text, "no data change");
+});
+
 test("a scalar-only program keeps its values in the call strip", () => {
   const at = findPlan(
     "recursion",

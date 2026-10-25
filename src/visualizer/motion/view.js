@@ -309,11 +309,16 @@ export function operationFeedback(plan) {
   if (comparison) {
     return { kind: "compare", text: comparison.text, explanation: comparison.explanation };
   }
-  const operations = Array.isArray(plan.operations) ? plan.operations : [];
-  // `from` values exist in the state the animation starts from; `to` values in
-  // the target state. Reading each from its own heap keeps a newly created
-  // object printable instead of "(not shown at this step)".
-  const before = plan.previousState?.heap ?? plan.state?.heap ?? {};
+  const operations = Array.isArray(plan.feedbackOperations)
+    ? plan.feedbackOperations
+    : Array.isArray(plan.operations)
+      ? plan.operations
+      : [];
+  // `from` values exist in the state the step started from; `to` values in the
+  // target state. Reading each from its own heap keeps a newly created object
+  // printable instead of "(not shown at this step)".
+  const before =
+    plan.feedbackPreviousState?.heap ?? plan.previousState?.heap ?? plan.state?.heap ?? {};
   const after = plan.state?.heap ?? before;
   const fromText = (value) => (value ? showValue(value, before) : "?");
   const toText = (value) => (value ? showValue(value, after) : "?");
@@ -327,7 +332,10 @@ export function operationFeedback(plan) {
   );
   if (swap) {
     const [left, right] = swap.action.payload.indices;
-    const items = plan.previousState?.heap?.[swap.action.target.objectId]?.items;
+    const items =
+      (plan.feedbackPreviousState?.heap ?? plan.previousState?.heap)?.[
+        swap.action.target.objectId
+      ]?.items;
     return {
       kind: "swap",
       text: items

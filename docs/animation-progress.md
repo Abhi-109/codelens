@@ -588,6 +588,12 @@ remaining work is unchanged: Phase 4 (frames, recursion, objects), Phase 5 (skin
   The regression is pinned by a test that plans with `previousIndex: null`.
 - A scalar-only step says where its values are ("Scalar values stay in the call strip above")
   instead of leaving the canvas with a bare sentence.
+- A seek or a hold plans no animation, and the headline used to be derived from those (empty)
+  actions: jumping straight to a swap said "no data change", which is a false statement about
+  the recording. The plan now also carries `feedbackOperations`, a description-only diff of
+  the recorded step before the target, and the headline reads from it. The animation still
+  plans nothing on a seek; only the sentence changes. `view.test.mjs` pins a seeked swap and
+  a seeked step that really did change nothing.
 - Tests in `view.test.mjs` cover the returning frame and its value, a `None` return, stack
   depth and the single current frame, caught vs propagated vs uncaught wording, unwind and
   final error wording, the seeked case, and scalar-only state. JS suite is **705 tests**.
