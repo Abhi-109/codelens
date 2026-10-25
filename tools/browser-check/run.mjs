@@ -134,6 +134,7 @@ function readStage(browser) {
       colors: {
         warn: getComputedStyle(stage).getPropertyValue("--warn").trim(),
         accent: getComputedStyle(stage).getPropertyValue("--accent").trim(),
+        compare: getComputedStyle(stage).getPropertyValue("--compare-ring").trim(),
         ok: getComputedStyle(stage).getPropertyValue("--ok").trim(),
       },
       theme: document.documentElement.getAttribute("data-theme"),
@@ -145,6 +146,13 @@ function readStage(browser) {
 
 const moved = (cell) =>
   cell.transform !== "none" && cell.transform !== "matrix(1, 0, 0, 1, 0, 0)";
+
+/** A CSS custom property's hex value as the rgb() string the DOM reports. */
+const rgbOf = (hex) => {
+  const value = hex.replace("#", "");
+  const [r, g, b] = [0, 2, 4].map((at) => parseInt(value.slice(at, at + 2), 16));
+  return `rgb(${r}, ${g}, ${b})`;
+};
 
 const translateX = (transform) => {
   const match = /matrix\(([^)]+)\)/.exec(transform);
@@ -555,8 +563,8 @@ async function bubbleSort(browser) {
     swapped.cells.map((cell) => cell.transform).join(" | "),
   );
   check(
-    swapped.cells[0].border === "rgb(77, 140, 255)" &&
-      swapped.cells[1].border === "rgb(77, 140, 255)",
+    swapped.cells[0].border === rgbOf(swapped.colors.accent) &&
+      swapped.cells[1].border === rgbOf(swapped.colors.accent),
     "the blue ring persists after movement",
     `${swapped.cells[0].border} / ${swapped.cells[1].border}`,
   );
@@ -598,13 +606,13 @@ async function bubbleSort(browser) {
   );
   check(both.length === 1, "step 18 layers an operation over a proven final cell", `${both.length}`);
   check(
-    /rgb\(74, 222, 128\)/.test(both[0]?.shadow ?? "") &&
-      /rgb\(77, 140, 255\)/.test(both[0]?.shadow ?? ""),
+    both[0]?.shadow.includes(rgbOf(layered.colors.ok)) &&
+      both[0]?.shadow.includes(rgbOf(layered.colors.accent)),
     "the layered cell keeps both the green inset and the blue outer ring",
     both[0]?.shadow,
   );
   check(
-    both[0]?.indexColor === "rgb(74, 222, 128)",
+    both[0]?.indexColor === rgbOf(layered.colors.ok),
     "the settled index label stays green",
     both[0]?.indexColor,
   );
@@ -632,13 +640,14 @@ async function bubbleSort(browser) {
   check(
     goldOnGreen.every(
       (cell) =>
-        /rgb\(74, 222, 128\)/.test(cell.shadow) && /rgb\(251, 191, 36\)/.test(cell.shadow),
+        cell.shadow.includes(rgbOf(allGreen.colors.ok)) &&
+        cell.shadow.includes(rgbOf(allGreen.colors.compare)),
     ),
     "the gold ring sits outside the green inset ring",
     goldOnGreen.map((cell) => cell.shadow).join(" | "),
   );
   check(
-    goldOnGreen.every((cell) => cell.indexColor === "rgb(74, 222, 128)"),
+    goldOnGreen.every((cell) => cell.indexColor === rgbOf(allGreen.colors.ok)),
     "a proven-final operand keeps its green index label",
     goldOnGreen.map((cell) => cell.indexColor).join(" | "),
   );
