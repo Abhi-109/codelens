@@ -749,27 +749,8 @@ function Workspace() {
           </span>
         ) : null}
 
-        <div className="tb-spacer" />
-
-        {/* The learning mode belongs to the whole workspace, not to one pane,
-            so it lives in the bar that is on screen whichever pane you are in. */}
-        <div className="seg seg-mode" role="group" aria-label="Learning mode">
-          {LEARNING_MODES.map((id) => (
-            <button
-              key={id}
-              type="button"
-              className={`seg-item${mode === id ? " on" : ""}`}
-              aria-pressed={mode === id}
-              title={MODE_BLURBS[id]}
-              onClick={() => setMode(id)}
-            >
-              {MODE_LABELS[id]}
-            </button>
-          ))}
-        </div>
-
-        <span className="tb-divider" aria-hidden="true" />
-
+        {/* Run sits at the left of the bar, directly above the code panel it
+            runs, rather than at the far corner of the window. */}
         <button type="button" className="run" onClick={handleRun} disabled={running}>
           <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
             <path d="M4.5 3.2 12 8l-7.5 4.8V3.2Z" fill="currentColor" />
@@ -795,6 +776,25 @@ function Workspace() {
             />
           </svg>
         </button>
+
+        <div className="tb-spacer" />
+
+        {/* The learning mode belongs to the whole workspace, not to one pane,
+            so it lives in the bar that is on screen whichever pane you are in. */}
+        <div className="seg seg-mode" role="group" aria-label="Learning mode">
+          {LEARNING_MODES.map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={`seg-item${mode === id ? " on" : ""}`}
+              aria-pressed={mode === id}
+              title={MODE_BLURBS[id]}
+              onClick={() => setMode(id)}
+            >
+              {MODE_LABELS[id]}
+            </button>
+          ))}
+        </div>
       </header>
 
       <main
@@ -933,7 +933,7 @@ function Workspace() {
               story={runStory}
               index={index}
               onJump={jumpTo}
-              compact={viz === "motion"}
+              compact
             />
             {viz === "scene" ? (
               <AdaptiveView
@@ -1005,6 +1005,25 @@ function Workspace() {
             )}
           </VisualizationPane>
 
+          {/* Playback belongs to the animation, so it sits under the stage
+              inside the right panel, above the inspector. */}
+          <PlaybackBar
+            trace={trace}
+            index={index}
+            playing={playing}
+            speed={speed}
+            onJump={jumpTo}
+            onTogglePlay={() => dispatch(sessionActions.togglePlaying())}
+            onSpeedChange={setSpeed}
+            onOpenGlossary={() => setGlossaryOpen(true)}
+            showJson={showJson}
+            onShowJsonChange={setShowJson}
+            result={result}
+            traceFacts={traceFacts}
+            showTraceDetails={showTraceDetails}
+            onShowTraceDetailsChange={setShowTraceDetails}
+          />
+
           {/* The six inspector sections live in one drawer under the stage, not
               in a third column. It opens by default, except in Motion, where
               the animation is what you came to watch. */}
@@ -1014,23 +1033,6 @@ function Workspace() {
           </details>
         </section>
       </main>
-
-      <PlaybackBar
-        trace={trace}
-        index={index}
-        playing={playing}
-        speed={speed}
-        onJump={jumpTo}
-        onTogglePlay={() => dispatch(sessionActions.togglePlaying())}
-        onSpeedChange={setSpeed}
-        onOpenGlossary={() => setGlossaryOpen(true)}
-        showJson={showJson}
-        onShowJsonChange={setShowJson}
-        result={result}
-        traceFacts={traceFacts}
-        showTraceDetails={showTraceDetails}
-        onShowTraceDetailsChange={setShowTraceDetails}
-      />
 
       {glossaryOpen && (
         <div className="drawer-backdrop" onClick={() => setGlossaryOpen(false)}>

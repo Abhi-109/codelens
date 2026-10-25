@@ -14,9 +14,9 @@
  */
 
 /** Every canvas the workspace can draw, in the order they are offered. */
-export const VIZ_MODES = ["scene", "tree", "flow", "combined", "timeline", "motion"];
+export const VIZ_MODES = ["motion", "scene", "tree", "flow", "combined", "timeline"];
 
-export const DEFAULT_VIZ = "scene";
+export const DEFAULT_VIZ = "motion";
 export const VIZ_STORAGE_KEY = "codelens-viz";
 
 export const VIZ_LABELS = {
@@ -58,7 +58,7 @@ export function selectViz(state, viz) {
   return state && state.viz === next ? state : { ...state, viz: next };
 }
 
-/** The canvas a fresh workspace opens on: the saved one, or Call tree. */
+/** The canvas a fresh workspace opens on: the saved one, or Motion. */
 export function initialViz() {
   return { viz: loadViz() };
 }

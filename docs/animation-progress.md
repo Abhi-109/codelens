@@ -548,6 +548,35 @@ remaining work is unchanged: Phase 4 (frames, recursion, objects), Phase 5 (skin
   their column. Covers positives, negatives (label above the baseline) and zero, with 18 px
   reserved above the plot for the tallest bar's label.
 
+## Task 7 Stage 4 notes (premium workspace: tokens, shell, editor, stage)
+- Palette retuned to charcoal (`--bg #0e1014`) and warm paper (`--bg #f7f7f4`); the old
+  navy/lavender pair read as a different product. Every changed pair is measured by
+  `styles/contrast.test.mjs`, including the new gold below.
+- Execution colour now has one meaning each: blue acts (`--accent`), **gold compares**
+  (`--compare`), green is proven settled (`--ok`), red failed (`--danger`). The motion canvas
+  stops borrowing `--warn` for a comparison.
+- A ring and a text label need different golds on paper: `--compare` (dark gold, 4.5:1) is
+  the word "Compare", `--compare-ring` (brighter gold, 3:1) is the ring on an operand cell.
+  On charcoal one gold clears both, so the two tokens share a value there.
+- Motion is now the first canvas and `DEFAULT_VIZ`, because it is the only canvas that draws
+  the recorded data at every step. A saved choice still wins, so returning visitors keep
+  theirs; the tests assert the new intent rather than being loosened.
+- Playback moved from the page footer into the animation panel, under the stage and above
+  the inspector, so the transport sits with the thing it moves. Run and restart moved to the
+  left of the workspace toolbar, directly above the code panel they act on.
+- The run story is always folded at the top of the canvas (it stays openable), which gives
+  every canvas back the ~60px it was spending on a second header.
+- The code panel no longer wraps: lines are `white-space: pre` and scroll horizontally, so a
+  long line cannot pretend Python's indentation is shallower than it is. The editor and the
+  executed-lines view fill the pane; examples stay at the foot.
+- The animation stage keeps a 180px floor, so an open inspector can never squeeze a canvas
+  to a sliver; the inspector itself is capped at `min(260px, 30vh)` and scrolls.
+- Motion cells are 112px tall with 20px values, the frame strip separates calls with a quiet
+  rule, and the reference marker is plain text rather than a pill.
+- Verified with `npm run test:js` (698 pass), `npm run lint`, `npm run build`, and headless
+  Chrome at 1440x960 in both themes: stage 570px, inspector folded to 31px, playback 44px
+  inside the panel, no horizontal page overflow, every canvas renders at its full height.
+
 ## Task 7 Stage 3 notes (two-panel workspace, inspector drawer)
 - The redesign brief called this Stage B. `.layout` is now three tracks — `var(--col-left, 34%)`,
   a 7px splitter, `minmax(0, 1fr)` — instead of five. The two extra tracks (`--col-mid` and a

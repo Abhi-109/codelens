@@ -277,10 +277,40 @@
 
 .code-pane {
   padding-right: var(--space-3);
+  overflow: hidden;
+}
+
+/* The editor and the executed-lines view both fill the pane and scroll
+   inside it; the examples row stays put at the bottom. */
+.code-pane > textarea,
+.code-pane > .code-view {
+  flex: 1;
+  min-height: 0;
+}
+
+.code-pane > textarea {
+  resize: none;
 }
 
 .visual-pane {
-  padding: var(--space-3) var(--space-4) var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  overflow: hidden;
+}
+
+/* The animation panel is one column: modes, stage, playback, inspect. The
+   stage is the only row that grows, and it keeps a floor so no canvas can be
+   squeezed to a sliver by an open inspector. */
+.visual-pane > .viz-pane {
+  min-height: 0;
+}
+
+.visual-pane .viz-body {
+  min-height: 180px;
+  overflow: hidden;
+}
+
+.visual-pane .viz-body > * {
+  min-height: 0;
 }
 
 /* --- Pane headings --------------------------------------------------------- */
@@ -342,28 +372,38 @@
 }
 
 .code-view {
-  padding: var(--space-2) 0;
-  border: 1px solid transparent;
+  padding: var(--space-3) 0;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--code-bg);
-  font-size: 13.5px;
-  line-height: 1.8;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow: auto;
   scrollbar-gutter: stable;
 }
 
 /* Every line is a target for "jump here", but only the run's line is marked:
-   no card, no outline, no shadow per line. */
+   no card, no outline, no shadow per line. Lines never wrap - a long line
+   scrolls, which keeps Python's indentation honest. */
 .app .code-line {
-  gap: 10px;
-  min-height: 25px;
-  padding: 1px 16px 1px 6px;
+  gap: var(--space-3);
+  width: max-content;
+  min-width: 100%;
+  min-height: 24px;
+  padding: 0 var(--space-4) 0 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: var(--text-h);
   font-family: var(--mono);
-  font-size: 13.5px;
-  line-height: 1.8;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre;
+  text-align: left;
+}
+
+.code-text {
+  white-space: pre;
 }
 
 .app .code-line:hover {
@@ -996,12 +1036,20 @@
   color: var(--text-h);
 }
 
+.inspect-drawer[open] {
+  display: flex;
+  flex-direction: column;
+  max-height: min(260px, 30vh);
+  overflow: hidden;
+}
+
 .inspect-drawer[open] > summary {
   margin-bottom: var(--space-1);
 }
 
 .inspect-drawer .inspector {
-  max-height: min(320px, 36vh);
+  min-height: 0;
+  overflow: auto;
 }
 
 .inspect-drawer .inspector .inspector-body,
@@ -1015,12 +1063,12 @@
 /* --- The playback bar ------------------------------------------------------ */
 
 .controls-bar {
-  gap: var(--space-3);
-  min-height: 54px;
-  padding: 0 var(--space-4);
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-2) 0 0;
   padding-bottom: max(0px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
-  background: var(--surface);
+  background: transparent;
 }
 
 .controls {
@@ -1243,7 +1291,7 @@
     flex-wrap: wrap;
     gap: var(--space-2);
     min-height: 0;
-    padding: var(--space-2) var(--space-3);
+    padding: var(--space-2) 0 0;
   }
 
   .controls {

@@ -120,6 +120,14 @@ const PAIRS = [
   ['--danger', '--bg', 4.5, 'error text on the page'],
   ['--ok', '--code-bg', 4.5, 'success text on a code panel'],
   ['--warn', '--code-bg', 4.5, 'warning text on a code panel'],
+  // A recorded comparison is its own meaning: gold, read as text in the step
+  // head and as the ring on an operand cell.
+  ['--compare', '--bg', 4.5, 'comparison text on the page'],
+  ['--compare', '--surface', 4.5, 'comparison text on a panel'],
+  ['--compare', '--code-bg', 4.5, 'comparison text and rings on the canvas'],
+  // The ring is a graphic, not text: it is the brighter gold that still clears
+  // 3:1 against the cell fill it is drawn on.
+  ['--compare-ring', '--code-bg', 3, 'comparison ring on a cell'],
   ['--btn-primary-fg', '--btn-primary-bg', 4.5, 'primary button label'],
   ['--btn-primary-fg', '--btn-primary-hover-bg', 4.5, 'primary button label, hovered'],
   ['--on-accent', '--accent-fill', 4.5, 'label on the accent fill'],

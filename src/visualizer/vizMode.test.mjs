@@ -37,10 +37,10 @@ function storeWith(values = {}, { throws = false } = {}) {
 test("every offered canvas has a name and a plain-English blurb", () => {
   assert.deepEqual(
     VIZ_MODES,
-    ["scene", "tree", "flow", "combined", "timeline", "motion"],
-    "Adaptive is the canvas a fresh run opens on",
+    ["motion", "scene", "tree", "flow", "combined", "timeline"],
+    "Motion is the canvas a fresh run opens on, and the first one offered",
   );
-  assert.equal(DEFAULT_VIZ, "scene");
+  assert.equal(DEFAULT_VIZ, "motion");
   for (const id of VIZ_MODES) {
     assert.equal(isVizMode(id), true);
     assert.equal(typeof VIZ_LABELS[id], "string");
@@ -59,7 +59,7 @@ test("every offered canvas has a name and a plain-English blurb", () => {
   assert.equal(isVizMode(undefined), false);
 });
 
-test("an unusable choice falls back to Adaptive rather than blanking the pane", () => {
+test("an unusable choice falls back to Motion rather than blanking the pane", () => {
   assert.equal(normalizeViz("tree"), "tree");
   assert.equal(normalizeViz("nonsense"), DEFAULT_VIZ);
   assert.equal(normalizeViz(""), DEFAULT_VIZ);
@@ -96,7 +96,7 @@ test("an unknown canvas keeps the current one instead of blanking the pane", () 
     { viz: DEFAULT_VIZ },
     "no state to update falls back exactly the way the inspector tab does",
   );
-  assert.equal(initialViz().viz, DEFAULT_VIZ, "with nothing saved, a fresh session opens on Adaptive");
+  assert.equal(initialViz().viz, DEFAULT_VIZ, "with nothing saved, a fresh session opens on Motion");
 });
 
 test("picking the canvas already showing changes nothing at all", () => {
@@ -127,7 +127,7 @@ test("stepping along the canvas strip wraps at both ends", () => {
     assert.equal(stepViz(first, 1), VIZ_MODES[1], "one step on walks to the next canvas");
     assert.equal(stepViz(last, -1), VIZ_MODES[VIZ_MODES.length - 2]);
   }
-  assert.equal(stepViz(undefined, 1), oneOn, "nothing chosen: start at Adaptive, step on");
+  assert.equal(stepViz(undefined, 1), oneOn, "nothing chosen: start at Motion, step on");
   assert.equal(stepViz("nonsense", 1), oneOn, "unusable choice: the same");
   assert.equal(stepViz(first, Number.NaN), first, "not a step at all: stay put");
 });

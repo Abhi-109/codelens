@@ -4,7 +4,13 @@
    The theme is the `data-theme` attribute on <html> — "dark" or "light" — set
    by the boot script in index.html before first paint, then kept in step by
    src/theme.js. :root alone is the light default, so a browser without the
-   attribute still gets a finished theme rather than a broken half-state. */
+   attribute still gets a finished theme rather than a broken half-state.
+
+   Two palettes, designed separately: charcoal and warm paper. Both are
+   measured by styles/contrast.test.mjs, so a value here cannot quietly fall
+   under WCAG. Execution colour has one meaning each - blue acts, gold
+   compares, green is proven settled, red failed - and those three never
+   borrow from the brand accent. */
 
 :root {
   /* 4px spacing scale. Every gap in the app is one of these. */
@@ -25,7 +31,11 @@
   --radius-pill: 999px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  --mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+
+  /* One control height, so buttons, selects and tabs line up. */
+  --control-sm: 28px;
+  --control-md: 34px;
 
   /* Subtle borders, not heavy shadows. Shadows only for things that float. */
   --shadow-sm: 0 1px 2px rgb(15 23 42 / 6%);
@@ -35,88 +45,84 @@
   --dur-med: 200ms;
 }
 
-/* --- Light (default) ------------------------------------------------------ */
+/* --- Light: warm paper, ink, one blue -------------------------------- */
 
 :root,
 [data-theme='light'] {
   color-scheme: light;
 
-  --bg: #f6f7fc;
+  --bg: #f7f7f4;
   --surface: #ffffff;
   --raised: #ffffff;
-  --border: #e3e6f0;
-  --border-strong: #c9cede;
+  --border: #e4e3dd;
+  --border-strong: #cbc9c1;
 
   /* Names the playground already uses, retuned to this palette. */
-  --text: #5b6478;
-  --text-h: #0f172a;
+  --text: #565b66;
+  --text-h: #14161a;
   /* Accent as *text* and as a thin graphic. On a light surface the same blue
      can also be the fill white sits on - both directions clear 4.5:1 here.
      That is precisely what stops being true in the dark theme, where the two
      roles are split for real. */
-  --accent: #3b5bff;
-  --accent-fill: #3b5bff;
-  --accent-bg: rgb(59 91 255 / 8%);
-  --accent-border: rgb(59 91 255 / 35%);
-  --code-bg: #f1f3fa;
+  --accent: #2f57d6;
+  --accent-fill: #2f57d6;
+  --accent-bg: rgb(47 87 214 / 8%);
+  --accent-border: rgb(47 87 214 / 32%);
+  --code-bg: #f1f1ec;
 
-  /* Brand. On a light surface the logo is one colour: obsidian. */
-  --logo-mark: #101010;
-  --logo-word: #101010;
+  /* Brand. On a light surface the logo is one colour: ink. */
+  --logo-mark: #14161a;
+  --logo-word: #14161a;
 
-  /* Accents. Dark enough to read as text on a white panel: #14b8a6 only
-     managed 2.49:1 here, which is under what a graphic needs and well under
-     what the 11px return value needs. */
+  /* Accents. Dark enough to read as text on a white panel. */
   --teal: #0f766e;
-  --violet: #7c3aed;
+  --violet: #6d28d9;
 
-  /* The control-flow canvas colours its five shape families, and these two are
-     the rest of that set: the neutral family (assignments, expressions and
-     raises) and input/output. Decisions and loops take --edge-back instead -
-     already the colour of the arrow that loops back to them, so the loop
-     machinery is one colour end to end. Every one of these is measured as a
-     *stroke*: a shape outline has to clear 3:1 or the family stops being
-     distinguishable, which is the whole point of the colour. */
-  --slate: #64748b;
-  --copper: #c2410c;
+  /* The control-flow canvas colours its five shape families. Every one of
+     these is measured as a *stroke*: a shape outline has to clear 3:1 or the
+     family stops being distinguishable, which is the whole point of the
+     colour. Decisions and loops take --edge-back, already the colour of the
+     arrow that loops back to them. */
+  --slate: #5f6b7c;
+  --copper: #b34a10;
 
-  /* Status. Kept dark enough to read on a white surface - and measured, not
-     guessed: #16a34a and #d97706 only reached 3.30 and 3.19:1. */
-  --ok: #15803d;
-  --warn: #b45309;
-  --danger: #dc2626;
-  --danger-bg: rgb(220 38 38 / 7%);
+  /* Status. Measured, not guessed. */
+  --ok: #14722f;
+  --warn: #a15c00;
+  --danger: #c62828;
+  --danger-bg: rgb(198 40 40 / 7%);
+
+  /* A recorded comparison is evidence: gold, and nothing else is gold. Text
+     has to be dark to clear 4.5:1 on paper, so the ring - a graphic, 3:1 -
+     is the brighter gold the eye reads as gold. */
+  --compare: #8a5a00;
+  --compare-ring: #b07d00;
+  --compare-bg: rgb(138 90 0 / 9%);
 
   /* Text on top of the accent colour. */
   --on-accent: #ffffff;
 
-  /* Primary buttons are near-black in light mode (see docs/design), blue in
-     dark mode. One token pair, so every primary button agrees. */
-  --btn-primary-bg: #0b1020;
+  /* Primary buttons are ink in light mode, blue in dark mode. One token pair,
+     so every primary button agrees. */
+  --btn-primary-bg: #16181d;
   --btn-primary-fg: #ffffff;
+  --btn-primary-hover-bg: #2a2e37;
 
-  /* Hover must be *visible*. brightness() barely moves a near-black, so the
-     lift is a real colour: #1c2536 keeps white text at 15.36:1 (AAA). */
-  --btn-primary-hover-bg: #1c2536;
+  /* Hero: the one gradient left in the product, on the landing headline. */
+  --hero-grad-from: #2f57d6;
+  --hero-grad-to: #6d28d9;
 
-  /* Hero: second headline line, blue -> violet in light. */
-  --hero-grad-from: #3b5bff;
-  --hero-grad-to: #7c3aed;
-
-  /* Hero background washes: a lavender bloom, top right and bottom left. */
-  --hero-wash-a: rgb(124 58 237 / 15%);
-  --hero-wash-b: rgb(59 91 255 / 9%);
+  /* Hero background wash: a single quiet bloom, not a light show. */
+  --hero-wash-a: rgb(47 87 214 / 7%);
+  --hero-wash-b: rgb(109 40 217 / 4%);
 
   /* Execution-graph edge colours, by meaning. The return path is the same
      teal as --teal, for the same reason: it has to clear 4.5:1, because the
      legend prints it as text and the value riding on the arrow does too. */
-  --edge-call: #8b5cf6;
+  --edge-call: #7c3aed;
   --edge-return: #0f766e;
-  /* Also the colour of the decision and loop shapes, which this edge returns
-     to. Darkened from #ca8a04, which only managed 2.75:1 on this background -
-     invisible until now because nothing referenced it. */
   --edge-back: #a16207;
-  --edge-error: #dc2626;
+  --edge-error: #c62828;
 
   /* One colour per call depth, so nested calls can be told apart. */
   --call-0: #aa3bff;
@@ -124,44 +130,40 @@
   --call-2: #c2410c;
   --call-3: #2563eb;
   --call-4: #db2777;
-  --call-5: #15803d;
+  --call-5: #14722f;
 
-  --focus: #3b5bff;
+  --focus: #2f57d6;
 }
 
-/* --- Dark ----------------------------------------------------------------- */
+/* --- Dark: charcoal, not navy ---------------------------------------- */
 
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #0a0f1e;
-  --surface: #111827;
-  --raised: #151e32;
-  --border: #1f2a44;
-  --border-strong: #2c3a5c;
+  --bg: #0e1014;
+  --surface: #14161b;
+  --raised: #1a1d23;
+  --border: #23262f;
+  --border-strong: #343a46;
 
-  --text: #8e99b4;
-  --text-h: #e8ecf8;
-  /* Accent as *text* on a dark surface. #2f6bff only reached 4.24:1 on the
-     page and 3.94:1 on a panel, so every link, label and legend was under
-     AA; #4d8cff is the blue the hero already used here, and it clears 5.5:1
-     on both. The fill that white text sits on goes the other way - lighten
-     that and white starts to sink - so it is its own token below. */
-  --accent: #4d8cff;
-  --accent-fill: #2a65f7;
-  --accent-bg: rgb(77 140 255 / 12%);
-  --accent-border: rgb(77 140 255 / 45%);
-  --code-bg: #0d1424;
+  --text: #9aa3b2;
+  --text-h: #e8eaee;
+  /* Accent as *text* on a dark surface. The fill that white text sits on goes
+     the other way - lighten that and white starts to sink - so it is its own
+     token. */
+  --accent: #5b9dff;
+  --accent-fill: #2563eb;
+  --accent-bg: rgb(91 157 255 / 12%);
+  --accent-border: rgb(91 157 255 / 42%);
+  --code-bg: #12141a;
 
   /* Brand: electric lime mark, warm white wordmark. */
   --logo-mark: #c7ff5e;
   --logo-word: #f5f3ed;
 
   --teal: #22d3c5;
-  --violet: #8b5cf6;
+  --violet: #a78bfa;
 
-  /* The same two control-flow families as in light, opened up for a dark
-     surface. Decisions and loops still take --edge-back. */
   --slate: #94a3b8;
   --copper: #fb923c;
 
@@ -171,28 +173,31 @@
   --danger: #f87171;
   --danger-bg: rgb(248 113 113 / 10%);
 
+  /* Gold: a recorded comparison. Kept apart from the amber warning. One gold
+     works for both roles on charcoal. */
+  --compare: #e3b341;
+  --compare-ring: #e3b341;
+  --compare-bg: rgb(227 179 65 / 12%);
+
   --on-accent: #ffffff;
 
   /* Primary buttons stay blue on a dark surface. Both values are chosen
-     against the white label on them, not by eye: 4.88:1 at rest and 4.55:1
-     on hover, where the old #2f6bff / #3477ff pair gave 4.50 and 4.02 - the
-     hover state failed AA outright. The hover is a touch lighter, so the
-     lift still reads as a lift. */
-  --btn-primary-bg: #2a65f7;
+     against the white label on them: 5.17:1 at rest and 4.55:1 on hover. */
+  --btn-primary-bg: #2563eb;
   --btn-primary-fg: #ffffff;
   --btn-primary-hover-bg: #2f6afe;
 
-  /* Hero: second headline line, blue -> cyan in dark. */
-  --hero-grad-from: #4d8cff;
-  --hero-grad-to: #22d3c5;
+  /* Hero: blue -> violet, the one gradient in the product. */
+  --hero-grad-from: #5b9dff;
+  --hero-grad-to: #a78bfa;
 
-  /* Hero background washes: soft wave lines, drawn in the accent colour. */
-  --hero-wash-a: rgb(47 107 255 / 9%);
-  --hero-wash-b: rgb(34 211 197 / 6%);
+  /* Hero background wash: one soft bloom. */
+  --hero-wash-a: rgb(91 157 255 / 9%);
+  --hero-wash-b: rgb(167 139 250 / 5%);
 
-  --edge-call: #8b5cf6;
+  --edge-call: #a78bfa;
   --edge-return: #22d3c5;
-  --edge-back: #fbbf24;
+  --edge-back: #f5b942;
   --edge-error: #f87171;
 
   /* The same six call colours, lifted for a dark surface. */
@@ -203,7 +208,7 @@
   --call-4: #f9a8d4;
   --call-5: #86efac;
 
-  --focus: #6b9bff;
+  --focus: #6ea8fe;
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
   --shadow-md: 0 8px 24px rgb(0 0 0 / 45%);
