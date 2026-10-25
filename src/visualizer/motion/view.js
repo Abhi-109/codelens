@@ -25,6 +25,41 @@ function flatten(nodes) {
   return map;
 }
 
+/**
+ * The comparison this step recorded, or null.
+ *
+ * A `compare` event is the only evidence of which two values met: its operands,
+ * operator and bool-or-null result come straight from the recording, and its
+ * own heap resolves any operand that is a reference. The operand cells become
+ * active rings only when they still name a visible list or tuple position in
+ * the state on screen; a cellless operand (a scalar, a set membership, a dict
+ * value) highlights nothing rather than guessing a position.
+ *
+ * @param {Object|null} plan a plan from `planMotion`
+ * @returns {{text: string, cells: string[]}|null}
+ */
+export function comparisonOf(plan) {
+  const event = plan?.compareEvent;
+  if (!event || event.event !== "compare") return null;
+  const operands = Array.isArray(event.operands) ? event.operands : [];
+  if (operands.length !== 2) return null;
+  const heap = event.heap ?? {};
+  const cells = [];
+  for (const operand of operands) {
+    const cell = operand?.cell;
+    if (!cell || !Number.isInteger(cell.index) || cell.index < 0) continue;
+    const object = plan.state?.heap?.[cell.object_id];
+    if (!object || (object.type !== "list" && object.type !== "tuple")) continue;
+    if (cell.index >= (object.items?.length ?? 0)) continue;
+    cells.push(motionTargetKey({ kind: "cell", objectId: cell.object_id, index: cell.index }));
+  }
+  const verdict = typeof event.result === "boolean" ? (event.result ? " → True" : " → False") : "";
+  return {
+    text: `compare ${showValue(operands[0]?.value, heap)} ${event.operator} ${showValue(operands[1]?.value, heap)}${verdict}`,
+    cells,
+  };
+}
+
 function flagsFor(plan) {
   const entering = new Set();
   const exiting = new Set();
@@ -33,6 +68,11 @@ function flagsFor(plan) {
   const active = new Set();
   const settled = new Set();
   const moves = [];
+
+  // A comparison changes no state, so it has no action to carry its operand
+  // cells. The recorded cells are evidence all the same: ring them, but never
+  // report a mutation.
+  for (const key of comparisonOf(plan)?.cells ?? []) active.add(key);
 
   // Settled cells are not an operation: no action produced them, and they
   // survive every later step where the recording still proves them. They are
@@ -129,6 +169,10 @@ function objectView(object, flags) {
  */
 export function operationFeedback(plan) {
   if (!plan) return null;
+  // A recorded comparison is a real step of its own, so it gets its own
+  // headline even though it produced no state action.
+  const comparison = comparisonOf(plan);
+  if (comparison) return { kind: "compare", text: comparison.text };
   const operations = Array.isArray(plan.operations) ? plan.operations : [];
   // `from` values exist in the state the animation starts from; `to` values in
   // the target state. Reading each from its own heap keeps a newly created
@@ -275,6 +319,7 @@ export function motionView(plan) {
     durationMs: plan.durationMs,
     mode: plan.mode,
     feedback: operationFeedback(plan),
+    comparison: comparisonOf(plan),
     frames: plan.nodes.frames.map((frame) => frameView(frame, flags)),
     objects: plan.nodes.objects.map((object) => objectView(object, flags)),
     ghosts,

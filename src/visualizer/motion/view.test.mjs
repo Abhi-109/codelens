@@ -12,7 +12,7 @@ import { gunzipSync } from "node:zlib";
 import { snapshotAt, stateOf } from "../../animation/diff.js";
 import { showValue } from "../../tracer/values.js";
 import { MOTION_OPERATION, motionNodes, planMotion } from "./plan.js";
-import { motionView } from "./view.js";
+import { comparisonOf, motionView } from "./view.js";
 
 const read = (path) =>
   JSON.parse(gunzipSync(readFileSync(new URL(path, import.meta.url))).toString());
@@ -594,7 +594,7 @@ test("an insert, a removal and a value change mark only the cell they name", () 
   );
 });
 
-test("no verified mutation means no active cell, on any fixture", () => {
+test("no recorded operation or comparison means no active cell, on any fixture", () => {
   const held = findPlan(
     "bubble-sort",
     (candidate) => candidate.index > 0 && candidate.operations.length === 0,
@@ -606,7 +606,7 @@ test("no verified mutation means no active cell, on any fixture", () => {
     for (let index = 1; index < p.trace.length; index += 1) {
       const plan = planAt(p, index);
       if (!plan) continue;
-      const named = new Set();
+      const named = new Set(comparisonOf(plan)?.cells ?? []);
       for (const operation of plan.operations) {
         if (operation.op === MOTION_OPERATION.move) {
           for (const cell of operation.action?.payload?.indices ?? []) {
@@ -789,6 +789,8 @@ test("a comparison-looking line never invents a swap or operand highlight", () =
   let checked = 0;
 
   for (let index = 0; index < p.trace.length; index += 1) {
+    // A `compare` event is real evidence and is covered by its own tests below.
+    if (p.trace[index]?.event === "compare") continue;
     const line = snapshotAt(p.trace, index).line;
     if (!/[<>]=?|==|!=/.test(lines[line - 1] ?? "")) continue;
     checked += 1;
@@ -805,6 +807,130 @@ test("a comparison-looking line never invents a swap or operand highlight", () =
   }
 
   assert.ok(checked > 0, "the fixture really runs comparison lines");
+});
+
+function comparePlans(name) {
+  const p = program(name);
+  const out = [];
+  for (let index = 0; index < p.trace.length; index += 1) {
+    if (p.trace[index]?.event === "compare") {
+      out.push({ p, index, plan: planAt(p, index) });
+    }
+  }
+  return out;
+}
+
+test("a recorded comparison rings its cells and reports only what it compared", () => {
+  const compares = comparePlans("bubble-sort");
+  assert.ok(compares.length > 0, "the fixture records comparisons");
+
+  for (const { p, index, plan } of compares) {
+    const event = plan.compareEvent;
+    const view = motionView(plan);
+    const pair = event.operands
+      .map((operand) => showValue(operand.value, event.heap))
+      .join(` ${event.operator} `);
+
+    assert.equal(view.feedback.kind, "compare");
+    assert.equal(view.feedback.text, `compare ${pair}${event.result ? " → True" : " → False"}`);
+    assert.equal(view.line, event.line, "the head names the compared line");
+    assert.equal(view.lineText, p.source.split(/\r?\n/)[event.line - 1].trim());
+
+    // A comparison is not a mutation, even when the next step swaps.
+    assert.equal(plan.actions.length, 0, `step ${index} produced actions`);
+    assert.deepEqual(view.moves, []);
+    assert.deepEqual(view.changed, []);
+    assert.deepEqual(view.ghosts, []);
+    assert.equal(view.animate, false);
+
+    // Only the operand cells at visible list positions are ringed.
+    const expected = event.operands.flatMap((operand) => {
+      const cell = operand.cell;
+      if (!cell || !Number.isInteger(cell.index) || cell.index < 0) return [];
+      const object = plan.state.heap[cell.object_id];
+      if (!object || !["list", "tuple"].includes(object.type)) return [];
+      if (cell.index >= object.items.length) return [];
+      return [`cell:${cell.object_id}:${cell.index}`];
+    });
+    assert.deepEqual(keysOf(activeCells(view)), [...new Set(expected)].sort());
+  }
+});
+
+test("a comparison with no recorded verdict invents no answer", () => {
+  const nullResult = comparePlans("sort-mixed").find(
+    ({ plan }) => plan.compareEvent.result === null,
+  );
+  assert.ok(nullResult, "the fixture records a comparison that raised");
+  const view = motionView(nullResult.plan);
+  assert.equal(view.feedback.kind, "compare");
+  assert.ok(!view.feedback.text.includes("→"), view.feedback.text);
+  assert.deepEqual(keysOf(activeCells(view)), ["cell:o1:0", "cell:o1:1"]);
+});
+
+test("a comparison prints a referenced operand from its own recorded heap", () => {
+  const p = program("set-basics");
+  const found = p.trace.findIndex(
+    (event) => event?.event === "compare" && event.operands.some((operand) => operand.value?.type === "ref"),
+  );
+  assert.notEqual(found, -1, "the fixture compares against a referenced set");
+  const event = p.trace[found];
+  const pair = event.operands
+    .map((operand) => showValue(operand.value, event.heap))
+    .join(` ${event.operator} `);
+  const view = motionView(planAt(p, found));
+
+  assert.ok(view.feedback.text.includes(pair), view.feedback.text);
+  assert.deepEqual(
+    activeCells(view),
+    [],
+    "a membership operand has no cell, so nothing is ringed",
+  );
+});
+
+test("backward playback and seeking reconstruct the same comparison", () => {
+  const { p, index, plan } = comparePlans("bubble-sort")[0];
+  const expected = motionView(plan);
+  for (const previousIndex of [index + 1, 0, index]) {
+    const other = motionView(planAt(p, index, { previousIndex }));
+    assert.equal(other.feedback.kind, "compare");
+    assert.equal(other.feedback.text, expected.feedback.text);
+    assert.deepEqual(keysOf(activeCells(other)), keysOf(activeCells(expected)));
+    assert.deepEqual(other.moves, []);
+    assert.deepEqual(other.changed, []);
+  }
+});
+
+test("a comparison never rings a cell its own evidence cannot place", () => {
+  const base = comparePlans("bubble-sort")[0].plan;
+  const event = base.compareEvent;
+  const second = `cell:${event.operands[1].cell.object_id}:${event.operands[1].cell.index}`;
+  const withFirstCell = (cell) => ({
+    ...base,
+    compareEvent: {
+      ...event,
+      operands: [{ ...event.operands[0], cell }, event.operands[1]],
+    },
+  });
+  const active = (cell) => keysOf(activeCells(motionView(withFirstCell(cell))));
+
+  assert.deepEqual(active(null), [second], "a scalar operand names no cell");
+  assert.deepEqual(active({ object_id: "o1", index: -1 }), [second]);
+  assert.deepEqual(active({ object_id: "o1", index: 1.5 }), [second]);
+  assert.deepEqual(active({ object_id: "o999", index: 0 }), [second]);
+  assert.deepEqual(active({ object_id: "o1", index: 999 }), [second]);
+  assert.deepEqual(
+    active(event.operands[0].cell),
+    keysOf(activeCells(motionView(base))),
+    "the untouched evidence still rings both cells",
+  );
+});
+
+test("a comparison step establishes no finality of its own", () => {
+  for (const { p, index, plan } of comparePlans("bubble-sort")) {
+    const before = planAt(p, index - 1);
+    assert.deepEqual(plan.finalized, before.finalized, `step ${index} changed finality`);
+    assert.deepEqual(plan.stateActions, [], `step ${index} changed state`);
+  }
 });
 
 test("a settled cell is flagged on the exact slot the plan proves", () => {

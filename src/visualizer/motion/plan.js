@@ -301,6 +301,9 @@ export function planMotion(
   }
   const next = snapshotAt(trace, index);
   if (!next) return null;
+  // `snapshotAt` borrows the visible state from the previous line event, so a
+  // comparison's own operand heap has to be kept separately to print operands.
+  const raw = trace[index];
   const state = stateOf(next);
   const line = Number.isInteger(next.line) ? next.line : null;
   const lineText =
@@ -339,6 +342,7 @@ export function planMotion(
     index,
     step: next.step,
     event: next.event ?? null,
+    compareEvent: raw?.event === "compare" ? raw : null,
     line,
     lineText,
     transition,

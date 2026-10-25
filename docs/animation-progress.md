@@ -139,10 +139,11 @@ the Phase 1 plan is waiting for approval, not for clarification.
 ## Next action
 Stage 5 R1–R4 are in: labeled cells replace the bars, verified operations ring the cells they
 touch, the interrupted-move measurement order is fixed, and the canvas now uses its width with
-a single step head (line, operation, source). The R3 measurement fix and the R4 layout both
-still need a real browser check; this environment has no browser automation. Comparison
-visualisation has no trace data; the smallest viable design for capturing operands and outcomes
-is reported and awaits a separate architectural decision. Nothing is pushed.
+a single step head (line, operation, source). Comparison steps now use the format-3 event: the
+head names the two operands, the operator and the recorded outcome, and the recorded operand
+cells get the active ring without pretending a mutation happened. The R3 measurement fix, the
+R4 layout and the new comparison treatment still need a real browser check; this environment
+has no browser automation. Nothing is pushed.
 
 ## Comparison capture notes (format 3, landed)
 - The owner approved the design on 2026-10-25 with two decisions: a **dedicated `compare`
@@ -176,12 +177,21 @@ is reported and awaits a separate architectural decision. Nothing is pushed.
   non-bool result left undecided, a raising comparison keeping its operands, chained
   comparisons not captured, operands evaluated once in order, membership/identity operators,
   and comparisons not consuming steps. Python suite is **133 tests**.
-- **Deliberately not done yet:** the two vendored JS fixtures are still format 2, so the app
-  tests keep running on the old event sequence and the motion canvas has no compare
-  treatment. Regenerating them shifts every index-pinned JS test, so it lands with the
-  renderer commit that actually draws comparisons.
+- **Renderer landed:** the vendored JS fixtures were regenerated at format 3, so every JS
+  consumer now runs on the real compare events. `timeline.js` gives a compare row its
+  `operands op operands → True/False` text, `explain.js` and `statementStage.js` describe the
+  comparison from the event, and the motion canvas shows `compare 4 > 2 → True` in its step
+  head while ringing the recorded operand cells. A compare step has no actions, so it moves
+  nothing and cannot establish a settled position; backward playback and seeking recompute the
+  same comparison from the same position. A cell is ringed only when its recorded
+  `{object_id, index}` still names a visible list/tuple position; negative indices, non-integer
+  (dict-key) indices and hidden positions highlight nothing.
+- **Limits kept:** a `numbers[-1]` operand records its raw negative index, so the canvas does
+  not ring that cell; a dict subscript has no positional cell to ring; a comparison that raises
+  shows its operands and no verdict. Chained comparisons and operands containing
+  `yield`/`yield from`/`await` are still not captured at all.
 
-## Comparison capture notes (proof of concept, not wired in)
+## Comparison capture notes (proof of concept, historical)
 - Starting point: the trace has no comparison event and no operand record. `programProfile.js`
   has static comparison *sites* (line plus operand labels taken from the AST), and
   `sortingAdapter.js` turns those into highlights by reading the frame's variables at that

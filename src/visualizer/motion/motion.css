@@ -74,6 +74,13 @@
   color: var(--accent);
 }
 
+/* A recorded comparison is evidence, not a mutation: same one-line head, with
+ * the emphasis on the values rather than the operation's accent weight. */
+.motion-event.is-compare {
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
 .motion-source {
   flex: 1 1 100%;
   overflow: hidden;
