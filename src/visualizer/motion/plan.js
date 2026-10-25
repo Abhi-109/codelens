@@ -29,6 +29,7 @@ import {
 import { namesById, objectLabel } from "../../tracer/objects.js";
 import { showValue } from "../../tracer/values.js";
 import { isSpeed } from "../playback.js";
+import { finalizedCells } from "./finality.js";
 
 /** How the cursor reached this index. Only the two adjacent transitions animate. */
 export const MOTION_TRANSITION = Object.freeze({
@@ -351,6 +352,10 @@ export function planMotion(
     durationMs,
     state,
     previousState,
+    // Cells the recording proves settled. A property of this position only:
+    // the same index always recomputes the same cells, whatever the cursor did
+    // before, so a seek or a backward step cannot keep a later step's marks.
+    finalized: finalizedCells(state, trace),
     actions,
     stateActions: stateActions(actions),
     overlays: actions.filter((action) => action.effect === "overlay"),

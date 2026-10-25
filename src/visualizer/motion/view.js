@@ -31,7 +31,17 @@ function flagsFor(plan) {
   const changed = new Set();
   const highlighted = new Set();
   const active = new Set();
+  const settled = new Set();
   const moves = [];
+
+  // Settled cells are not an operation: no action produced them, and they
+  // survive every later step where the recording still proves them. They are
+  // keyed exactly like the slots they mark.
+  for (const group of plan.finalized ?? []) {
+    for (const index of group.indices ?? []) {
+      settled.add(motionTargetKey({ kind: "cell", objectId: group.objectId, index }));
+    }
+  }
 
   for (const operation of plan.operations) {
     const key = operation.targetKey;
@@ -62,7 +72,7 @@ function flagsFor(plan) {
     }
   }
 
-  return { entering, exiting, changed, highlighted, active, moves };
+  return { entering, exiting, changed, highlighted, active, settled, moves };
 }
 
 function variableView(variable, flags) {
@@ -81,6 +91,9 @@ function slotView(slot, flags) {
     changed: flags.changed.has(slot.key),
     highlighted: flags.highlighted.has(slot.key),
     active: flags.active.has(slot.key),
+    // Proven by the recording, not by this step's actions, so a swap that
+    // starts now never clears a position settled earlier.
+    settled: flags.settled.has(slot.key),
   };
 }
 

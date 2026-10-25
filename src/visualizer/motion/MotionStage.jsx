@@ -77,6 +77,7 @@ function Slot({ slot, registerNode }) {
         slot.changed && "is-changed",
         slot.highlighted && "is-highlighted",
         slot.active && "is-active",
+        slot.settled && "is-settled",
         slot.entering && "is-entering",
       )}
       data-key={slot.key}

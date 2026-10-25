@@ -806,3 +806,62 @@ test("a comparison-looking line never invents a swap or operand highlight", () =
 
   assert.ok(checked > 0, "the fixture really runs comparison lines");
 });
+
+test("a settled cell is flagged on the exact slot the plan proves", () => {
+  for (const name of MATRIX) {
+    const p = program(name);
+    for (let index = 0; index < p.trace.length; index += 1) {
+      const plan = planAt(p, index);
+      if (!plan) continue;
+      const view = motionView(plan);
+      const proven = new Set(
+        plan.finalized.flatMap((group) =>
+          group.indices.map((cell) => `cell:${group.objectId}:${cell}`),
+        ),
+      );
+      const flagged = allSlots(view).filter((slot) => slot.settled);
+      assert.deepEqual(
+        new Set(flagged.map((slot) => slot.key)),
+        proven,
+        `${name} step ${index} flags cells the recording did not prove`,
+      );
+      for (const slot of flagged) {
+        assert.equal(slot.kind, "cell", `${name} step ${index} settled a non-cell`);
+        assert.equal(slot.container, "list", `${name} step ${index} settled a non-list`);
+      }
+    }
+  }
+});
+
+test("a settled position survives the swap that follows it", () => {
+  const { p, index, plan } = findPlan(
+    "bubble-sort",
+    (candidate) =>
+      Boolean(moveOf(candidate, "swap")) &&
+      candidate.finalized.some((group) => group.indices.length > 0),
+  );
+  const view = motionView(plan);
+  const swap = moveOf(plan, "swap");
+  const [left, right] = swap.action.payload.indices;
+  const active = activeCells(view).map((slot) => slot.key);
+
+  // The operation is exactly the pair the diff verified, and the position an
+  // earlier pass settled is still green beside it.
+  assert.deepEqual(new Set(active), new Set([`cell:o1:${left}`, `cell:o1:${right}`]));
+  const settled = allSlots(view).filter((slot) => slot.settled);
+  assert.ok(settled.length > 0, "the previous pass's positions are still marked");
+  // This first proven swap is the one that puts a value into the place it ends
+  // in, so the same cell is both the operation and settled. Both flags stay
+  // set: the operation takes the blue ring, the settled green keeps the index.
+  assert.ok(
+    settled.some((slot) => active.includes(slot.key)),
+    "a swap that completes a position carries both marks",
+  );
+
+  // The mark is not a one-step flash: the following step keeps it.
+  const next = motionView(planAt(p, index + 1));
+  const nextSettled = new Set(allSlots(next).filter((slot) => slot.settled).map((slot) => slot.key));
+  for (const slot of settled) {
+    assert.ok(nextSettled.has(slot.key), `step ${index + 1} lost the settled ${slot.key}`);
+  }
+});

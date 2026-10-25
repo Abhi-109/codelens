@@ -335,12 +335,31 @@
   box-shadow: 0 0 0 1px var(--accent-border);
 }
 
+/* A cell the recording proves settled: it already holds the value this
+ * position ends with. Green is the status token; the accent stays reserved for
+ * the operation happening now, so a swap's two blue cells never read as
+ * "sorted". Both states are the same ring in two colors, not two shapes.
+ * Inset because the sequence row clips its overflow. */
+.motion-slot.motion-cell.is-settled {
+  border-color: var(--ok);
+  box-shadow: inset 0 0 0 1px var(--ok);
+}
+
+.motion-slot.motion-cell.is-settled .motion-cell-index {
+  color: var(--ok);
+}
+
 /* The verified operation's cells. A ring, not a fill: the fill is the change
  * flash, so a swap reads as two ringed cells moving, not two repainted values.
- * Inset because the sequence row clips its overflow. */
+ * The operation takes the ring back while it runs - it is the thing happening -
+ * and the settled green stays legible on the index label underneath. */
 .motion-slot.motion-cell.is-active {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.motion-slot.motion-cell.is-active.is-settled .motion-cell-index {
+  color: var(--ok);
 }
 
 .motion-slot {

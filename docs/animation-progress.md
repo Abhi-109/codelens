@@ -4,7 +4,7 @@
 **Current milestone:** Motion-first visualizer — Stage 1 (numeric bars) done; Stage 2 awaits
 approval. Task 7 Stages 1–3 remain complete; the diff engine's remaining `apply.js`/golden
 work is separately scoped.
-**Last updated:** 2026-10-24
+**Last updated:** 2026-10-25
 
 ## Phase checklist
 - [x] 0 Audit
@@ -143,6 +143,52 @@ a single step head (line, operation, source). The R3 measurement fix and the R4 
 still need a real browser check; this environment has no browser automation. Comparison
 visualisation has no trace data; the smallest viable design for capturing operands and outcomes
 is reported and awaits a separate architectural decision. Nothing is pushed.
+
+## Motion-first Stage 6 notes (persistent settled positions)
+- **The trace has no field that says "this position is final".** No event carries intent,
+  and a state alone cannot prove it: "this cell has not changed lately" is not evidence, and
+  "the tail happens to be in order" is true of arrays that still move. The smallest reliable
+  way to expose it turned out not to be a schema change at all: a complete trace already
+  records the run's own outcome.
+- `src/visualizer/motion/finality.js` is that rule, pure and applied per cursor position,
+  never accumulated. A position is marked only when all of these hold: the run ended cleanly
+  (its last event is a `return`); the list's last recorded contents are untruncated; those
+  contents are nondecreasing (finite numbers, big ints excluded); the trace rearranged the
+  list in place (two consecutive snapshots of equal length with a different value, so an
+  untouched or merely grown list is never coloured); and the cell's current value already
+  equals the value that same position ends with, with that match reaching in from an end of
+  the row. A lone equal value in a still-moving middle is not marked.
+- The rule is algorithm-agnostic. A bubble sort's settled tail, an insertion sort's settled
+  head and a selection sort's settled head all fall out of the same boundary match; no loop
+  variable, source line, algorithm name or "recently moved" heuristic is read. On the real
+  bubble trace the first proven step is 14 (`[2, 4, 1, 3, 5]`) with only index 4 settled,
+  then step 24 with `[2, 3, 4]`, then step 29 with all five. `builtin-sort`, which rewrites
+  in place, settles all three cells at its last visible step.
+- The operation keeps the accent. `is-active` is still the verified swap's two blue cells
+  (`--accent`); settled cells take `--ok` green on the border, an inset ring and the index
+  label, so the two meanings share one ring shape in two colours. When a swap is itself the
+  operation that puts a value in place - which is exactly the first proven bubble swap - the
+  cell carries both: blue ring over green index. That overlap is real and is tested.
+- Reconstruction needs no bookkeeping: a plan recomputes `finalized` from the state at its
+  own index, so backward steps, seeks and reset cannot keep a later step's cells, and there
+  is no accumulator to clear.
+- Tests: 11 in `finality.test.mjs` and 2 in `view.test.mjs`, all on real fixtures
+  (`bubble-sort`, `bubble-duplicates`, `bubble-negative`, `insertion-sort`, `selection-sort`,
+  `builtin-sort`, `bubble-sorted`, `bubble-truncated`, `list-basics`, `list-mutation`,
+  `merge-sort`, `sort-mixed`) plus one clearly-marked synthetic step-limit trace, because no
+  fixture pairs a list with a limit event. The suite checks: every marked cell holds the
+  value its position ends with; marks only grow while the list is visible; the last visible
+  step settles every cell; the shape is always a prefix-plus-suffix; duplicates settle by
+  position; a failed run, a truncated list, an unsorted outcome, an untouched list and a
+  grown-only list are never marked; the same index proves the same cells however it was
+  reached; reset shows none; and only a list's cells can settle. JS suite is **679 tests**.
+- Known limits, deliberately conservative: an already-sorted input (`bubble-sorted`) shows no
+  green, because the trace never rearranged it and so proves nothing about a settled
+  position; a list built only by appends (`merge-sort`'s merged result) shows no green;
+  string, mixed-type and truncated outcomes are never verified. A tracer-emitted per-step
+  finality fact would show those too, but that is a trace-format change and was not made.
+- No tracer, trace-format, action-vocabulary, diff, cursor, dependency or other-canvas
+  change. Untouched programs keep uncoloured cells.
 
 ## Motion-first Stage 5 notes (canvas focus and step head, R4)
 - Layout cause, fixed at both levels: `.motion-object` was still `flex: 0 1 300px`, so a
