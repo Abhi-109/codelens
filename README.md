@@ -213,7 +213,7 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 136 Python tests: the tracer and its comparison events, the
                       # flowchart model, the static program profile and the corpus
-npm run test:js       # 739 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 762 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6
                       # dict/set/object contents and lifecycle), the pure motion
@@ -224,7 +224,8 @@ npm run test:js       # 739 JS tests: the animation diff vocabulary, the one-tra
                       # choreography (curves, arcs, one duration per pair),
                       # DOM-free motion view and its real-
                       # action-to-render mapping (persistent keys, verified moves,
-                      # ghosts, highlights),
+                      # ghosts, highlights), the stage's output/return/ending
+                      # facts at the cursor,
                       # the safe index evaluator and the
                       # statement-shape parser, the call tree and control flow model and
                       # layout, the
@@ -267,7 +268,9 @@ operation, Back/Next/seek/reset, invalid input), opens a lesson's program in the
 visualizer, and checks both themes, reduced motion at 390px, keyboard focus and arrow-key
 seeking. The release regressions cover a successful run's status label, a 200-element
 list, a cyclic list, runaway recursion and its capped call strip, a caught exception, and
-the skip link. It needs Chrome or Edge; set `CHROME_PATH` if it is not in a standard location.
+the skip link. The stage checks cover scalar-only values, a returned string beside its
+printed output (`greet()`), backward seeking, reset, both themes and a 390 px phone. It
+needs Chrome or Edge; set `CHROME_PATH` if it is not in a standard location.
 It is the only test that can exercise the effect ordering in `MotionStage.jsx`, so it is
 the regression test for the interruption fix.
 
@@ -351,6 +354,8 @@ codelens/
 │   │   │   ├── plan.test.mjs   # real traces, reversibility, seeks, timing, cancellation
 │   │   │   ├── view.js          # plan -> drawable nodes, ghosts and step flags (pure)
 │   │   │   ├── view.test.mjs   # real-trace action-to-render mapping
+│   │   │   ├── stageResult.js   # output, last return and ending at the cursor (pure)
+│   │   │   ├── stageResult.test.mjs
 │   │   │   ├── MotionStage.jsx  # persistent data cards, FLIP moves, cancellation
 │   │   │   ├── motion.css       # the motion canvas styling, token-only
 │   │   │   └── useReducedMotion.js # the live prefers-reduced-motion preference

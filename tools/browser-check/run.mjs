@@ -63,6 +63,15 @@ for n in range(1, 5):
 print(total)
 `;
 
+// The reported regression: a returned string and its printed output, neither
+// of which had a place on the canvas before.
+const GREET = `def greet(name):
+    message = "Hello, " + name
+    return message
+
+print(greet("Asha"))
+`;
+
 // --- assertions -------------------------------------------------------------
 
 const failures = [];
@@ -117,6 +126,19 @@ function readStage(browser) {
       rowScrollWidth: row?.scrollWidth ?? null,
       rowClientWidth: row?.clientWidth ?? null,
       noValues: Boolean(stage.querySelector(".motion-no-values")),
+      scalars: [...stage.querySelectorAll(".motion-scalar")].map((el) => ({
+        name: el.querySelector(".motion-scalar-name")?.textContent,
+        value: el.querySelector(".motion-scalar-value")?.textContent,
+        type: el.querySelector(".motion-scalar-type")?.textContent,
+        changed: el.classList.contains("is-changed"),
+      })),
+      scalarsMore: stage.querySelector(".motion-scalars-more")?.textContent ?? null,
+      returnFunction: stage.querySelector(".motion-return-fn")?.textContent ?? null,
+      returnValue: stage.querySelector(".motion-return-value")?.textContent ?? null,
+      output: stage.querySelector(".motion-output-text")?.textContent ?? null,
+      result: stage.querySelector(".motion-result-status")?.textContent ?? null,
+      resultDetail: stage.querySelector(".motion-result-detail")?.textContent ?? null,
+      resultNote: stage.querySelector(".motion-result-note")?.textContent ?? null,
       objects: [...stage.querySelectorAll(".motion-object")].map((el) => ({
         type: el.querySelector(".motion-object-type")?.textContent,
         label: el.querySelector(".motion-object-label")?.textContent,
@@ -889,12 +911,24 @@ async function fallbacks(browser) {
   const scalarMax = (await readStage(browser)).max;
   await seek(browser, scalarMax);
   const scalar = await readStage(browser);
-  check(scalar.noValues, "a program without collections says there is nothing to draw");
+  check(!scalar.noValues, "a program without collections no longer claims there is nothing to draw");
   check(
     scalar.objects.length === 0,
     "a program without collections draws no value cards",
     `${scalar.objects.length}`,
   );
+  check(
+    scalar.scalars.some((tile) => tile.name === "total" && tile.value === "6"),
+    "the scalar program shows total as a value tile",
+    JSON.stringify(scalar.scalars),
+  );
+  check(
+    scalar.scalars.some((tile) => tile.name === "n" && tile.type === "int"),
+    "the scalar program labels the type it can prove",
+    JSON.stringify(scalar.scalars),
+  );
+  check(scalar.output === "6\n", "the scalar program shows its printed output", scalar.output);
+  check(scalar.result === "Completed", "the scalar program reaches a completed state", scalar.result);
   check(
     scalar.variables.some((variable) => variable.includes("total")),
     "the scalar program still shows its variables",
@@ -912,7 +946,116 @@ async function fallbacks(browser) {
     "the scalar program still explains its steps",
     explained ? `step ${explained.index}: ${explained.text}` : "no step had a sentence",
   );
+  // The final step is the useful composition: values, printed output, status.
+  await seek(browser, scalarMax);
   await browser.screenshot("scalars");
+
+  // The reported greet() regression: the returned string and the printed
+  // output must both be visible in the stage, not only in the Inspector.
+  await openProgram(browser, GREET);
+  const greetMax = (await readStage(browser)).max;
+  await seek(browser, greetMax);
+  const greet = await readStage(browser);
+  check(
+    greet.returnFunction === "greet() returned" && greet.returnValue === '"Hello, Asha"',
+    "the stage shows the returned string with the function that returned it",
+    `${greet.returnFunction} ${greet.returnValue}`,
+  );
+  check(
+    greet.output === "Hello, Asha\n",
+    "the stage shows the printed output separately from the return value",
+    JSON.stringify(greet.output),
+  );
+  check(greet.result === "Completed", "the greet run reaches a completed state", greet.result);
+  check(
+    greet.resultNote === null,
+    "a run with output is not also called empty",
+    greet.resultNote,
+  );
+  await browser.screenshot("greet-final");
+
+  // Output is a tail of the recording: the first printed step is found by
+  // stepping, then the step before it must have no output at all.
+  let firstOutput = null;
+  for (let index = 0; index <= greetMax && firstOutput === null; index += 1) {
+    await seek(browser, index);
+    const state = await readStage(browser);
+    if (state.output !== null) firstOutput = { index, text: state.output };
+  }
+  check(firstOutput !== null, "the greet run records its print", JSON.stringify(firstOutput));
+  if (firstOutput) {
+    await seek(browser, firstOutput.index - 1);
+    const before = await readStage(browser);
+    check(
+      before.output === null,
+      "seeking back before a print removes the future output",
+      JSON.stringify(before.output),
+    );
+  }
+
+  // Reset position: no output and no final status.
+  await seek(browser, 0);
+  const greetStart = await readStage(browser);
+  check(
+    greetStart.output === null && greetStart.result === null && greetStart.returnValue === null,
+    "reset clears output, return and final status",
+    JSON.stringify({
+      output: greetStart.output,
+      result: greetStart.result,
+      returned: greetStart.returnValue,
+    }),
+  );
+
+  // The same result stage in the light theme and on a phone.
+  await seek(browser, greetMax);
+  const toggleTheme = () =>
+    browser.evaluate(`(() => {
+      const el = [...document.querySelectorAll("button")].find((button) =>
+        (button.getAttribute("aria-label") ?? "").startsWith("Switch to"),
+      );
+      if (!el) return false;
+      el.click();
+      return true;
+    })()`);
+  check(await toggleTheme(), "theme toggle exists on the result stage");
+  await sleep(300);
+  const greetLight = await readStage(browser);
+  check(
+    greetLight.theme === "light" &&
+      greetLight.returnValue === '"Hello, Asha"' &&
+      greetLight.output === "Hello, Asha\n",
+    "the return and output survive the light theme",
+    JSON.stringify({
+      theme: greetLight.theme,
+      returned: greetLight.returnValue,
+      output: greetLight.output,
+    }),
+  );
+  await browser.screenshot("greet-light");
+  check(await toggleTheme(), "theme toggles back after the result stage");
+  await sleep(300);
+
+  await browser.send("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
+  await sleep(300);
+  const greetMobile = await readStage(browser);
+  check(
+    !greetMobile.bodyOverflow,
+    "the result stage does not overflow a phone width",
+    `${greetMobile.bodyOverflow}`,
+  );
+  check(
+    greetMobile.returnValue === '"Hello, Asha"' && greetMobile.output === "Hello, Asha\n",
+    "the return and output stay readable on a phone",
+    JSON.stringify({ returned: greetMobile.returnValue, output: greetMobile.output }),
+  );
+  await browser.screenshot("greet-mobile");
+  await browser.send("Emulation.clearDeviceMetricsOverride");
+  await sleep(200);
 }
 
 // --- E. data-structure lab, lessons, narrow screen and keyboard -------------
@@ -1382,7 +1525,10 @@ async function productPages(browser) {
 
 const BIG_ARRAY = "numbers = list(range(200))\nprint(numbers[0])\nprint(numbers[-1])\n";
 const CYCLE = "a = []\na.append(a)\nb = a\nprint(a)\n";
-const RUNAWAY = "def down(n):\n    return down(n + 1)\nprint(down(0))\n";
+// A low recursion limit keeps this deterministic: Pyodide can otherwise spend
+// the whole time budget walking a thousand frames and report Timeout instead.
+const RUNAWAY =
+  "import sys\nsys.setrecursionlimit(120)\n\ndef down(n):\n    return down(n + 1)\nprint(down(0))\n";
 const CAUGHT = "values = [1, 2]\ntry:\n    print(values[5])\nexcept IndexError:\n    print('caught')\nprint('after')\n";
 
 async function releaseRegressions(browser) {
@@ -1438,15 +1584,18 @@ async function releaseRegressions(browser) {
 
   // Runaway recursion: an honest runtime error, a capped call strip.
   await openProgram(browser, RUNAWAY);
-  const runaway = await readStage(browser);
+  const runawayMax = (await readStage(browser)).max;
   check(
     (await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()')) ===
       "Runtime error",
     "runaway recursion reports a runtime error",
     await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()'),
   );
+  // The last step is the error itself; the step before it holds the deep stack.
+  await seek(browser, runawayMax - 1);
+  const runaway = await readStage(browser);
   check(
-    runaway.frameCount <= 24,
+    runaway.frameCount > 0 && runaway.frameCount <= 24,
     "the call strip is capped on a deep stack",
     `${runaway.frameCount} frames`,
   );
@@ -1457,6 +1606,18 @@ async function releaseRegressions(browser) {
     "the capped strip says where the rest are listed",
   );
   check(!runaway.bodyOverflow, "the deep stack does not overflow the page");
+  await seek(browser, runawayMax);
+  const runawayEnd = await readStage(browser);
+  check(
+    runawayEnd.result === "Runtime error" && !/Completed/.test(runawayEnd.result ?? ""),
+    "the failed run's stage says Runtime error, not Completed",
+    `${runawayEnd.result} ${runawayEnd.resultDetail}`,
+  );
+  check(
+    /RecursionError/.test(runawayEnd.resultDetail ?? ""),
+    "the failed run's stage names the recorded error",
+    runawayEnd.resultDetail,
+  );
   await browser.screenshot("runaway-recursion");
 
   // A caught exception is not a failed program.
@@ -1475,6 +1636,11 @@ async function releaseRegressions(browser) {
     `(() => document.querySelector(".output-console")?.textContent ?? "")()`,
   );
   check(/after/.test(printed), "the program keeps running after a caught exception", printed.slice(0, 80));
+  check(
+    caught.result === "Completed" && /caught/.test(caught.output ?? "") && /after/.test(caught.output ?? ""),
+    "the stage itself shows the caught run's output and completion",
+    JSON.stringify({ result: caught.result, output: caught.output }),
+  );
   check(!caught.bodyOverflow, "the caught exception run does not overflow the page");
   await browser.screenshot("caught-exception");
 

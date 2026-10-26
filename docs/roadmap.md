@@ -57,6 +57,24 @@ Release-readiness pass over the finished product. Details and evidence are in
       recursion, caught and uncaught exceptions
 - [x] Browser regressions for each of the above
 
+## Values, results and output (Phase 6)
+
+The motion stage stopped drawing only heap collections. Details and evidence are
+in [animation-progress.md](animation-progress.md).
+
+- [x] Scalar-only programs draw compact value tiles (name, value, type) instead
+      of a "nothing to draw" message
+- [x] The most recent named function return is shown as a result tile; the
+      module's implicit `None` reads as completion, not a returned value
+- [x] Printed output is its own bounded area, reconstructed from the recorded
+      output events up to the cursor
+- [x] The final step reports Completed, a limit, or the recorded runtime/syntax
+      error instead of treating every ending as success
+- [x] Seeking backwards removes future output; step 0 clears output, return and
+      status; a new run replaces all three
+- [x] Browser regressions for `greet()` (return and printed output), scalar-only
+      runs, backward seeking, reset, both themes and a 390 px phone
+
 ## Flowchart renderer (stages A3–A5) — superseded
 
 > **Retired.** This slice drew the format-2 chart with **dagre**, and was

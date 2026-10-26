@@ -73,7 +73,10 @@ export function sessionReducer(state, action) {
     case SESSION_ACTION.runSucceeded: {
       const result = action.result ?? null;
       const trace = Array.isArray(result?.trace) ? result.trace : [];
-      const wanted = action.index ?? (result?.error ? errorStep(trace) : 0);
+      // The tracer records a crashed run as status "error" with error_type;
+      // an engine failure carries an `error` object instead.
+      const failed = Boolean(result?.error) || result?.status === "error";
+      const wanted = action.index ?? (failed ? errorStep(trace) : 0);
       return {
         ...state,
         result,

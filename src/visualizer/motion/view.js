@@ -10,6 +10,7 @@
 
 import { showValue } from "../../tracer/values.js";
 import { MOTION_OPERATION, motionNodes, motionTargetKey } from "./plan.js";
+import { stageResult } from "./stageResult.js";
 
 function flatten(nodes) {
   const map = new Map();
@@ -267,9 +268,46 @@ function slotView(slot, flags) {
  * many it left out; the Stack tab still lists every recorded frame. */
 export const MAX_VISIBLE_FRAMES = 24;
 
+/* A scalar-only program still has values worth seeing. The current call's
+ * primitive variables become compact tiles; collections keep their object
+ * cards, and functions, classes and modules are context rather than data. */
+export const MAX_VISIBLE_SCALARS = 12;
+const SCALAR_TYPES = new Set(["int", "float", "str", "bool", "none", "other"]);
+
+function scalarTiles(plan, flags) {
+  const frames = plan?.nodes?.frames ?? [];
+  const current = frames[frames.length - 1] ?? null;
+  if (!current) return { scalars: [], scalarsHidden: 0 };
+  const tiles = current.variables
+    .filter((variable) => SCALAR_TYPES.has(variable.valueType))
+    .map((variable) => ({
+      key: variable.key,
+      name: variable.name,
+      text: variable.text,
+      valueType: variable.valueType,
+      typeName:
+        variable.valueType === "none"
+          ? "None"
+          : (variable.value?.class ?? variable.valueType),
+      changed: flags.changed.has(variable.key),
+      highlighted: flags.highlighted.has(variable.key),
+    }));
+  // This step's own variables come first, then the rest in recorded order.
+  const ordered = [
+    ...tiles.filter((tile) => tile.changed || tile.highlighted),
+    ...tiles.filter((tile) => !(tile.changed || tile.highlighted)),
+  ];
+  return {
+    scalars: ordered.slice(0, MAX_VISIBLE_SCALARS),
+    scalarsHidden: Math.max(0, ordered.length - MAX_VISIBLE_SCALARS),
+  };
+}
+
 function frameView(frame, flags, returned) {
+  // The module frame's implicit None is completion, not a returned value.
   const ownsReturn =
     returned !== null &&
+    frame.function !== "<module>" &&
     (returned.frameId !== null
       ? returned.frameId === frame.frameId
       : returned.function === frame.function);
@@ -441,6 +479,15 @@ export function operationFeedback(plan) {
 
   const returned = plan.returned;
   if (returned) {
+    // The top-level script always hands back an implicit None. Calling that a
+    // return value would read as a result the learner never asked for.
+    if (returned.function === "<module>") {
+      return {
+        kind: "return",
+        text: "program finished",
+        explanation: "The script reaches its end, so the run is complete.",
+      };
+    }
     const value = returned.value ? showValue(returned.value, plan.state?.heap ?? {}) : null;
     return {
       kind: "return",
@@ -474,15 +521,18 @@ export function operationFeedback(plan) {
  * target so a removed element can animate away without changing layout.
  *
  * @param {Object|null} plan a plan from `planMotion`
+ * @param {{trace?: Array, result?: Object|null}} [stage] the run behind the plan
  * @returns {Object|null}
  */
-export function motionView(plan) {
+export function motionView(plan, stage = null) {
   if (!plan) return null;
   const previousNodes = plan.previousState ? motionNodes(plan.previousState) : null;
   const previous = flatten(previousNodes);
   const flags = flagsFor(plan);
   const feedback = operationFeedback(plan);
   const returned = returnOf(plan);
+  const scalars = scalarTiles(plan, flags);
+  const result = stageResult(stage?.trace, plan.index, stage?.result ?? null);
 
   // A seek, reset, hold or reduced-motion presentation renders the exact
   // target directly. Only a real adjacent animation may show a removed node.
@@ -512,6 +562,11 @@ export function motionView(plan) {
     explanation: feedback?.explanation ?? null,
     frames: shown.map((frame) => frameView(frame, flags, returned)),
     framesHidden: frames.length - shown.length,
+    scalars: scalars.scalars,
+    scalarsHidden: scalars.scalarsHidden,
+    lastReturn: result.lastReturn,
+    output: result.output,
+    ending: result.ending,
     objects: plan.nodes.objects.map((object) => objectView(object, flags)),
     ghosts,
     moves: flags.moves,

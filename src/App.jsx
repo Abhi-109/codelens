@@ -105,10 +105,14 @@ function runStateOf({ running, engine, result, trace, sourceDirty }) {
     };
   }
   if (!result) return { id: "ready", label: "Ready" };
-  if (result.error) {
+  if (result.error || result.status === "error") {
+    // A crashed Python run carries error_type/exception; an engine failure
+    // carries a ready-made `error` object.
+    const type =
+      result.error?.type ?? result.error_type ?? result.exception?.type ?? "Error";
     return {
       id: "error",
-      label: result.error.type === "SyntaxError" ? "Syntax error" : "Runtime error",
+      label: type === "SyntaxError" ? "Syntax error" : "Runtime error",
     };
   }
   if (result.status && result.status !== "ok") {
@@ -956,7 +960,7 @@ function Workspace() {
                 }
               />
             ) : viz === "motion" ? (
-              <MotionStage plan={motionPlan} />
+              <MotionStage plan={motionPlan} trace={trace} result={result} />
             ) : viz === "timeline" ? (
               <TimelinePane
                 trace={trace}

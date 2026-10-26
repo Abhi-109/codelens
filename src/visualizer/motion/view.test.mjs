@@ -12,7 +12,13 @@ import { gunzipSync } from "node:zlib";
 import { snapshotAt, stateOf } from "../../animation/diff.js";
 import { showValue } from "../../tracer/values.js";
 import { MOTION_OPERATION, motionNodes, planMotion } from "./plan.js";
-import { comparisonOf, MAX_VISIBLE_FRAMES, motionView, returnOf } from "./view.js";
+import {
+  comparisonOf,
+  MAX_VISIBLE_FRAMES,
+  MAX_VISIBLE_SCALARS,
+  motionView,
+  returnOf,
+} from "./view.js";
 
 const read = (path) =>
   JSON.parse(gunzipSync(readFileSync(new URL(path, import.meta.url))).toString());
@@ -25,7 +31,7 @@ const eventsOf = (trace) => (Array.isArray(trace) ? trace : Object.values(trace)
 function program(name) {
   const entry = CORPUS[name] ?? RECOGNITION.programs[name];
   assert.ok(entry, `${name} is in a fixture`);
-  return { name, source: entry.source, trace: eventsOf(entry.trace) };
+  return { name, source: entry.source, trace: eventsOf(entry.trace), result: entry.result ?? null };
 }
 
 const MATRIX = [
@@ -1072,14 +1078,132 @@ test("a returned value rides on the frame the recording returned from", () => {
   assert.equal(view.feedback.text, "return 42");
 });
 
-test("a call step that hands nothing back still says it returned", () => {
+test("the top-level script finishing is completion, not a returned value", () => {
   const at = findPlan("recursion", (plan) => {
     const returned = returnOf(plan);
     return returned !== null && returned.function === "<module>";
   });
   const view = motionView(at.plan);
   assert.equal(returnOf(at.plan).text, "None");
-  assert.match(view.feedback.text, /^return/);
+  assert.equal(view.feedback.text, "program finished");
+  assert.equal(
+    view.frames.filter((frame) => frame.function === "<module>" && frame.returned !== null).length,
+    0,
+    "the module frame does not wear an implicit None as a result",
+  );
+});
+
+test("scalar-only programs show the current call's values as tiles", () => {
+  const p = program("variables");
+  const view = motionView(planAt(p, p.trace.length - 1), p);
+  const byName = new Map(view.scalars.map((tile) => [tile.name, tile]));
+
+  assert.equal(view.objects.length, 0, "there is no collection to draw");
+  assert.deepEqual(
+    [...byName.keys()].sort(),
+    ["age", "height", "is_student", "name", "nothing"],
+  );
+  assert.equal(byName.get("name").text, '"Asha"');
+  assert.equal(byName.get("name").valueType, "str");
+  assert.equal(byName.get("age").text, "12");
+  assert.equal(byName.get("age").valueType, "int");
+  assert.equal(byName.get("height").valueType, "float");
+  assert.equal(byName.get("is_student").text, "True");
+  assert.equal(byName.get("nothing").text, "None");
+  assert.equal(byName.get("nothing").typeName, "None");
+});
+
+test("a changed scalar is marked and comes first", () => {
+  const at = findPlan("scalars-only", (plan) =>
+    motionView(plan).scalars.some((tile) => tile.changed),
+  );
+  const view = motionView(at.plan, at.p);
+  assert.equal(view.scalars[0].changed, true, "the changed value leads the strip");
+  assert.ok(
+    view.scalars.filter((tile) => !tile.changed).length > 0,
+    "the unchanged values are still shown",
+  );
+});
+
+test("scalar tiles belong to the running call, not every historical frame", () => {
+  const at = findPlan("function-args", (plan) => plan.nodes.frames.length === 2);
+  const view = motionView(at.plan, at.p);
+  assert.deepEqual(
+    view.scalars.map((tile) => tile.name).sort(),
+    ["greeting", "name"],
+    "the caller's function name is context, not a scalar value",
+  );
+});
+
+test("collections keep their cards and are not repeated as scalar tiles", () => {
+  const p = program("alias-shared");
+  const view = motionView(planAt(p, p.trace.length - 1), p);
+  assert.ok(view.objects.length > 0, "the shared list still has a card");
+  assert.equal(view.scalars.length, 0, "references are not copied into scalar tiles");
+});
+
+test("a returned value and printed output are separate facts", () => {
+  const p = program("function-basic");
+  const view = motionView(planAt(p, p.trace.length - 1), p);
+  assert.equal(view.lastReturn.function, "greet");
+  assert.equal(view.lastReturn.text, '"Hello, Asha"');
+  assert.equal(view.output, "Hello, Asha\n");
+  assert.equal(view.ending.label, "Completed");
+});
+
+test("the scalar strip is bounded and says how many it left out", () => {
+  const variables = Array.from({ length: MAX_VISIBLE_SCALARS + 2 }, (_, index) => ({
+    key: `variable:1:x${index}`,
+    name: `x${index}`,
+    text: String(index),
+    valueType: "int",
+    value: { type: "int", value: index },
+  }));
+  const plan = {
+    index: 0,
+    step: 0,
+    event: "line",
+    line: 1,
+    lineText: null,
+    transition: "hold",
+    animate: false,
+    durationMs: 0,
+    mode: "full",
+    operations: [],
+    returned: null,
+    nodes: {
+      frames: [{ key: "frame:1", frameId: 1, function: "f", variables }],
+      objects: [],
+    },
+    state: { frames: [], heap: {} },
+  };
+  const view = motionView(plan);
+  assert.equal(view.scalars.length, MAX_VISIBLE_SCALARS);
+  assert.equal(view.scalarsHidden, 2);
+});
+
+test("reduced motion keeps the scalar facts and the final status", () => {
+  const p = program("scalars-only");
+  const plan = planAt(p, p.trace.length - 1, { reducedMotion: true });
+  const view = motionView(plan, p);
+  assert.equal(view.animate, false);
+  assert.equal(view.scalars.length, 2);
+  assert.equal(view.output, "6\n");
+  assert.equal(view.ending.label, "Completed");
+});
+
+test("a new trace replaces the old values and output instead of adding to them", () => {
+  const collections = program("alias-shared");
+  const scalar = program("scalars-only");
+  const collectionView = motionView(planAt(collections, collections.trace.length - 1), collections);
+  const scalarView = motionView(planAt(scalar, scalar.trace.length - 1), scalar);
+
+  assert.ok(collectionView.objects.length > 0, "the collection program keeps its cards");
+  assert.equal(collectionView.scalars.length, 0);
+  assert.ok(scalarView.scalars.length > 0, "the scalar program keeps its tiles");
+  assert.equal(scalarView.objects.length, 0);
+  assert.equal(scalarView.output, "6\n");
+  assert.notEqual(collectionView.output, scalarView.output);
 });
 
 test("nested calls carry the recorded stack depth, deepest last and current", () => {

@@ -144,9 +144,53 @@ the Phase 1 plan is waiting for approval, not for clarification.
   gate failure; do not add a dependency to fix it.
 
 ## Next action
-The comparison and swap presentation is now browser-validated (see Stage 7 notes below). The
-remaining work is unchanged: Phase 4 (frames, recursion, objects), Phase 5 (skins), Phase 6
-(hardening) and Phase 7 (validation, polish, cleanup) are still open. Nothing is pushed.
+The values, results and output pass is browser-validated (see Phase 6 notes below). The
+remaining animation-spec work is unchanged: Phase 4 (frames, recursion, objects), Phase 5
+(skins), Phase 6 (hardening) and Phase 7 (validation, polish, cleanup).
+
+## Motion stage: values, results and output (Phase 6)
+- **Root cause of the empty stage.** `MotionStage` drew only `view.objects`, which is the
+  heap: lists, dicts, sets and objects. Scalars lived only in the compact call strip, so a
+  scalar-only program fell through to `.motion-no-values` and the canvas said its values
+  "stay in the call strip". Printed output and the returned value existed only in the
+  Inspector, so `greet()` looked like an empty program after it ran.
+- **One generic, trace-driven layer.** `stageResult.js` is pure and takes the recorded
+  trace plus the cursor: `outputAt` joins the recorded `output` chunks up to that cursor,
+  `lastFunctionReturn` scans backwards for the most recent named function return (the
+  module's implicit `None` is excluded), and `ending` is reported only at the final step,
+  from the run result. `motionView(plan, { trace, result })` merges those facts with the
+  existing diff facts; nothing is invented and no example is special-cased.
+- **The stage hierarchy.** A returned-value tile (accent edge, names the function), compact
+  scalar tiles (name, value, type, changed/highlighted mark), the existing collection cards,
+  the one-sentence operation description, a bounded output area, and a final status line.
+  The final status is a line rather than another card, and the return tile stays separate
+  from printed output: `showValue` quotes a returned string (`"Hello, Asha"`) while output
+  is the raw recorded text (`Hello, Asha\n`).
+- **Scalars are values too.** Only the deepest (current) frame contributes tiles; the
+  caller's variables remain context in the call strip. Primitive types are `int`, `float`,
+  `str`, `bool`, `none` and `other`; functions, classes and modules are filtered out.
+  Changed and highlighted variables lead, the strip caps at 12 and says how many remain,
+  and a collection is never duplicated as a tile (references keep their object card).
+- **Completion is not a result.** The module frame no longer wears the implicit `None` as a
+  return arrow, and the step sentence reads "program finished". A caught exception still
+  ends as Completed; an uncaught one is "Runtime error" with the recorded type and message;
+  limits read Step limit, Timeout or Output limit. Both the tracer's raw `status: "error"`
+  shape and an engine `error` object are understood, and a crashed run now opens on its
+  failing step instead of step 0.
+- **Backward and reset reconstruct from the recording.** Output is a prefix of the recorded
+  chunks, so seeking backwards removes future output; step 0 clears output, the return tile
+  and the final status. A new run replaces all three rather than adding to them.
+- **Verification.** 16 new `stageResult` tests, scalar/return/output/switch/reduced-motion
+  tests in `view.test.mjs`, a raw-tracer-error session test, and browser checks for the
+  reported `greet()` program (return + output + Completed in the stage, not only the
+  Inspector), backward seeking, reset, both themes and 390 px. Counts: 136 Python tests,
+  762 JS tests, 181 browser checks. Screenshots inspected: `scalars.png`,
+  `greet-final.png`, `greet-light.png`, `greet-mobile.png`, `swap-7.png`, `final.png`,
+  `runaway-recursion.png` and `light.png`.
+- **Deliberate limits.** The scalar strip shows the current call only and caps at 12; the
+  Variables tab keeps the full recording. The output area scrolls past 9.5rem. Editing the
+  source keeps the previous trace visible under "Source edited" (existing behavior); it is
+  not a stale-value bug in this layer.
 
 ## Product experience notes (Phase 4: Learn, Docs, data-structure lab)
 - **Learn is data, not markup.** Seven lessons across five sections live in

@@ -246,6 +246,18 @@ test("a crashed run opens on the exception step without being told", () => {
   assert.equal(state.editing, false);
 });
 
+test("a tracer error without an error object also opens on its failing step", () => {
+  const trace = [step(0, "line", { line: 1 }), step(1, "error", { line: 2 })];
+  const state = sessionReducer(
+    createInitialSession(),
+    sessionActions.finishRun({
+      result: { status: "error", error_type: "RecursionError", trace },
+    }),
+  );
+  assert.equal(state.index, 1);
+  assert.equal(state.editing, false);
+});
+
 test("cancelling a stale run keeps the previous result on screen", () => {
   let state = runSession();
   const previous = state.result;

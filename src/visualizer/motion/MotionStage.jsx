@@ -62,6 +62,46 @@ function Value({ node }) {
   );
 }
 
+/** A primitive variable from the current call: name, value and type. */
+function ScalarTile({ tile }) {
+  return (
+    <div
+      className={classNames(
+        "motion-scalar",
+        tile.changed && "is-changed",
+        tile.highlighted && "is-highlighted",
+      )}
+      data-key={tile.key}
+    >
+      <span className="motion-scalar-name">{tile.name}</span>
+      <span
+        className="motion-value motion-scalar-value"
+        data-type={tile.valueType}
+        title={tile.text}
+      >
+        {tile.text}
+      </span>
+      <span className="motion-scalar-type">{tile.typeName}</span>
+    </div>
+  );
+}
+
+/** The most recent named function return, kept apart from printed output. */
+function ReturnTile({ returned }) {
+  return (
+    <div className="motion-return">
+      <span className="motion-return-fn">{returned.function}() returned</span>
+      <span
+        className="motion-value motion-return-value"
+        data-type={returned.valueType}
+        title={returned.text}
+      >
+        {returned.text}
+      </span>
+    </div>
+  );
+}
+
 function Slot({ slot, registerNode }) {
   const keyed =
     slot.kind === "attribute" || (slot.kind === "entry" && slot.container !== "set");
@@ -196,10 +236,10 @@ function FrameCard({ frame, registerNode, registerVariable }) {
  * operations. It owns measurements and animation handles only. It never calls
  * the session, so an animation finishing can never move the execution cursor.
  *
- * @param {{plan: Object|null}} props
+ * @param {{plan: Object|null, trace?: Array, result?: Object|null}} props
  */
-export default function MotionStage({ plan }) {
-  const view = useMemo(() => motionView(plan), [plan]);
+export default function MotionStage({ plan, trace = [], result = null }) {
+  const view = useMemo(() => motionView(plan, { trace, result }), [plan, trace, result]);
   const stageRef = useRef(null);
   const nodeRefs = useRef(new Map());
   const ghostRefs = useRef(new Map());
@@ -413,6 +453,9 @@ export default function MotionStage({ plan }) {
     );
   }
 
+  const hasValues = view.scalars.length > 0 || view.objects.length > 0 || Boolean(view.lastReturn);
+  const showEmpty = !hasValues && !view.output && !view.ending;
+
   return (
     <div className="motion-stage" ref={stageRef}>
       {/* One place for the step: which line ran, what it verifiably did, and the
@@ -453,6 +496,21 @@ export default function MotionStage({ plan }) {
       {/* The data and the sentence about it are one group, so the explanation
           sits directly under the array instead of at the foot of the canvas. */}
       <div className="motion-data">
+        {view.lastReturn ? <ReturnTile returned={view.lastReturn} /> : null}
+
+        {view.scalars.length > 0 ? (
+          <section className="motion-scalars" aria-label="Values">
+            {view.scalars.map((tile) => (
+              <ScalarTile key={tile.key} tile={tile} />
+            ))}
+          </section>
+        ) : null}
+        {view.scalarsHidden > 0 ? (
+          <p className="motion-scalars-more">
+            +{view.scalarsHidden} more in the Variables tab
+          </p>
+        ) : null}
+
         {view.objects.length > 0 ? (
           <section className="motion-objects" aria-label="Values">
             {view.objects.map((object) => (
@@ -464,15 +522,34 @@ export default function MotionStage({ plan }) {
               />
             ))}
           </section>
-        ) : (
+        ) : null}
+
+        {showEmpty ? (
           <p className="motion-no-values">
-            Scalar values stay in the call strip above; lists, dicts, sets and objects appear
-            here.
+            This step has no values that can be reconstructed. The Variables and Output tabs
+            keep the full recording.
           </p>
-        )}
+        ) : null}
 
         {view.explanation ? <p className="motion-explain">{view.explanation}</p> : null}
       </div>
+
+      {view.output ? (
+        <section className="motion-output" aria-label="Program output">
+          <span className="motion-output-label">Output</span>
+          <pre className="motion-output-text">{view.output}</pre>
+        </section>
+      ) : null}
+
+      {view.ending ? (
+        <section className={classNames("motion-result", `is-${view.ending.id}`)} aria-label="Result">
+          <span className="motion-result-status">{view.ending.label}</span>
+          {view.ending.detail ? (
+            <span className="motion-result-detail">{view.ending.detail}</span>
+          ) : null}
+          {view.output ? null : <span className="motion-result-note">No output</span>}
+        </section>
+      ) : null}
 
       {view.ghosts.length > 0 ? (
         <div className="motion-ghost-layer" aria-hidden="true">

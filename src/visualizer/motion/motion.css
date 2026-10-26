@@ -239,6 +239,170 @@
   text-align: center;
 }
 
+/* Scalars are values too: compact tiles that wrap instead of a blank canvas.
+ * The current call's own variables are the subject; collections keep their
+ * cells and cards below. */
+.motion-scalars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.motion-scalar {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: min(100%, 24ch);
+  padding: 5px 9px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.motion-scalar-name {
+  overflow: hidden;
+  font: 600 10.5px/1.35 var(--mono);
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motion-scalar-value {
+  font: 600 13px/1.4 var(--mono);
+}
+
+.motion-scalar-type {
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 1.35;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0.72;
+}
+
+.motion-scalar.is-changed {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.motion-scalar.is-highlighted {
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+
+.motion-scalars-more {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text);
+}
+
+/* A returned value is a result, not printed output: it keeps the accent edge
+ * and names the call that produced it. */
+.motion-return {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-md);
+  background: var(--accent-bg);
+}
+
+.motion-return-fn {
+  flex: none;
+  font: 600 11px/1.4 var(--mono);
+  color: var(--text);
+}
+
+.motion-return-value {
+  min-width: 0;
+  font: 600 14px/1.4 var(--mono);
+}
+
+/* Captured stdout: the program's own whitespace, bounded in the stage. */
+.motion-output {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.motion-output-label {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.motion-output-text {
+  max-height: 9.5rem;
+  margin: 0;
+  overflow: auto;
+  font: 12px/1.5 var(--mono);
+  color: var(--text-h);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The final status is a line, not another card: output above it stays the
+ * program's, and the return tile above stays the call's. */
+.motion-result {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.motion-result-status {
+  font-weight: 600;
+}
+
+.motion-result.is-completed .motion-result-status {
+  color: var(--ok);
+}
+
+.motion-result.is-limit .motion-result-status {
+  color: var(--warn);
+}
+
+.motion-result.is-error .motion-result-status,
+.motion-result.is-syntax .motion-result-status {
+  color: var(--danger);
+}
+
+.motion-result-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motion-result-note {
+  color: var(--text);
+  opacity: 0.8;
+}
+
 /* One sentence about what the step means, directly under the data it describes.
  * It is built from the same plan as the step head, so the two cannot disagree. */
 .motion-explain {
@@ -616,6 +780,14 @@
   .motion-source {
     display: none;
   }
+
+  .motion-scalar {
+    max-width: 100%;
+  }
+
+  .motion-output-text {
+    max-height: 7rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -624,7 +796,8 @@
   .motion-slot,
   .motion-slot.motion-cell,
   .motion-cell-index,
-  .motion-var {
+  .motion-var,
+  .motion-scalar {
     transition: none;
   }
 
