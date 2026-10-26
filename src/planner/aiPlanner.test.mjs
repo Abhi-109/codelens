@@ -15,7 +15,7 @@ import {
   isAiResultCurrent,
   planWithAi,
 } from "./aiPlanner.js";
-import { makePlan, validatePlan } from "./plan.js";
+import { makePlan, fallbackPlan, validatePlan } from "./plan.js";
 
 function analysis(overrides = {}) {
   return {
@@ -73,9 +73,18 @@ test("the request is bounded and carries no trace events or secret", () => {
   assert.equal(request.source_truncated, true);
   assert.equal(request.renderers.length, 6);
   assert.equal(request.trace.events, 20);
+  assert.equal(request.trace.hasFrames, true);
   assert.equal("trace" in request.trace, false);
   assert.equal("events" in request.trace, true);
   assert.ok(!JSON.stringify(request).includes("apiKey"));
+});
+
+test("the request is facts only: the server owns the prompt", () => {
+  const request = buildAiRequest({ source: "x = 1", analysis: analysis(), plan: deterministicPlan(), hasFlow: true });
+  assert.equal("untrusted_source" in request, false);
+  assert.equal("response_shape" in request, false);
+  assert.equal(request.has_flow, true);
+  assert.equal(buildAiRequest({ analysis: analysis(), plan: deterministicPlan(), hasFlow: false }).has_flow, false);
 });
 
 test("a valid answer becomes an ai plan with detected evidence", () => {
@@ -200,6 +209,64 @@ test("the cache is keyed by the request, so a new source misses", async () => {
   assert.equal(three.cached, false);
   assert.equal(provider.calls(), 2);
   assert.notEqual(cacheKey(first), cacheKey(second));
+});
+
+test("the cache is keyed by the request and the endpoint, so neither is reused", async () => {
+  const report = analysis();
+  const cache = createPlanCache(4);
+  const request = buildAiRequest({ source: "a = 1", analysis: report, plan: deterministicPlan(report) });
+  const local = { ...fakeProvider({ primary: "tree" }), endpoint: "https://a.example/api/plan" };
+  const other = { ...fakeProvider({ primary: "tree" }), endpoint: "https://b.example/api/plan" };
+
+  const first = await planWithAi({ provider: local, request, analysis: report, deterministic: deterministicPlan(report), cache });
+  const again = await planWithAi({ provider: local, request, analysis: report, deterministic: deterministicPlan(report), cache });
+  const elsewhere = await planWithAi({ provider: other, request, analysis: report, deterministic: deterministicPlan(report), cache });
+
+  assert.equal(first.cached, false);
+  assert.equal(again.cached, true);
+  assert.equal(elsewhere.cached, false);
+  assert.notEqual(cacheKey(request, local.endpoint), cacheKey(request, other.endpoint));
+});
+
+test("a fallback baseline is not overridden by a model", async () => {
+  const report = analysis({ status: "syntax_error", concepts: [], trace: { ...analysis().trace, events: 0 } });
+  const baseline = fallbackPlan("source_syntax_error");
+  const result = aiPlanFromResponse({ primary: "motion" }, { analysis: report, deterministic: baseline });
+  assert.equal(result.plan, null);
+  assert.equal(result.error.detail, "deterministic_fallback");
+
+  const provider = fakeProvider({ primary: "motion" });
+  const skipped = await planWithAi({
+    provider,
+    request: buildAiRequest({ source: "def", analysis: report, plan: baseline }),
+    analysis: report,
+    deterministic: baseline,
+  });
+  assert.equal(skipped.plan, null);
+  assert.equal(provider.calls(), 0);
+});
+
+test("a cancellation signal reaches the provider", async () => {
+  const report = analysis();
+  let seen = null;
+  const provider = {
+    configured: true,
+    endpoint: "https://a.example/api/plan",
+    async request(_request, options) {
+      seen = options?.signal ?? null;
+      throw Object.assign(new Error("cancelled"), { code: "cancelled" });
+    },
+  };
+  const controller = new AbortController();
+  const result = await planWithAi({
+    provider,
+    request: buildAiRequest({ source: "a", analysis: report, plan: deterministicPlan(report) }),
+    analysis: report,
+    deterministic: deterministicPlan(report),
+    signal: controller.signal,
+  });
+  assert.equal(seen, controller.signal);
+  assert.equal(result.error.code, "cancelled");
 });
 
 test("the cache is bounded", () => {

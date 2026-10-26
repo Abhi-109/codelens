@@ -193,6 +193,7 @@ export async function launch(url, { outDir = tmpdir() } = {}) {
       )
       .map((event) => ({
         level: event.params.type ?? event.params.entry?.level ?? null,
+        url: event.params.entry?.url ?? null,
         text:
           event.params.args
             ?.map((arg) => arg.value ?? arg.description)

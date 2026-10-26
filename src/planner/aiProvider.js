@@ -50,6 +50,19 @@ export function createAiProvider(options = {}) {
 
   const configured = Boolean(endpoint && typeof fetchImpl === "function");
 
+  // A server that classifies its own refusal is more useful than a bare status
+  // code. Only the documented code is read; the rest of the body is dropped.
+  async function serverCode(response) {
+    try {
+      const text = await response.text();
+      if (typeof text !== "string" || text.length > maxBytes) return null;
+      const code = JSON.parse(text)?.error?.code;
+      return AI_ERROR_CODES.includes(code) ? code : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function request(payload, { signal } = {}) {
     if (!configured) throw new PlannerProviderError("not_configured");
     if (signal?.aborted) throw new PlannerProviderError("cancelled");
@@ -71,7 +84,9 @@ export function createAiProvider(options = {}) {
         signal: controller.signal,
       });
       if (response?.status === 429) throw new PlannerProviderError("rate_limited");
-      if (!response?.ok) throw new PlannerProviderError("http_error", `HTTP ${response?.status}`);
+      if (!response?.ok) {
+        throw new PlannerProviderError((await serverCode(response)) ?? "http_error", `HTTP ${response?.status}`);
+      }
       const declared = Number(response.headers?.get?.("content-length"));
       if (Number.isFinite(declared) && declared > maxBytes) {
         throw new PlannerProviderError("oversized");

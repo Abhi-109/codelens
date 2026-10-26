@@ -103,6 +103,28 @@ test("a caller can cancel its own request", async () => {
   await assert.rejects(provider.request(payload, { signal: controller.signal }), (error) => error.code === "cancelled");
 });
 
+test("a server that classifies its own refusal is believed", async () => {
+  const respond = (status, body) =>
+    createAiProvider({
+      endpoint: "/api/plan",
+      fetchImpl: async () => new Response(JSON.stringify(body), { status }),
+    });
+
+  await assert.rejects(respond(503, { error: { code: "not_configured", detail: "sk-live-secret" } }).request(payload), (error) => {
+    assert.equal(error.code, "not_configured");
+    assert.equal(error.message.includes("sk-live"), false);
+    return true;
+  });
+  await assert.rejects(
+    respond(400, { error: { code: "rejected", detail: "origin" } }).request(payload),
+    (error) => error.code === "rejected",
+  );
+  await assert.rejects(
+    respond(502, { error: { code: "nonsense", detail: "stack trace" } }).request(payload),
+    (error) => error.code === "http_error",
+  );
+});
+
 test("the endpoint comes from public configuration, never a key", () => {
   assert.equal(plannerEndpoint({}), null);
   assert.equal(plannerEndpoint({ __CODELENS_PLANNER_ENDPOINT__: " /api/plan " }), "/api/plan");
