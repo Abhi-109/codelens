@@ -23,6 +23,7 @@ export const REASON_CODES = Object.freeze([
   "observed_recursion",
   "nested_calls_with_collections",
   "nested_calls",
+  "nested_loop",
   "branch_heavy",
   "collection_motion",
   "generic_values",

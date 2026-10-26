@@ -17,6 +17,7 @@ export const PLAN_REASON_TEXT = Object.freeze({
   observed_recursion: "the same function ran at more than one depth",
   nested_calls_with_collections: "nested calls and collection changes were observed",
   nested_calls: "calls nested inside other calls were observed",
+  nested_loop: "loops nested inside loops were observed",
   branch_heavy: "the run is mostly decisions",
   collection_motion: "the run changes a collection",
   generic_values: "no specialized pattern was proven",
@@ -124,6 +125,12 @@ export function planVisualization(input = {}) {
     return hasCollection(concepts)
       ? choose("combined", "nested_calls_with_collections")
       : choose("tree", "nested_calls");
+  }
+
+  // Two loops deep is a control-flow story the flowchart reads better than
+  // motion. A collection keeps its own canvas, where the changes are visible.
+  if (concepts.get("nested_loop") && !hasCollection(concepts)) {
+    return choose("flow", "nested_loop");
   }
 
   const branchHeavy =

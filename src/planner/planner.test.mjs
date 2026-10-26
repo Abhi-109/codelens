@@ -146,6 +146,28 @@ test("branch-heavy scalar code opens control flow when the graph exists", () => 
   assert.equal(withoutGraph.reasons[0].code, "renderer_missing_evidence");
 });
 
+test("nested loops without a collection open control flow", () => {
+  const plan = corpusPlan("nested-loops");
+  assert.equal(plan.primary, "flow");
+  assert.equal(plan.reasons[0].code, "nested_loop");
+
+  // A collection keeps its own canvas: the changes are what matters there.
+  const withList = planVisualization({
+    analysis: {
+      status: "ok",
+      counts: {},
+      trace: { events: 8, calls: 1, hasFrames: false },
+      concepts: [
+        { id: "nested_loop", strength: "structural", evidence: ["profile.loops"] },
+        { id: "list", strength: "observed", evidence: ["trace.heap.list"] },
+      ],
+    },
+    recognition: { adapterId: "generic" },
+    hasFlow: true,
+  });
+  assert.equal(withList.primary, "motion");
+});
+
 test("a syntax error and an empty program fall back without inventing a story", () => {
   const broken = corpusPlan("error-syntax");
   assert.equal(broken.primary, "motion");
