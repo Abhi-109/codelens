@@ -129,6 +129,13 @@
   border-left: 1px solid var(--border);
 }
 
+/* The cap note reads as metadata, not as another call. */
+.motion-frames-more {
+  flex-basis: 100%;
+  font-size: 11.5px;
+  color: var(--text);
+}
+
 .motion-frame.is-highlighted .motion-fn {
   color: var(--accent);
 }

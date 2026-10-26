@@ -33,6 +33,13 @@ work is separately scoped.
 | 1.6 Dict/set/object contents: keyed entry and attribute add/remove/change, non-sequence lifecycle, exact inverse with insertion order, deferred ambiguity | done | `f8edf2f` + `82f369f` + `34f1145` + docs commits |
 
 ## Decisions made
+- 2026-10-26 — **The call strip caps at the 24 most recent frames.** A runaway
+  recursion records about a thousand frames; drawing every one produced 9,196 DOM
+  nodes. The strip is context, not the subject, so it keeps the deepest calls and
+  states how many it left out, while the Stack tab still lists the whole recorded
+  stack. `MAX_VISIBLE_FRAMES` in `view.js`, with a unit test on the
+  `recursive-deep` fixture and a browser check. The rest of the Phase 5 pass is
+  recorded in `docs/phase5-checklist.md`.
 - 2026-10-24 — **No tracer change is needed for v1.** The format-2 trace plus the
   editor's source answers every question in spec §6–§7 (index markers via the frame's
   variables at the `line` event, line shape by parsing the source). `format_version`

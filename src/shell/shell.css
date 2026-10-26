@@ -52,6 +52,27 @@
 
 /* --- Shell layout --------------------------------------------------------- */
 
+/* The first Tab stop: a keyboard reader can jump past the nav. It sits out of
+   flow until focused, then becomes an ordinary button-shaped link. */
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 40;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-h);
+  font-size: 14px;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 .shell {
   display: flex;
   flex-direction: column;
@@ -369,6 +390,10 @@
 
   .shell-links-open {
     display: flex;
+  }
+
+  .shell-links-open .shell-link {
+    padding: 10px 12px;
   }
 
   .shell-main-wide {

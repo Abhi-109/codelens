@@ -450,6 +450,15 @@
     padding: var(--space-3);
   }
 
+  /* A thumb needs a bigger target than a mouse does. */
+  .ds-btn {
+    min-height: 36px;
+  }
+
+  .ds-field input {
+    height: 36px;
+  }
+
   .ds-transport .ds-btn {
     flex: 1;
   }

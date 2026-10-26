@@ -76,6 +76,9 @@ export function AppShell({ children, wide = false }) {
 
   return (
     <div className={isApp ? 'shell shell-app' : 'shell'}>
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
       <header className="shell-nav">
         <Link to="/" className="shell-brand" aria-label="CodeLens home">
           <BrandLogo className="shell-brand-logo" decorative />
@@ -119,7 +122,7 @@ export function AppShell({ children, wide = false }) {
         </div>
       </header>
 
-      <main className={wide ? 'shell-main shell-main-wide' : 'shell-main'} id="main">
+      <main className={wide ? 'shell-main shell-main-wide' : 'shell-main'} id="main" tabIndex={-1}>
         {children}
       </main>
 

@@ -85,6 +85,7 @@ const PANES = [
 const clamp = (value, lo, hi) => Math.min(Math.max(value, lo), hi);
 
 const STATUS_LABELS = {
+  completed: "Completed",
   timeout: "Timeout",
   step_limit: "Step limit",
   output_limit: "Output limit",

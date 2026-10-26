@@ -41,6 +41,22 @@ project is left in a runnable, demoable state after each task.
 - [x] Add `docs/roadmap.md` (this file)
 - [x] Add a GitHub Actions workflow that runs tests, lint, and build on every push and PR
 
+## Product quality (Phase 5)
+
+Release-readiness pass over the finished product. Details and evidence are in
+[phase5-checklist.md](phase5-checklist.md).
+
+- [x] Real-browser audit of every route at 1440, 720 and 390 px, both themes,
+      and reduced motion
+- [x] Successful runs read "Completed" instead of the tracer's `completed`
+- [x] Skip link to the main region, with a visible focus state
+- [x] Lazy-load the Python visualizer only: the entry bundle drops from
+      774 kB to 342 kB and Vite's chunk advisory is gone
+- [x] Call strip capped at the 24 most recent frames, with a count of the rest
+- [x] Stress checks: 200-element lists, cyclic lists, deep and runaway
+      recursion, caught and uncaught exceptions
+- [x] Browser regressions for each of the above
+
 ## Flowchart renderer (stages A3–A5) — superseded
 
 > **Retired.** This slice drew the format-2 chart with **dagre**, and was

@@ -12,7 +12,7 @@ import { gunzipSync } from "node:zlib";
 import { snapshotAt, stateOf } from "../../animation/diff.js";
 import { showValue } from "../../tracer/values.js";
 import { MOTION_OPERATION, motionNodes, planMotion } from "./plan.js";
-import { comparisonOf, motionView, returnOf } from "./view.js";
+import { comparisonOf, MAX_VISIBLE_FRAMES, motionView, returnOf } from "./view.js";
 
 const read = (path) =>
   JSON.parse(gunzipSync(readFileSync(new URL(path, import.meta.url))).toString());
@@ -1096,6 +1096,20 @@ test("nested calls carry the recorded stack depth, deepest last and current", ()
     view.frames.filter((frame) => frame.current).length,
     1,
     "exactly one frame is running",
+  );
+  assert.equal(view.frames.at(-1).current, true);
+});
+
+test("a deep call stack keeps the most recent frames and counts the rest", () => {
+  const at = findPlan("recursive-deep", (plan) => plan.nodes.frames.length > MAX_VISIBLE_FRAMES);
+  const view = motionView(at.plan);
+  assert.equal(view.frames.length, MAX_VISIBLE_FRAMES);
+  assert.equal(view.framesHidden, at.plan.nodes.frames.length - MAX_VISIBLE_FRAMES);
+  assert.ok(view.framesHidden > 0);
+  assert.deepEqual(
+    view.frames.map((frame) => frame.frameId),
+    at.plan.nodes.frames.slice(-MAX_VISIBLE_FRAMES).map((frame) => frame.frameId),
+    "the deepest, most recent calls are the ones kept",
   );
   assert.equal(view.frames.at(-1).current, true);
 });

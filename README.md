@@ -213,7 +213,7 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 136 Python tests: the tracer and its comparison events, the
                       # flowchart model, the static program profile and the corpus
-npm run test:js       # 738 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 739 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6
                       # dict/set/object contents and lifecycle), the pure motion
@@ -265,7 +265,9 @@ Back and slider seeks, a burst of steps, comparisons, persistent green positions
 reduced motion, and short and long arrays. It also drives the data-structure lab (every
 operation, Back/Next/seek/reset, invalid input), opens a lesson's program in the
 visualizer, and checks both themes, reduced motion at 390px, keyboard focus and arrow-key
-seeking. It needs Chrome or Edge; set `CHROME_PATH` if it is not in a standard location.
+seeking. The release regressions cover a successful run's status label, a 200-element
+list, a cyclic list, runaway recursion and its capped call strip, a caught exception, and
+the skip link. It needs Chrome or Edge; set `CHROME_PATH` if it is not in a standard location.
 It is the only test that can exercise the effect ordering in `MotionStage.jsx`, so it is
 the regression test for the interruption fix.
 
@@ -289,6 +291,7 @@ codelens/
 │   ├── animation.md        # the action vocabulary and the diff rules
 │   ├── animation-audit.md  # Phase 0: what the tracer really records
 │   ├── animation-progress.md # phase status, decisions, open questions
+│   ├── phase5-checklist.md # release-readiness pass: findings, fixes, evidence
 │   └── roadmap.md          # what is built, what is next
 ├── src/
 │   ├── main.jsx            # mounts the router and paints the stored theme

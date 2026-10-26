@@ -262,6 +262,11 @@ function slotView(slot, flags) {
   };
 }
 
+/* A runaway recursion records about a thousand frames. The call strip is
+ * context, not the subject, so it keeps the most recent calls and says how
+ * many it left out; the Stack tab still lists every recorded frame. */
+export const MAX_VISIBLE_FRAMES = 24;
+
 function frameView(frame, flags, returned) {
   const ownsReturn =
     returned !== null &&
@@ -489,6 +494,9 @@ export function motionView(plan) {
     }
   }
 
+  const frames = plan.nodes.frames;
+  const shown = frames.length > MAX_VISIBLE_FRAMES ? frames.slice(-MAX_VISIBLE_FRAMES) : frames;
+
   return {
     index: plan.index,
     step: plan.step,
@@ -502,7 +510,8 @@ export function motionView(plan) {
     feedback,
     comparison: comparisonOf(plan),
     explanation: feedback?.explanation ?? null,
-    frames: plan.nodes.frames.map((frame) => frameView(frame, flags, returned)),
+    frames: shown.map((frame) => frameView(frame, flags, returned)),
+    framesHidden: frames.length - shown.length,
     objects: plan.nodes.objects.map((object) => objectView(object, flags)),
     ghosts,
     moves: flags.moves,

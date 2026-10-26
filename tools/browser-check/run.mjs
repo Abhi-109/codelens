@@ -1378,7 +1378,149 @@ async function productPages(browser) {
   await browser.screenshot("ds-keyboard");
 }
 
-// --- F. no console errors ---------------------------------------------------
+// --- F. release regressions -------------------------------------------------
+
+const BIG_ARRAY = "numbers = list(range(200))\nprint(numbers[0])\nprint(numbers[-1])\n";
+const CYCLE = "a = []\na.append(a)\nb = a\nprint(a)\n";
+const RUNAWAY = "def down(n):\n    return down(n + 1)\nprint(down(0))\n";
+const CAUGHT = "values = [1, 2]\ntry:\n    print(values[5])\nexcept IndexError:\n    print('caught')\nprint('after')\n";
+
+async function releaseRegressions(browser) {
+  console.log("\n--- release regressions ---");
+  await openRoute(browser, "/visualizer/python");
+  await browser.waitFor(
+    `document.querySelector('textarea[aria-label="Your Python code"]')`,
+    60000,
+    "the Python workspace",
+  );
+
+  // A successful run says so in words, not in the tracer's status id.
+  await openProgram(browser, BIG_ARRAY);
+  const big = await readStage(browser);
+  check(
+    (await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()')) === "Completed",
+    "a successful run reads Completed",
+    await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()'),
+  );
+
+  // Hundreds of elements: a bounded strip, a truthful count, no page overflow.
+  await seek(browser, big.max);
+  const bigEnd = await readStage(browser);
+  const more = await browser.evaluate('document.querySelector(".motion-object-more")?.textContent ?? null');
+  check(
+    bigEnd.cells.length === 30,
+    "a 200-element list draws a bounded strip",
+    `${bigEnd.cells.length} cells`,
+  );
+  check(
+    bigEnd.rowScrolls && !bigEnd.bodyOverflow,
+    "the long list scrolls inside its own row, not the page",
+    JSON.stringify({ rowScrolls: bigEnd.rowScrolls, page: bigEnd.bodyOverflow }),
+  );
+  check(
+    /170 more/.test(bigEnd.head ?? "") || /170 more/.test(more ?? ""),
+    "the strip says how many cells it left out",
+    `${more} | ${bigEnd.head}`,
+  );
+  await browser.screenshot("big-array");
+
+  // A self-referential list renders a marker instead of recursing forever.
+  await openProgram(browser, CYCLE);
+  const cycleMax = (await readStage(browser)).max;
+  await seek(browser, cycleMax);
+  const cycle = await readStage(browser);
+  check(
+    cycle.objects.some((object) => object.slots.some((slot) => slot.includes("…"))),
+    "a cyclic list shows a cycle marker",
+    cycle.objects.map((object) => object.slots.join(" | ")).join(" || "),
+  );
+  check(!cycle.bodyOverflow, "the cyclic list does not overflow the page");
+
+  // Runaway recursion: an honest runtime error, a capped call strip.
+  await openProgram(browser, RUNAWAY);
+  const runaway = await readStage(browser);
+  check(
+    (await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()')) ===
+      "Runtime error",
+    "runaway recursion reports a runtime error",
+    await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()'),
+  );
+  check(
+    runaway.frameCount <= 24,
+    "the call strip is capped on a deep stack",
+    `${runaway.frameCount} frames`,
+  );
+  check(
+    (await browser.evaluate('document.querySelector(".motion-frames-more")?.textContent ?? ""')).includes(
+      "earlier calls not shown",
+    ),
+    "the capped strip says where the rest are listed",
+  );
+  check(!runaway.bodyOverflow, "the deep stack does not overflow the page");
+  await browser.screenshot("runaway-recursion");
+
+  // A caught exception is not a failed program.
+  await openProgram(browser, CAUGHT);
+  const caughtMax = (await readStage(browser)).max;
+  await seek(browser, caughtMax);
+  const caught = await readStage(browser);
+  check(
+    (await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()')) === "Completed",
+    "a caught exception still completes",
+    await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()'),
+  );
+  await browser.evaluate(`document.querySelector('[data-tabid="output"]')?.click()`);
+  await sleep(300);
+  const printed = await browser.evaluate(
+    `(() => document.querySelector(".output-console")?.textContent ?? "")()`,
+  );
+  check(/after/.test(printed), "the program keeps running after a caught exception", printed.slice(0, 80));
+  check(!caught.bodyOverflow, "the caught exception run does not overflow the page");
+  await browser.screenshot("caught-exception");
+
+  // The skip link is the first Tab stop and becomes visible when focused.
+  await browser.evaluate(
+    `(() => { document.body.tabIndex = -1; document.body.focus(); })()`,
+  );
+  await browser.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "Tab",
+    code: "Tab",
+    windowsVirtualKeyCode: 9,
+  });
+  await browser.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Tab",
+    code: "Tab",
+    windowsVirtualKeyCode: 9,
+  });
+  await sleep(80);
+  const skip = await browser.evaluate(`(() => {
+    const link = document.querySelector(".skip-link");
+    if (!link) return null;
+    const rect = link.getBoundingClientRect();
+    const style = getComputedStyle(link);
+    const first = [...document.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )][0];
+    document.body.removeAttribute("tabindex");
+    return {
+      focused: document.activeElement === link,
+      href: link.getAttribute("href"),
+      top: Math.round(rect.top),
+      inViewport: rect.bottom > 0 && rect.top < window.innerHeight,
+      outline: style.outlineStyle,
+      target: Boolean(document.querySelector(link.getAttribute("href"))),
+      first: first === link,
+    };
+  })()`);
+  check(skip?.first, "the skip link is the first focusable element", String(skip?.first));
+  check(skip?.focused && skip?.href === "#main", "the skip link leads to the main region", JSON.stringify(skip));
+  check(skip?.inViewport && skip?.outline === "solid", "the focused skip link is visible", JSON.stringify(skip));
+  check(skip?.target, "the skip link target exists", String(skip?.target));
+}
+
+// --- G. no console errors ---------------------------------------------------
 
 async function consoleIsClean(browser) {
   const messages = await browser.consoleMessages();
@@ -1441,6 +1583,7 @@ async function main() {
     await playbackAndLayout(browser);
     await fallbacks(browser);
     await productPages(browser);
+    await releaseRegressions(browser);
     await consoleIsClean(browser);
   } finally {
     browser?.close();

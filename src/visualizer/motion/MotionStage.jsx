@@ -434,6 +434,11 @@ export default function MotionStage({ plan }) {
 
       {view.frames.length > 0 ? (
         <section className="motion-frames" aria-label="Active calls">
+          {view.framesHidden > 0 ? (
+            <span className="motion-frames-more">
+              +{view.framesHidden} earlier calls not shown. The Stack tab lists them all.
+            </span>
+          ) : null}
           {view.frames.map((frame) => (
             <FrameCard
               key={frame.key}
