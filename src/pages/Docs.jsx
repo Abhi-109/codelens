@@ -1,17 +1,10 @@
-/* Docs index (Phase 5). Lists documentation pages by name; the content
- * arrives with that milestone. */
+/* Docs index. The list comes from the same module the doc pages read, so an
+ * entry always has a page behind it. */
 
 import { Link } from '../router.jsx';
 import { PageHeader } from '../shell/AppShell.jsx';
+import { DOC_PAGES } from './docsContent.js';
 import './pages.css';
-
-const PAGES = [
-  { slug: 'getting-started', title: 'Getting started' },
-  { slug: 'python-visualizer', title: 'Python visualizer' },
-  { slug: 'supported-python', title: 'Supported Python' },
-  { slug: 'data-structures', title: 'Data structures' },
-  { slug: 'faq', title: 'FAQ' },
-];
 
 export default function Docs() {
   return (
@@ -22,10 +15,11 @@ export default function Docs() {
         subtitle="How CodeLens works, what the visualizer shows, and what the tracer supports."
       />
       <ul className="docs-list">
-        {PAGES.map((page) => (
+        {DOC_PAGES.map((page) => (
           <li key={page.slug}>
             <Link to={`/docs/${page.slug}`} className="docs-item">
-              {page.title}
+              <span className="docs-title">{page.title}</span>
+              <span className="docs-summary">{page.summary}</span>
             </Link>
           </li>
         ))}

@@ -22,10 +22,16 @@ export function Router({ children }) {
   }, []);
 
   const navigate = useCallback((to, { replace = false } = {}) => {
-    const next = normalizePath(to);
-    if (next === normalizePath(window.location.pathname)) return;
-    if (replace) window.history.replaceState(null, '', next);
-    else window.history.pushState(null, '', next);
+    // Matching ignores the query, but the URL keeps it: a lesson links to
+    // /visualizer/python?example=... and the visualizer reads that id when it
+    // mounts. Only the path decides whether this is the same page.
+    const url = String(to);
+    const next = normalizePath(url);
+    if (next === normalizePath(window.location.pathname) && url === window.location.pathname + window.location.search) {
+      return;
+    }
+    if (replace) window.history.replaceState(null, '', url);
+    else window.history.pushState(null, '', url);
     // A new page starts at the top, like any link the browser handles itself.
     window.scrollTo(0, 0);
     setPath(next);

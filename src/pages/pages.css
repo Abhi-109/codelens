@@ -569,7 +569,9 @@
 
 .ds-item,
 .docs-item {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -579,6 +581,17 @@
   font-weight: 500;
   text-decoration: none;
   transition: border-color var(--dur-fast);
+}
+
+.docs-title {
+  font-weight: 600;
+}
+
+.docs-summary {
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--text);
 }
 
 .ds-item:hover,
@@ -613,7 +626,9 @@
 }
 
 .learn-lesson {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -626,6 +641,198 @@
 
 .learn-lesson:hover {
   border-color: var(--accent);
+}
+
+.learn-lesson-title {
+  font-weight: 600;
+}
+
+.learn-lesson-summary {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+/* --- A lesson ------------------------------------------------------------- */
+
+.lesson {
+  max-width: 760px;
+}
+
+.lesson-objectives {
+  margin: var(--space-6) 0 0;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.lesson-objectives h2 {
+  margin: 0 0 var(--space-2);
+  font: 600 11px/1.4 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.lesson-objectives ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-h);
+}
+
+.prose {
+  margin-top: var(--space-6);
+}
+
+.prose h2 {
+  margin: var(--space-6) 0 var(--space-2);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.prose p {
+  margin: 0 0 var(--space-3);
+  max-width: 68ch;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.prose ul {
+  margin: 0 0 var(--space-4);
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 68ch;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.prose-note {
+  margin: 0 0 var(--space-4) !important;
+  padding: var(--space-3) var(--space-4);
+  border-left: 2px solid var(--accent-border);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--accent-bg);
+  font-size: 13.5px !important;
+}
+
+.lesson-example,
+.lesson-checkpoints {
+  margin-top: var(--space-8);
+}
+
+.lesson-example h2,
+.lesson-checkpoints h2 {
+  margin: 0 0 var(--space-3);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.lesson-code {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--code-bg);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-h);
+  overflow-x: auto;
+}
+
+.lesson-hint {
+  margin: var(--space-3) 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.checkpoints {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.checkpoint {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.checkpoint summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.checkpoint p {
+  margin: var(--space-2) 0 0;
+  max-width: 68ch;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.lesson-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-top: var(--space-10);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.lesson-nav-link {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.lesson-nav-next {
+  margin-left: auto;
+  text-align: right;
+}
+
+.lesson-nav-label {
+  font: 600 10px/1.4 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.lesson-nav-title {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .lesson-nav {
+    flex-direction: column;
+  }
+
+  .lesson-nav-next {
+    margin-left: 0;
+    text-align: left;
+  }
 }
 
 /* --- About ---------------------------------------------------------------- */

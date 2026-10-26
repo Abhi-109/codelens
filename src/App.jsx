@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { DEFAULT_EXAMPLE_ID, EXAMPLES, exampleById } from "./examples.js";
 import {
   buildFlowchart,
   buildFlowchartGraph,
@@ -66,41 +67,6 @@ import "./App.css";
 import "./visualizer/workspace.css";
 
 const MODULE = "<module>";
-
-const EXAMPLES = [
-  {
-    name: "Variables",
-    code: 'name = "Asha"\nage = 12\nheight = 1.52\nis_student = True\nnothing = None\nprint(name, age)\n',
-  },
-  {
-    name: "if / else",
-    code: 'marks = 68\nif marks >= 90:\n    grade = "A"\nelif marks >= 60:\n    grade = "B"\nelse:\n    grade = "C"\nprint(grade)\n',
-  },
-  {
-    name: "for loop",
-    code: "total = 0\nfor n in range(1, 6):\n    total = total + n\nprint(total)\n",
-  },
-  {
-    name: "Recursion",
-    code: "def fact(n):\n    if n <= 1:\n        return 1\n    return n * fact(n - 1)\n\n\nprint(fact(5))\n",
-  },
-  {
-    name: "List",
-    code: 'fruits = ["apple", "banana"]\nfruits.append("cherry")\nprint(fruits[2])\n',
-  },
-  {
-    name: "Class",
-    code:
-      "class Dog:\n    def __init__(self, name):\n        self.name = name\n        self.tricks = []\n\n    def learn(self, trick):\n        self.tricks.append(trick)\n\n\nrex = Dog('Rex')\nrex.learn('sit')\nprint(rex.tricks)\n",
-  },
-  {
-    name: "Merge sort",
-    code:
-      "def merge_sort(arr):\n    if len(arr) <= 1:\n        return arr\n    mid = len(arr) // 2\n    left = merge_sort(arr[:mid])\n    right = merge_sort(arr[mid:])\n    return merge(left, right)\n\n\ndef merge(left, right):\n    result = []\n    i = 0\n    j = 0\n    while i < len(left) and j < len(right):\n        if left[i] <= right[j]:\n            result.append(left[i])\n            i += 1\n        else:\n            result.append(right[j])\n            j += 1\n    result.extend(left[i:])\n    result.extend(right[j:])\n    return result\n\n\ndata = [38, 27, 43, 3, 9, 82, 10]\nprint(merge_sort(data))\n",
-  },
-];
-
-const START_EXAMPLE = 3; // Recursion — the best demo of the execution graph.
 
 // One splitter, one percentage: the code keeps about a third of the window and
 // the stage takes everything else.
@@ -239,11 +205,26 @@ function Splitter({ name, onGrab, onMove, onRelease }) {
   );
 }
 
+/** The program the workspace opens on.
+ *
+ * A lesson links to `/visualizer/python?example=<id>`, so the lesson's own
+ * program is already in the editor and one Run shows it. An unknown or
+ * missing id opens the default instead of an empty editor. The source is
+ * loaded, not run: the learner presses Run, exactly as they would by hand.
+ */
+function openingExample() {
+  const fallback = exampleById(DEFAULT_EXAMPLE_ID) ?? EXAMPLES[0];
+  if (typeof window !== "object") return fallback;
+  const id = new URLSearchParams(window.location.search).get("example");
+  return (id && exampleById(id)) || fallback;
+}
+
 export default function App() {
+  const opening = openingExample();
   return (
     <ExecutionSessionProvider
       initialState={createInitialSession({
-        source: EXAMPLES[START_EXAMPLE].code,
+        source: opening.code,
         speed: loadSpeed(),
         viz: loadViz(),
       })}

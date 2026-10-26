@@ -1,29 +1,28 @@
-/* One docs page, e.g. /docs/getting-started. Content arrives with the
- * documentation milestone; unknown slugs get the 404 state. */
+/* One documentation page, e.g. /docs/python-visualizer.
+ *
+ * The body is data from docsContent.js; this file only lays it out. Unknown
+ * slugs get the 404 state. It shares the lesson typography (.prose) on
+ * purpose: both are reading pages, not the workspace. */
 
 import { PageHeader } from '../shell/AppShell.jsx';
-import { EmptyState, NotFoundState } from '../shell/states.jsx';
-
-const TITLES = {
-  'getting-started': 'Getting started',
-  'python-visualizer': 'Python visualizer',
-  'supported-python': 'Supported Python',
-  'data-structures': 'Data structures',
-  faq: 'FAQ',
-};
+import { NotFoundState } from '../shell/states.jsx';
+import { docBySlug } from './docsContent.js';
+import { Blocks } from './Prose.jsx';
+import './pages.css';
 
 export default function Doc({ page }) {
-  const title = TITLES[page];
-  if (!title) return <NotFoundState />;
+  const entry = docBySlug(page);
+  if (!entry) return <NotFoundState />;
   return (
-    <div>
-      <PageHeader crumbs={[{ label: 'Documentation', to: '/docs' }, { label: title }]} title={title} />
-      <EmptyState title="Not written yet">
-        <p>
-          This page is planned for the documentation milestone. Until it exists,
-          the repository docs describe the tracer and the trace format in detail.
-        </p>
-      </EmptyState>
-    </div>
+    <article className="lesson">
+      <PageHeader
+        crumbs={[{ label: 'Documentation', to: '/docs' }, { label: entry.title }]}
+        title={entry.title}
+        subtitle={entry.summary}
+      />
+      <div className="prose">
+        <Blocks blocks={entry.blocks} />
+      </div>
+    </article>
   );
 }
