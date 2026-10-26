@@ -213,7 +213,7 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 136 Python tests: the tracer and its comparison events, the
                       # flowchart model, the static program profile and the corpus
-npm run test:js       # 698 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 738 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6
                       # dict/set/object contents and lifecycle), the pure motion
@@ -238,7 +238,9 @@ npm run test:js       # 698 JS tests: the animation diff vocabulary, the one-tra
                       # homepage preview, the language picker, the workspace modules,
                       # variable history, the run story (rounds, value chains and
                       # error endings), the timeline and comparison helpers,
-                      # output/input/error entries, and the design tokens' contrast
+                      # output/input/error entries, the design tokens' contrast,
+                      # the lesson and documentation content, the built-in
+                      # example registry, and the data-structure operation model
 npm run lint          # oxlint
 npm run build         # production build
 ```
@@ -260,9 +262,12 @@ npm run check:browser # drive the real app in headless Chrome (no npm dependency
 `check:browser` starts its own dev server and headless Chrome, then checks the motion
 canvas against real layout: consecutive swaps, an interrupted swap at 1x and 4x, mid-move
 Back and slider seeks, a burst of steps, comparisons, persistent green positions, themes,
-reduced motion, and short and long arrays. It needs Chrome or Edge; set `CHROME_PATH` if it
-is not in a standard location. It is the only test that can exercise the effect ordering in
-`MotionStage.jsx`, so it is the regression test for the interruption fix.
+reduced motion, and short and long arrays. It also drives the data-structure lab (every
+operation, Back/Next/seek/reset, invalid input), opens a lesson's program in the
+visualizer, and checks both themes, reduced motion at 390px, keyboard focus and arrow-key
+seeking. It needs Chrome or Edge; set `CHROME_PATH` if it is not in a standard location.
+It is the only test that can exercise the effect ordering in `MotionStage.jsx`, so it is
+the regression test for the interruption fix.
 
 ## Project structure
 
@@ -311,7 +316,20 @@ codelens/
 │   │   ├── preview.js          # real trace -> preview frames (pure, reuses stepView)
 │   │   ├── preview.test.mjs    # every frame checked against the corpus recording
 │   │   ├── preview-fixture.json # a recorded run of one built-in example
+│   │   ├── lessons.js          # the seven lessons, as tested data
+│   │   ├── lessons.test.mjs    # objectives, examples and checkpoints are complete
+│   │   ├── docsContent.js      # the five documentation pages, as tested data
+│   │   ├── docsContent.test.mjs # every mode and Inspect tab is documented
+│   │   ├── Prose.jsx           # the block/checkpoint renderer both pages share
 │   │   └── usePageMeta.js      # each page's own <title> and meta description
+│   ├── examples.js         # the built-in programs, with stable ids for lesson links
+│   ├── examples.test.mjs
+│   ├── datastructures/     # the authored lab: operations, frames and drawings
+│   │   ├── model.js        # pure operations -> frames (capacity, LIFO, FIFO, BST, BFS/DFS)
+│   │   ├── model.test.mjs  # boundaries, duplicates, determinism, independent snapshots
+│   │   ├── StructureView.jsx # one snapshot -> array/list/stack/queue/tree/graph
+│   │   ├── DataStructureLab.jsx # controls, cursor, play/pause, reset
+│   │   └── datastructures.css
 │   ├── App.jsx             # the Python visualizer: orchestrator + tracer wiring
 │   ├── App.css
 │   ├── animation/          # the action diff behind the new animation page

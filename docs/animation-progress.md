@@ -4,7 +4,7 @@
 **Current milestone:** Motion-first visualizer — Stage 1 (numeric bars) done; Stage 2 awaits
 approval. Task 7 Stages 1–3 remain complete; the diff engine's remaining `apply.js`/golden
 work is separately scoped.
-**Last updated:** 2026-10-25
+**Last updated:** 2026-10-26
 
 ## Phase checklist
 - [x] 0 Audit
@@ -140,6 +140,34 @@ the Phase 1 plan is waiting for approval, not for clarification.
 The comparison and swap presentation is now browser-validated (see Stage 7 notes below). The
 remaining work is unchanged: Phase 4 (frames, recursion, objects), Phase 5 (skins), Phase 6
 (hardening) and Phase 7 (validation, polish, cleanup) are still open. Nothing is pushed.
+
+## Product experience notes (Phase 4: Learn, Docs, data-structure lab)
+- **Learn is data, not markup.** Seven lessons across five sections live in
+  `src/pages/lessons.js`; each has objectives, a runnable example id, checkpoints and a
+  next-lesson link. `lessons.test.mjs` fails if a lesson loses any of those or names an
+  example that is not in the registry. `Lesson.jsx` renders them through the shared
+  `Prose.jsx` block renderer, so the prose cannot drift into one-off JSX.
+- **Docs are data too.** `src/pages/docsContent.js` holds five pages (editor and playback,
+  visualization modes, Inspect tabs, trace events and the shared cursor, Python support and
+  limitations). Mode and Inspect lists are generated from `vizMode.js` and `workspace.js`, so
+  a new mode without a doc line is a test failure rather than a silent omission.
+- **One example registry.** `src/examples.js` gives every built-in program a stable id.
+  `?example=<id>` loads that source without running it; an unknown id falls back to
+  `recursion`. Lesson links use the same ids, so there is one place to edit a program.
+- **The data-structure lab is an authored model, not a Python trace.** `model.js` applies one
+  operation to a plain state and records frames; each frame is an independent snapshot plus
+  one sentence and its marks. Back/Next/seek therefore draw a past frame directly and a later
+  highlight cannot survive. The page says "not a Python trace" in a badge. Six structures:
+  array (capacity doubles), linked list, stack, queue, BST (duplicate kept once) and a fixed
+  graph (BFS/DFS from A). Errors leave the state unchanged and say why.
+- **Deliberate limits, stated on the page:** no tree deletion, no graph editing or start-node
+  choice, no manual array resize, no doubly linked lists or priority queues.
+- **Verification.** `check:browser` grew a product-page section: every structure and
+  operation, Back/Next/seek/reset, invalid input, capacity growth, play/pause, BST duplicate
+  and in-order, BFS/DFS, lesson index → lesson → example loaded unrun, both themes, reduced
+  motion at 390 px, Tab focus ring and arrow-key seeking, plus the console-clean check.
+- **Counts at the end of this task:** 136 Python tests, 738 JS tests, 145 browser checks.
+  The only build warning remains Vite's chunk-size advisory.
 
 ## Motion-first Stage 7 notes (comparison and swap presentation, browser-validated)
 - **Two rings, two meanings.** A recorded comparison's operand cells now carry `is-compare`

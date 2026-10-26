@@ -27,7 +27,14 @@ project is left in a runnable, demoable state after each task.
       quality bar says to lazy-load the engine only on the visualizer pages,
       so the hero never blocks first paint (`src/pages/preview.js`,
       `npm run fixtures:preview` re-records it)
-- [ ] Learn lessons and docs pages
+- [x] Learn lessons and docs pages: seven lessons across five sections, five
+      documentation pages, both generated from tested data
+      (`src/pages/lessons.js`, `src/pages/docsContent.js`); a lesson's example
+      link opens that program in the visualizer without running it
+- [x] Data-structure lab: arrays (with capacity growth), linked lists, stacks,
+      queues, binary search trees and a fixed graph, on an authored operation
+      model with Back/Next/Reset/Play and per-step snapshots
+      (`src/datastructures/`)
 
 - [x] Replace the Vite template `README.md` with a real one
 - [x] Add `.gitattributes` and normalize line endings to LF
