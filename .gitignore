@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Server-side planner credentials. Only .env.example may be committed.
+.env
+.env.*
+!.env.example
+
 # Python
 __pycache__/
 *.py[cod]
