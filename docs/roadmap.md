@@ -667,3 +667,36 @@ All gates pass: 111 Python tests, 526 JS tests, lint and a production build.
 The screenshots used for verification were taken against a running dev server
 at 1600, 1100 and 420px with the recursion example, a `for` loop, a runtime
 error, round stepping, playback, every view and the inspector tabs.
+
+## Automatic visualization planner (Phase 7A)
+
+The canvases were already real; choosing one was still manual. Phase 7A adds a
+decision layer that reads the existing AST profile and the recorded trace,
+names evidence-labelled concepts, validates a versioned plan, and opens a
+supported canvas.
+
+- [x] Deterministic concept detection over the existing profile, trace and
+      recognizer (`src/planner/concepts.js`); no second Python parser
+- [x] Capability registry for the six real canvases, with explicit missing
+      evidence and unknown-id rejection (`src/planner/renderers.js`)
+- [x] Versioned plan schema (v1), strict bounded validator and motion fallback
+      (`src/planner/plan.js`)
+- [x] Pure deterministic planner with reason codes: sorting/searching -> Adaptive,
+      observed recursion -> Call tree, nested calls -> Call tree/Combined,
+      branch-heavy -> Control flow, everything else -> Motion
+- [x] Lifecycle integration: one plan per run, auto-selection only until the
+      learner picks a canvas, one restrained why-line, cursor untouched
+- [x] Optional AI provider boundary with timeout, cancellation, size cap,
+      classified errors, schema/registry validation, bounded cache and stale-run
+      rejection; no key in the browser
+- [x] Unit, corpus integration and browser checks; docs in
+      [visualization-planner.md](visualization-planner.md)
+
+AI-assisted planning is implemented and tested behind the provider boundary, but
+the repository has no server route and the static deployment cannot hold a
+credential. It is therefore off unless the deployment supplies
+`VITE_PLANNER_ENDPOINT` (or `window.__CODELENS_PLANNER_ENDPOINT__`) pointing at a
+same-origin endpoint. The deterministic path is complete without it.
+
+Gates: 136 Python tests, 823 JS tests, lint, production build, 195 browser
+checks, `check:explain` and `test:pyodide`.

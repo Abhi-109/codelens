@@ -1011,3 +1011,21 @@ remaining animation-spec work is unchanged: Phase 4 (frames, recursion, objects)
 - Fixed while verifying: a bogus number literal (`1abc`) used to tokenize as a number and
   could report a supported mutation for invalid syntax; number tokens are now validated and
   an unreadable character is `unsupported`.
+
+## Phase 7A notes: automatic visualization planner
+- A decision layer now sits between the trace and the canvases: `src/planner/`
+  detects evidence-labelled concepts, checks real renderer capabilities, validates a
+  versioned plan and picks one canvas with a reason code. The renderer still draws only
+  the recorded trace, and the plan carries no trace, step or animation.
+- Evidence strength is a closed set (`observed`, `structural`, `derived`, `hypothesis`),
+  never a numeric confidence. A name or a loop shape alone never proves an algorithm;
+  sorting/searching come from the existing recognizer, which needs runtime evidence.
+- Auto-selection happens once per run and only until the learner picks a canvas; a manual
+  pick is never overwritten. Cursor, playback, output, returns and exceptions are
+  untouched, and the only UI addition is one why-line under the existing chooser.
+- AI planning is an optional same-origin provider (`VITE_PLANNER_ENDPOINT` /
+  `window.__CODELENS_PLANNER_ENDPOINT__`). No key reaches the browser. The repository has
+  no server route, so AI is implemented and unit-tested but off in the static build; the
+  deterministic path is complete without it.
+- Gates: 136 Python tests, 823 JS tests, lint, production build, `check:explain`,
+  `test:pyodide`, 195/195 browser checks. Docs: `docs/visualization-planner.md`.

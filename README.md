@@ -213,7 +213,7 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 136 Python tests: the tracer and its comparison events, the
                       # flowchart model, the static program profile and the corpus
-npm run test:js       # 762 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 823 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6
                       # dict/set/object contents and lifecycle), the pure motion
@@ -241,7 +241,10 @@ npm run test:js       # 762 JS tests: the animation diff vocabulary, the one-tra
                       # error endings), the timeline and comparison helpers,
                       # output/input/error entries, the design tokens' contrast,
                       # the lesson and documentation content, the built-in
-                      # example registry, and the data-structure operation model
+                      # example registry, the data-structure operation model,
+                      # the deterministic concept detector, the renderer
+                      # capability registry, the versioned plan validator, the
+                      # deterministic planner and the optional AI provider
 npm run lint          # oxlint
 npm run build         # production build
 ```
@@ -266,11 +269,14 @@ Back and slider seeks, a burst of steps, comparisons, persistent green positions
 reduced motion, and short and long arrays. It also drives the data-structure lab (every
 operation, Back/Next/seek/reset, invalid input), opens a lesson's program in the
 visualizer, and checks both themes, reduced motion at 390px, keyboard focus and arrow-key
-seeking. The release regressions cover a successful run's status label, a 200-element
-list, a cyclic list, runaway recursion and its capped call strip, a caught exception, and
-the skip link. The stage checks cover scalar-only values, a returned string beside its
-printed output (`greet()`), backward seeking, reset, both themes and a 390 px phone. It
-needs Chrome or Edge; set `CHROME_PATH` if it is not in a standard location.
+seeking. The planner checks open a scalar run on Motion, a recognized sort on Adaptive and
+observed recursion on the call tree, verify the one-line reason, and prove that a manual
+canvas pick is never overwritten by a later plan. The release regressions cover a successful
+run's status label, a 200-element list, a cyclic list, runaway recursion and its capped call
+strip, a caught exception, and the skip link. The stage checks cover scalar-only values, a
+returned string beside its printed output (`greet()`), backward seeking, reset, both themes
+and a 390 px phone. It needs Chrome or Edge; set `CHROME_PATH` if it is not in a standard
+location.
 It is the only test that can exercise the effect ordering in `MotionStage.jsx`, so it is
 the regression test for the interruption fix.
 
@@ -288,6 +294,7 @@ codelens/
 │   ├── program-profile.md  # the static AST profile contract (version 1)
 │   ├── recognition.md      # evidence rules and confidence for algorithm recognition
 │   ├── visualization-adapters.md # adapter contract, scene schema, validation rules
+│   ├── visualization-planner.md # concepts, renderer registry, plan schema, AI boundary
 │   ├── brand.md            # the mark, palette, asset files and usage rules
 │   ├── implementation-plan.md # the site build: audit, phases, and status
 │   ├── animation-spec.md   # the visualizer rebuild's source of truth
@@ -389,6 +396,13 @@ codelens/
 │   │   ├── VisualizationPane.jsx # one canvas toolbar: the offered views and the tools slot
 │   │   ├── workspace.css        # the chrome layer: toolbar, split, tabs, playback bar
 │   │   └── SimpleFlow.jsx       # the v1 block outline, behind "Simple view"
+│   ├── planner/            # the decision layer between the trace and the canvases
+│   │   ├── concepts.js     # profile + trace -> evidence-labelled concept report (pure)
+│   │   ├── renderers.js    # capability registry for the six real canvases (pure)
+│   │   ├── plan.js         # versioned plan schema, strict validator, safe fallback (pure)
+│   │   ├── planner.js      # deterministic renderer choice with reason codes (pure)
+│   │   ├── aiProvider.js   # optional same-origin JSON provider, no key in the browser
+│   │   └── aiPlanner.js    # validated, cached AI recommendation; never runtime facts
 │   ├── flowchart/
 │   │   ├── callTree.js          # frames -> a tree of calls, one node per call (pure)
 │   │   ├── callTree.test.mjs
