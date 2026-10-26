@@ -915,7 +915,470 @@ async function fallbacks(browser) {
   await browser.screenshot("scalars");
 }
 
-// --- E. no console errors ---------------------------------------------------
+// --- E. data-structure lab, lessons, narrow screen and keyboard -------------
+
+/** Navigate the single-page app the way the router does. */
+async function openRoute(browser, path) {
+  await browser.evaluate(`(() => {
+    window.history.pushState(null, "", ${JSON.stringify(path)});
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    return true;
+  })()`);
+  await sleep(350);
+}
+
+const readLab = (browser) =>
+  browser.evaluate(`(() => {
+    const text = (selector) => document.querySelector(selector)?.textContent ?? null;
+    const all = (selector) => [...document.querySelectorAll(selector)].map((el) => el.textContent);
+    const slider = document.querySelector('input[aria-label="Lab step"]');
+    const stage = document.querySelector(".ds-stage");
+    const plate = document.querySelector(".ds-plate");
+    return {
+      text: text(".ds-text"),
+      readout: text(".ds-readout"),
+      values: all(".ds-value"),
+      plates: all(".ds-plate"),
+      nodes: all(".ds-tree-node text"),
+      graphDone: all(".ds-graph-node.is-done text"),
+      compare: all(".ds-cell.is-compare .ds-value"),
+      found: all(".ds-cell.is-found .ds-value"),
+      active: all(".ds-cell.is-active .ds-value, .ds-node.is-active, .ds-plate.is-active"),
+      error: text(".ds-error"),
+      stepMax: slider ? Number(slider.max) : 0,
+      stepValue: slider ? Number(slider.value) : 0,
+      stepDisabled: slider ? slider.disabled : true,
+      overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      theme: document.documentElement.getAttribute("data-theme"),
+      columns: stage ? getComputedStyle(document.querySelector(".ds-lab")).gridTemplateColumns : "",
+      reduced: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      transition: plate ? getComputedStyle(plate).transitionDuration : null,
+      stageColor: stage ? getComputedStyle(stage).color : null,
+      stageBg: stage ? getComputedStyle(stage).backgroundColor : null,
+    };
+  })()`);
+
+async function productPages(browser) {
+  console.log("\n--- data-structure lab, lessons, narrow screen and keyboard ---");
+
+  await openRoute(browser, "/visualizer/data-structures");
+  await browser.waitFor(
+    'document.querySelectorAll(".ds-item").length === 6',
+    15000,
+    "the structure list",
+  );
+  const cards = await browser.evaluate(
+    '[...document.querySelectorAll(".ds-item-name")].map((el) => el.textContent)',
+  );
+  check(
+    cards.length === 6 && cards.includes("Binary search tree") && cards.includes("Graph"),
+    "all six structures are offered",
+    cards.join(", "),
+  );
+  await browser.screenshot("ds-index");
+
+  // Arrays: steps, marks, back/seek/reset and a bad index.
+  await browser.click('a[href="/visualizer/data-structures/array"]');
+  await browser.waitFor('document.querySelector(".ds-array")', 10000, "the array lab");
+  const start = await readLab(browser);
+  check(
+    start.values.filter(Boolean).join(",") === "4,7,1",
+    "the array starts with its example values",
+    start.values.join(","),
+  );
+  await browser.clickText("Search");
+  await sleep(150);
+  const compare = await readLab(browser);
+  check(compare.readout === "1 / 2", "a search records two steps", compare.readout);
+  check(
+    compare.compare.length === 1 && compare.found.length === 0,
+    "the first search step marks the comparison",
+    `compare ${compare.compare.join(",")} found ${compare.found.join(",")}`,
+  );
+  await browser.click('[aria-label="Next lab step"]');
+  await sleep(100);
+  const found = await readLab(browser);
+  check(
+    found.found.length === 1 && found.compare.length === 0,
+    "the found step replaces the comparison mark",
+    `compare ${found.compare.join(",")} found ${found.found.join(",")}`,
+  );
+  await browser.click('[aria-label="Previous lab step"]');
+  await sleep(100);
+  const back = await readLab(browser);
+  check(
+    back.compare.length === 1 && back.found.length === 0,
+    "stepping back removes the later found mark",
+    `compare ${back.compare.join(",")} found ${back.found.join(",")}`,
+  );
+  await browser.setValue('input[aria-label="Lab step"]', 1);
+  await sleep(100);
+  const seeked = await readLab(browser);
+  check(
+    seeked.found.length === 1 && seeked.compare.length === 0,
+    "seeking draws the target step, not the path",
+    `compare ${seeked.compare.join(",")} found ${seeked.found.join(",")}`,
+  );
+  await browser.click('[aria-label="Reset lab"]');
+  await sleep(100);
+  const reset = await readLab(browser);
+  check(
+    reset.readout === "0 / 0" && reset.active.length === 0,
+    "reset clears the run and its marks",
+    `${reset.readout} active ${reset.active.join(",")}`,
+  );
+  await browser.setValue('input[aria-label="Remove Index"]', 99);
+  await browser.clickText("Remove");
+  await sleep(100);
+  const refused = await readLab(browser);
+  check(
+    refused.error?.includes("outside") &&
+      refused.values.filter(Boolean).join(",") === "4,7,1",
+    "a bad index says why and changes nothing",
+    `${refused.error} | ${refused.values.join(",")}`,
+  );
+
+  // Dynamic array: the capacity doubles before the append.
+  await browser.setValue('input[aria-label="Append Value"]', 6);
+  await browser.clickText("Append");
+  await sleep(100);
+  await browser.setValue('input[aria-label="Append Value"]', 2);
+  await browser.clickText("Append");
+  await sleep(100);
+  const growing = await readLab(browser);
+  const capacity = await browser.evaluate('document.querySelector(".ds-note")?.textContent');
+  check(growing.readout === "1 / 2", "a full append records a growth step first", growing.readout);
+  check(
+    capacity?.includes("capacity 8"),
+    "the array grows from four slots to eight",
+    String(capacity),
+  );
+  await browser.click('[aria-label="Next lab step"]');
+  await sleep(100);
+  const grown = await readLab(browser);
+  check(
+    grown.values.filter(Boolean).join(",") === "4,7,1,6,2",
+    "the grown array keeps every value",
+    grown.values.join(","),
+  );
+
+  // Stack and queue: LIFO, FIFO, and the empty refusal.
+  await openRoute(browser, "/visualizer/data-structures/stack");
+  await browser.waitFor('document.querySelector(".ds-stack")', 10000, "the stack lab");
+  await browser.clickText("Pop");
+  await sleep(100);
+  const popped = await readLab(browser);
+  check(
+    popped.plates.join(",") === "A" && popped.text.includes("Pop B"),
+    "a stack pops from the top",
+    `${popped.plates.join(",")} | ${popped.text}`,
+  );
+  await browser.clickText("Pop");
+  await sleep(100);
+  await browser.clickText("Pop");
+  await sleep(100);
+  const emptyPop = await readLab(browser);
+  check(
+    emptyPop.error?.includes("empty"),
+    "popping an empty stack is refused",
+    String(emptyPop.error),
+  );
+  check(
+    (await browser.evaluate('document.querySelector(".ds-empty-cell")?.textContent')) === "empty",
+    "the empty stack says it is empty",
+  );
+
+  await openRoute(browser, "/visualizer/data-structures/queue");
+  await browser.waitFor('document.querySelector(".ds-queue")', 10000, "the queue lab");
+  await browser.clickText("Enqueue");
+  await sleep(100);
+  check(
+    (await readLab(browser)).plates.join(",") === "A,B,C",
+    "a queue enqueues at the back",
+  );
+  await browser.clickText("Dequeue");
+  await sleep(100);
+  const dequeued = await readLab(browser);
+  check(
+    dequeued.plates.join(",") === "B,C" && dequeued.text.includes("Dequeue A"),
+    "a queue dequeues from the front",
+    `${dequeued.plates.join(",")} | ${dequeued.text}`,
+  );
+
+  // Linked list: playback, pause, reset.
+  await openRoute(browser, "/visualizer/data-structures/linked-list");
+  await browser.waitFor('document.querySelector(".ds-linked")', 10000, "the list lab");
+  await browser.clickText("Traverse");
+  await sleep(100);
+  const walking = await readLab(browser);
+  check(walking.readout === "1 / 3", "a traversal records one step per node", walking.readout);
+  await browser.click('[aria-label="Play lab"]');
+  await sleep(850);
+  await browser.click('[aria-label="Pause lab"]');
+  const paused = await readLab(browser);
+  await sleep(900);
+  const stillPaused = await readLab(browser);
+  check(
+    stillPaused.stepValue === paused.stepValue,
+    "pausing the lab stops the playhead",
+    `${paused.stepValue} then ${stillPaused.stepValue}`,
+  );
+  await browser.click('[aria-label="Reset lab"]');
+  await sleep(100);
+  const resetList = await readLab(browser);
+  check(
+    resetList.readout === "0 / 0" && resetList.active.length === 0,
+    "resetting the list clears its steps",
+    resetList.readout,
+  );
+
+  // Binary search tree: insert, duplicate, in-order.
+  await openRoute(browser, "/visualizer/data-structures/bst");
+  await browser.waitFor('document.querySelector(".ds-stage")', 10000, "the tree lab");
+  for (const value of [8, 3, 10, 1, 6]) {
+    await browser.setValue('input[aria-label="Insert Value"]', value);
+    await browser.clickText("Insert");
+    await sleep(120);
+  }
+  await browser.setValue('input[aria-label="Lab step"]', 2);
+  await sleep(120);
+  const tree = await readLab(browser);
+  check(
+    tree.nodes.join(",") === "1,3,6,8,10",
+    "the tree inserts in search order",
+    tree.nodes.join(","),
+  );
+  await browser.setValue('input[aria-label="Insert Value"]', 3);
+  await browser.clickText("Insert");
+  await sleep(120);
+  await browser.setValue('input[aria-label="Lab step"]', 1);
+  await sleep(120);
+  const duplicate = await readLab(browser);
+  check(
+    duplicate.text.includes("keeps one copy") && duplicate.nodes.length === 5,
+    "a duplicate tree value is kept once",
+    `${duplicate.text} | ${duplicate.nodes.length} nodes`,
+  );
+  await browser.clickText("In-order");
+  await sleep(100);
+  await browser.setValue('input[aria-label="Lab step"]', 5);
+  await sleep(120);
+  const inorder = await readLab(browser);
+  check(
+    inorder.text.includes("1, 3, 6, 8, 10"),
+    "the in-order walk is sorted",
+    String(inorder.text),
+  );
+
+  // Graph: breadth-first and depth-first on the fixed graph.
+  await openRoute(browser, "/visualizer/data-structures/graph");
+  await browser.waitFor('document.querySelector(".ds-graph")', 10000, "the graph lab");
+  await browser.clickText("Breadth-first");
+  await sleep(100);
+  await browser.setValue('input[aria-label="Lab step"]', 6);
+  await sleep(120);
+  const bfs = await readLab(browser);
+  check(
+    bfs.text.includes("A → B → C → D → E → F") && bfs.graphDone.length === 6,
+    "breadth-first visits every node in queue order",
+    `${bfs.text} | ${bfs.graphDone.join(",")}`,
+  );
+  await browser.clickText("Depth-first");
+  await sleep(100);
+  await browser.setValue('input[aria-label="Lab step"]', 6);
+  await sleep(120);
+  const dfs = await readLab(browser);
+  check(
+    dfs.text.includes("A → B → D → F → E → C"),
+    "depth-first follows one branch before the next",
+    String(dfs.text),
+  );
+
+  // Lessons: the index, one lesson, and its program loaded unrun.
+  await openRoute(browser, "/learn");
+  await browser.waitFor(
+    'document.querySelectorAll(".learn-lesson").length === 7',
+    10000,
+    "the lesson index",
+  );
+  await browser.click('a[href="/learn/getting-started/introduction"]');
+  await browser.waitFor('document.querySelector(".lesson")', 10000, "a lesson page");
+  const lesson = await browser.evaluate(`(() => ({
+    title: document.querySelector(".page-title")?.textContent,
+    objectives: document.querySelectorAll(".lesson-objectives li").length,
+    checkpoints: document.querySelectorAll(".checkpoint").length,
+    example: document.querySelector('a[href^="/visualizer/python?example="]')?.getAttribute("href"),
+    next: document.querySelector(".lesson-nav-next")?.getAttribute("href"),
+  }))()`);
+  check(
+    lesson.title === "Introduction to CodeLens" &&
+      lesson.objectives >= 2 &&
+      lesson.checkpoints >= 2,
+    "a lesson has objectives, prose and checkpoints",
+    JSON.stringify(lesson),
+  );
+  check(
+    lesson.example === "/visualizer/python?example=statements",
+    "a lesson links to its own example",
+    String(lesson.example),
+  );
+  check(
+    lesson.next === "/learn/getting-started/first-program",
+    "a lesson links to the next one",
+    String(lesson.next),
+  );
+  await browser.click('a[href^="/visualizer/python?example="]');
+  await browser.waitFor(
+    'document.querySelector(\'textarea[aria-label="Your Python code"]\')',
+    15000,
+    "the visualizer with the lesson program",
+  );
+  const loaded = await browser.evaluate(`(() => {
+    const step = document.querySelector('input[aria-label="Step"]');
+    return {
+      source: document.querySelector('textarea[aria-label="Your Python code"]').value,
+      stepped: Boolean(step),
+      stepDisabled: step ? step.disabled : true,
+    };
+  })()`);
+  check(
+    loaded.source.includes("total = total + 4"),
+    "a lesson opens its own program in the visualizer",
+    loaded.source.slice(0, 40),
+  );
+  check(
+    !loaded.stepped || loaded.stepDisabled,
+    "the lesson loads the program without running it",
+    JSON.stringify({ stepped: loaded.stepped, disabled: loaded.stepDisabled }),
+  );
+  await browser.evaluate("window.history.back()");
+  await browser.waitFor('document.querySelector(".lesson")', 10000, "the lesson after going back");
+  check(
+    (await browser.evaluate('document.querySelectorAll(".checkpoint").length')) >= 2,
+    "going back returns to the lesson",
+  );
+
+  // Themes on the lab.
+  await openRoute(browser, "/visualizer/data-structures/array");
+  await browser.waitFor('document.querySelector(".ds-array")', 10000, "the array lab again");
+  const toggle = () =>
+    browser.evaluate(`(() => {
+      const el = [...document.querySelectorAll("button")].find((button) =>
+        (button.getAttribute("aria-label") ?? "").startsWith("Switch to"),
+      );
+      if (!el) return false;
+      el.click();
+      return true;
+    })()`);
+  const dark = await readLab(browser);
+  check(await toggle(), "the lab has the theme switch");
+  await sleep(300);
+  const light = await readLab(browser);
+  check(light.theme !== dark.theme, "the lab follows the theme", `${dark.theme} -> ${light.theme}`);
+  check(
+    light.stageColor !== light.stageBg,
+    "lab text is readable against its own surface",
+    `${light.stageColor} on ${light.stageBg}`,
+  );
+  check(!light.overflow, "the lab does not overflow in light theme");
+  await browser.screenshot("ds-light");
+  await toggle();
+  await sleep(300);
+  check((await readLab(browser)).theme === dark.theme, "the lab returns to the original theme");
+
+  // Narrow screen with reduced motion.
+  await browser.send("Emulation.setDeviceMetricsOverride", {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
+  await browser.send("Emulation.setEmulatedMedia", {
+    features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+  });
+  await openRoute(browser, "/visualizer/data-structures/stack");
+  const mobile = await readLab(browser);
+  check(mobile.reduced, "reduced motion is live on the narrow lab", String(mobile.reduced));
+  check(
+    mobile.columns.split(" ").length === 1,
+    "the lab becomes one column on a narrow screen",
+    mobile.columns,
+  );
+  check(!mobile.overflow, "the narrow lab does not overflow the page");
+  await browser.clickText("Push");
+  await sleep(100);
+  const mobileStep = await readLab(browser);
+  check(
+    mobileStep.plates.length === 3 && mobileStep.text.includes("Push C"),
+    "the narrow lab still records steps",
+    `${mobileStep.plates.join(",")} | ${mobileStep.text}`,
+  );
+  check(
+    mobileStep.transition === "0s" || parseFloat(mobileStep.transition) < 0.001,
+    "reduced motion removes the lab transition",
+    String(mobileStep.transition),
+  );
+  await browser.screenshot("ds-mobile-reduced");
+  await browser.send("Emulation.clearDeviceMetricsOverride");
+  await browser.send("Emulation.setEmulatedMedia", { features: [] });
+  await sleep(300);
+
+  // Keyboard: Tab reaches the timeline with a visible ring, and arrows seek.
+  await openRoute(browser, "/visualizer/data-structures/array");
+  await browser.waitFor('document.querySelector(".ds-array")', 10000, "the array lab for keyboard");
+  await browser.clickText("Search");
+  await sleep(150);
+  let focused = null;
+  for (let attempt = 0; attempt < 40 && focused?.label !== "Lab step"; attempt += 1) {
+    await browser.send("Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "Tab",
+      code: "Tab",
+      windowsVirtualKeyCode: 9,
+    });
+    await browser.send("Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: "Tab",
+      code: "Tab",
+      windowsVirtualKeyCode: 9,
+    });
+    await sleep(30);
+    focused = await browser.evaluate(`(() => ({
+      label: document.activeElement.getAttribute("aria-label"),
+      outline: getComputedStyle(document.activeElement).outlineStyle,
+      width: getComputedStyle(document.activeElement).outlineWidth,
+    }))()`);
+  }
+  check(focused?.label === "Lab step", "Tab reaches the lab timeline", JSON.stringify(focused));
+  check(
+    focused?.outline === "solid" && focused?.width === "2px",
+    "the focused lab control shows a ring",
+    JSON.stringify(focused),
+  );
+  for (const key of ["ArrowRight", "ArrowRight"]) {
+    await browser.send("Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key,
+      code: key,
+      windowsVirtualKeyCode: key === "ArrowRight" ? 39 : 37,
+    });
+    await browser.send("Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key,
+      code: key,
+      windowsVirtualKeyCode: key === "ArrowRight" ? 39 : 37,
+    });
+    await sleep(80);
+  }
+  check(
+    (await readLab(browser)).stepValue === 1,
+    "arrow keys seek the lab timeline",
+    String((await readLab(browser)).stepValue),
+  );
+  await browser.screenshot("ds-keyboard");
+}
+
+// --- F. no console errors ---------------------------------------------------
 
 async function consoleIsClean(browser) {
   const messages = await browser.consoleMessages();
@@ -977,6 +1440,7 @@ async function main() {
     await bubbleSort(browser);
     await playbackAndLayout(browser);
     await fallbacks(browser);
+    await productPages(browser);
     await consoleIsClean(browser);
   } finally {
     browser?.close();
