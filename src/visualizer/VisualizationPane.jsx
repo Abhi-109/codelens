@@ -23,9 +23,10 @@ import { VIZ_BLURBS, VIZ_LABELS, VIZ_MODES } from "./vizMode.js";
  * @param {string} props.viz the active canvas id
  * @param {(viz: string) => void} props.onVizChange
  * @param {import("react").ReactNode} [props.tools] controls for the active canvas
+ * @param {string|null} [props.hint] one short sentence on why this canvas was picked
  * @param {import("react").ReactNode} props.children the active canvas
  */
-export default function VisualizationPane({ viz, onVizChange, tools = null, children }) {
+export default function VisualizationPane({ viz, onVizChange, tools = null, hint = null, children }) {
   const refs = useRef([]);
   // With one canvas there is no choice to offer, so the strip stays out of the
   // way rather than showing a single button that does nothing.
@@ -77,6 +78,11 @@ export default function VisualizationPane({ viz, onVizChange, tools = null, chil
         ) : null}
         {tools ? <div className="canvas-tools">{tools}</div> : null}
       </div>
+      {hint ? (
+        <p className="viz-hint" title="Why this canvas was suggested">
+          {hint}
+        </p>
+      ) : null}
       <div
         className="viz-body"
         id="viz-canvas"

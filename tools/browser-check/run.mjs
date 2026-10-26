@@ -72,6 +72,15 @@ const GREET = `def greet(name):
 print(greet("Asha"))
 `;
 
+// Recursion the tracer really made, so the planner may open the call tree.
+const RECURSION = `def fact(n):
+    if n < 2:
+        return 1
+    return n * fact(n - 1)
+
+print(fact(5))
+`;
+
 // --- assertions -------------------------------------------------------------
 
 const failures = [];
@@ -224,6 +233,59 @@ async function openProgram(browser, source) {
   await sleep(400);
 }
 
+/** Open a fresh program without touching the canvas strip. */
+async function openPlanned(browser, source) {
+  await browser.evaluate(`(() => {
+    const edit = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent.trim() === "Edit",
+    );
+    if (edit) edit.click();
+    return Boolean(edit);
+  })()`);
+  await browser.waitFor(
+    `document.querySelector('textarea[aria-label="Your Python code"]')`,
+    15000,
+    "the code editor",
+  );
+  await browser.setValue(
+    'textarea[aria-label="Your Python code"]',
+    source,
+    "HTMLTextAreaElement",
+  );
+  await browser.click("button.run");
+  await browser.waitFor(
+    `!document.querySelector('textarea[aria-label="Your Python code"]')`,
+    120000,
+    "the code pane to switch to the executed trace",
+  );
+  await browser.waitFor(
+    `(() => {
+      const input = document.querySelector('input[aria-label="Step"]');
+      return Boolean(input) && !input.disabled;
+    })()`,
+    120000,
+    "a steppable trace",
+  );
+  await sleep(400);
+}
+
+const selectedCanvas = (browser) =>
+  browser.evaluate(
+    `document.querySelector('.viz-pane [role="tablist"] [role="tab"][aria-selected="true"]')?.textContent.trim() ?? null`,
+  );
+
+const planHint = (browser) =>
+  browser.evaluate(`document.querySelector(".viz-hint")?.textContent.trim() ?? null`);
+
+async function reloadWorkspace(browser) {
+  await browser.evaluate("location.reload()");
+  await browser.waitFor(
+    `document.querySelector('textarea[aria-label="Your Python code"]')`,
+    60000,
+    "the code editor after reload",
+  );
+}
+
 /** Sample every animation frame for `ms`, from the app's own DOM. */
 function startSampler(browser, ms = 800) {
   return browser.evaluate(`(() => {
@@ -276,6 +338,118 @@ async function waitForProgress(browser, threshold) {
     await sleep(8);
   }
   return { travelled: 0, slot: 0 };
+}
+
+// --- planner: automatic choice, manual override, no stale plan -------------
+
+async function planner(browser) {
+  // A scalar run: no specialized pattern was proven, so Motion stays.
+  await openPlanned(browser, SCALARS);
+  check(
+    (await selectedCanvas(browser)) === "Motion",
+    "the planner opens a scalar run on Motion",
+    String(await selectedCanvas(browser)),
+  );
+  check(
+    /no specialized pattern was proven/.test((await planHint(browser)) ?? ""),
+    "the why-line says the choice was generic",
+    String(await planHint(browser)),
+  );
+
+  // A real sorting run: the adaptive canvas is the honest choice.
+  await openPlanned(browser, BUBBLE);
+  check(
+    (await selectedCanvas(browser)) === "Adaptive",
+    "the planner opens a recognized sort on Adaptive",
+    String(await selectedCanvas(browser)),
+  );
+  check(
+    /sorting comparisons/.test((await planHint(browser)) ?? ""),
+    "the why-line names the observed sorting evidence",
+    String(await planHint(browser)),
+  );
+
+  // The learner's own choice wins, and changing canvas never moves the step.
+  await seek(browser, 4);
+  const beforeSwitch = await browser.evaluate(
+    `Number(document.querySelector('input[aria-label="Step"]').value)`,
+  );
+  await browser.clickText("Motion");
+  await sleep(300);
+  check(
+    (await selectedCanvas(browser)) === "Motion",
+    "a manual canvas choice is available",
+    String(await selectedCanvas(browser)),
+  );
+  check(
+    (await planHint(browser)) === null,
+    "the why-line disappears after a manual choice",
+    String(await planHint(browser)),
+  );
+  await browser.clickText("Call tree");
+  await sleep(300);
+  check(
+    (await browser.evaluate(`Number(document.querySelector('input[aria-label="Step"]').value)`)) ===
+      beforeSwitch,
+    "switching canvas never moves the shared cursor",
+    `${beforeSwitch}`,
+  );
+
+  // A recursive run would open the call tree, but the manual pick is pinned.
+  await browser.clickText("Motion");
+  await sleep(200);
+  await openPlanned(browser, RECURSION);
+  check(
+    (await selectedCanvas(browser)) === "Motion",
+    "a manual pick is not overwritten by a later plan",
+    String(await selectedCanvas(browser)),
+  );
+
+  // A fresh visit has no manual pin: recursion opens the call tree, and a
+  // different program cannot keep the previous plan.
+  await reloadWorkspace(browser);
+  await openPlanned(browser, RECURSION);
+  check(
+    (await selectedCanvas(browser)) === "Call tree",
+    "the planner opens observed recursion on the call tree",
+    String(await selectedCanvas(browser)),
+  );
+  check(
+    /same function ran at more than one depth/.test((await planHint(browser)) ?? ""),
+    "the why-line names the observed recursion",
+    String(await planHint(browser)),
+  );
+
+  const recursiveMax = await browser.evaluate(
+    `Number(document.querySelector('input[aria-label="Step"]').max)`,
+  );
+  await seek(browser, Math.min(3, recursiveMax));
+  check(
+    (await browser.evaluate(`Number(document.querySelector('input[aria-label="Step"]').value)`)) ===
+      Math.min(3, recursiveMax),
+    "the shared cursor works on an automatically chosen canvas",
+  );
+
+  await openPlanned(browser, SCALARS);
+  check(
+    (await selectedCanvas(browser)) === "Motion",
+    "a new program replaces the previous plan instead of reusing it",
+    String(await selectedCanvas(browser)),
+  );
+  check(
+    /no specialized pattern/.test((await planHint(browser)) ?? ""),
+    "the new program's why-line replaces the old one",
+    String(await planHint(browser)),
+  );
+
+  // No provider is configured in this build, so the deterministic path is all
+  // that runs; there is no request to fail and nothing to hide.
+  check(
+    (await browser.evaluate("window.__CODELENS_PLANNER_ENDPOINT__ ?? null")) === null,
+    "AI planning is off unless a public endpoint is configured",
+  );
+
+  await reloadWorkspace(browser);
 }
 
 // --- A. the interruption regression ----------------------------------------
@@ -1744,6 +1918,7 @@ async function main() {
       60000,
       "the code editor",
     );
+    await planner(browser);
     await interruption(browser);
     await bubbleSort(browser);
     await playbackAndLayout(browser);

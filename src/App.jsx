@@ -47,6 +47,15 @@ import {
 import { createRunGate } from "./visualizer/runGate.js";
 import { loadViz, saveViz } from "./visualizer/vizMode.js";
 import { clampStep } from "./visualizer/workspace.js";
+import { detectConcepts } from "./planner/concepts.js";
+import { describePlan, planVisualization } from "./planner/planner.js";
+import {
+  buildAiRequest,
+  createPlanCache,
+  isAiResultCurrent,
+  planWithAi,
+} from "./planner/aiPlanner.js";
+import { createAiProvider, plannerEndpoint } from "./planner/aiProvider.js";
 import { ExecutionSessionProvider } from "./visualizer/session/ExecutionSessionProvider.jsx";
 import { useExecutionSession } from "./visualizer/session/useExecutionSession.js";
 import { createInitialSession, sessionActions } from "./visualizer/session/session.js";
@@ -274,6 +283,13 @@ function Workspace() {
   // On a phone the Run button lives behind the Code tab, so start there.
   const [pane, setPane] = useState(() => (window.innerWidth < 900 ? "code" : "visual"));
   const [motionPlan, setMotionPlan] = useState(null);
+  // The validated plan for the current run, and whether the learner has picked
+  // a canvas themselves. A manual pick is never overwritten by a later plan.
+  const [planState, setPlanState] = useState(null);
+  const pinnedViz = useRef(false);
+  const planRun = useRef(null);
+  const aiProvider = useRef(null);
+  const aiCache = useRef(null);
   const reducedMotion = useReducedMotion();
 
   const timer = useRef(null);
@@ -324,6 +340,7 @@ function Workspace() {
   // Choosing a canvas touches the canvas and nothing else — never the step,
   // never the playing state, never the speed.
   const setViz = (next) => {
+    pinnedViz.current = true;
     dispatch(sessionActions.selectViz(next));
     saveViz(next);
   };
@@ -470,6 +487,10 @@ function Workspace() {
   const nextReason = nextEvent ? explainStep(trace, index + 1, shownSource).text : null;
   const olderCalls = Math.max(view.callStack.length - 1, 0);
   const runState = runStateOf({ running, engine, result, trace, sourceDirty });
+  // One short why-line, only while the recommended canvas is the one on
+  // screen. It is a hint, not a second toolbar.
+  const planHint =
+    planState && !sourceDirty && viz === planState.primary ? describePlan(planState) : null;
 
   // Keep the lit-up line in view without ever scrolling the page.
   useEffect(() => {
@@ -521,6 +542,8 @@ function Workspace() {
     const runSource = sourceRef.current;
     const run = gate.begin(runSource);
     dispatch(sessionActions.startRun());
+    setPlanState(null);
+    planRun.current = null;
 
     const cancelStale = () => dispatch(sessionActions.cancelRun());
 
@@ -550,6 +573,56 @@ function Workspace() {
           recognition: recognized,
         }),
       );
+
+      // The plan is derived from this run only. It can recommend a canvas, but
+      // it never touches the trace, the step or the playing state, and it only
+      // opens its choice while the learner has not picked one themselves.
+      const analysis = detectConcepts({
+        profile: p,
+        trace: r?.trace,
+        result: r,
+        recognition: recognized,
+      });
+      const nextPlan = planVisualization({
+        analysis,
+        recognition: recognized,
+        hasFlow: Boolean(f),
+      });
+      planRun.current = run;
+      setPlanState(nextPlan);
+      if (!pinnedViz.current) dispatch(sessionActions.selectViz(nextPlan.primary));
+
+      // AI is optional and late by design: the deterministic canvas is already
+      // on screen. A validated answer may refine it only for this same run.
+      const endpoint = plannerEndpoint();
+      if (endpoint) {
+        if (!aiProvider.current) aiProvider.current = createAiProvider({ endpoint });
+        if (!aiCache.current) aiCache.current = createPlanCache();
+        const request = buildAiRequest({ source: runSource, analysis, plan: nextPlan });
+        planWithAi({
+          provider: aiProvider.current,
+          request,
+          analysis,
+          deterministic: nextPlan,
+          hasFlow: Boolean(f),
+          cache: aiCache.current,
+        }).then(({ plan: aiPlan }) => {
+          if (!aiPlan) return;
+          if (!gate.isLatest(run) || !gate.isCurrent(run, sourceRef.current)) return;
+          if (
+            !isAiResultCurrent({
+              expectedRun: run,
+              currentRun: planRun.current,
+              pinned: pinnedViz.current,
+            })
+          ) {
+            return;
+          }
+          setPlanState(aiPlan);
+          dispatch(sessionActions.selectViz(aiPlan.primary));
+        });
+      }
+
       setWatched(null);
       setComparison(initialComparison());
       setDismissed(new Set());
@@ -905,6 +978,7 @@ function Workspace() {
           <VisualizationPane
             viz={viz}
             onVizChange={setViz}
+            hint={planHint}
             tools={
               viz === "scene" && result ? (
                 <AdaptiveTools

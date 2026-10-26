@@ -501,6 +501,15 @@
   min-width: 0;
 }
 
+/* One restrained why-line under the canvas chooser. It is a sentence, not a
+   card, and it disappears as soon as the learner picks another canvas. */
+.viz-hint {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* One menu, not a second toolbar: the current adapter and every alternative
    with the registry's reason, folded away until asked for. */
 .view-menu {
