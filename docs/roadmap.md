@@ -692,11 +692,52 @@ supported canvas.
 - [x] Unit, corpus integration and browser checks; docs in
       [visualization-planner.md](visualization-planner.md)
 
-AI-assisted planning is implemented and tested behind the provider boundary, but
-the repository has no server route and the static deployment cannot hold a
-credential. It is therefore off unless the deployment supplies
-`VITE_PLANNER_ENDPOINT` (or `window.__CODELENS_PLANNER_ENDPOINT__`) pointing at a
-same-origin endpoint. The deterministic path is complete without it.
+AI-assisted planning is implemented and tested behind the provider boundary. Phase
+7A left it off because the static deployment cannot hold a credential.
 
 Gates: 136 Python tests, 823 JS tests, lint, production build, 195 browser
 checks, `check:explain` and `test:pyodide`.
+
+## Secure AI planner activation (Phase 7B)
+
+Phase 7B makes that boundary deployable instead of hypothetical: the credential
+moves server-side, the lifecycle gets explicit cancellation, and the planner's
+automatic choices are measured against a written expectation table.
+
+- [x] Server route `api/plan.js` (Vercel Node function) over a pure
+      `handlePlannerRequest` core: POST-only, same-origin check, JSON content
+      type, 32 KB request cap, strict v1 schema, 6 s provider timeout, 16 KB
+      response cap, per-instance rate limit, explicit `not_configured`
+- [x] Provider key read from server env only (`PLANNER_PROVIDER_KEY`,
+      `PLANNER_PROVIDER_URL`, `PLANNER_MODEL`); fixed upstream URL, key in a
+      header, no key/stack/upstream body in any response or the bundle
+- [x] Reuses `plan.js`, `renderers.js` and `aiPlanner.js` — no second schema,
+      planner, parser or renderer; advertised capabilities must equal the real
+      registry
+- [x] Server returns the model's selection only; the browser re-validates it
+      against its own full evidence and builds the plan
+- [x] Client lifecycle: deterministic plan first, one in-flight request aborted
+      by a new run/edit/unmount, cache keyed by endpoint and whole request,
+      fallback baselines never overridden, failures silent in the UI
+- [x] Planner quality corpus: 122 cases (68 corpus + 54 recognition) covering 20
+      required behaviours, with a `check:planner` gate and a scripted-AI
+      comparison that measures validation, not a model
+- [x] `nested_loop` rule: loops nested two deep without a collection open
+      Control flow
+- [x] Server unit tests, client integration tests and browser scenarios against
+      a mock upstream (valid, invalid, error, timeout, stale, manual pin, edit
+      cancel, cursor stability, no third panel)
+
+Deployment is Vercel: set the three server variables and
+`VITE_PLANNER_ENDPOINT=/api/plan`. Without them the route answers
+`not_configured` and the deterministic planner is the whole product — a supported
+configuration, not a broken one.
+
+**Not verified live:** this environment had no provider credential and no
+deployed route, so the model path is implemented and mock-tested only. The
+measured quality numbers describe the deterministic planner and the validator.
+
+Gates: 136 Python tests, 871 JS tests, lint, production build, `check:planner`
+(122/122 appropriate), `check:browser` (212/212). `check:explain` and
+`test:pyodide` were not re-run: this phase did not touch the worker, `tracer.py`
+or the explanation layer.

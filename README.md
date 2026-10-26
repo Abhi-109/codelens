@@ -213,7 +213,7 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 136 Python tests: the tracer and its comparison events, the
                       # flowchart model, the static program profile and the corpus
-npm run test:js       # 823 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 871 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6
                       # dict/set/object contents and lifecycle), the pure motion
@@ -244,7 +244,10 @@ npm run test:js       # 823 JS tests: the animation diff vocabulary, the one-tra
                       # example registry, the data-structure operation model,
                       # the deterministic concept detector, the renderer
                       # capability registry, the versioned plan validator, the
-                      # deterministic planner and the optional AI provider
+                      # deterministic planner, the optional AI provider, the
+                      # 122-case planner quality corpus, and the server route
+                      # that holds the provider key (request validation, prompt,
+                      # provider adapter, rate limit, Vercel + dev adapters)
 npm run lint          # oxlint
 npm run build         # production build
 ```
@@ -255,13 +258,22 @@ sides — `test_corpus.py` against the claims it makes, and `src/tracer/corpus.t
 step by step through the UI's own functions. `docs/supported-python.md` is kept in
 sync by the same tests, so it cannot promise what the tracer does not do.
 
-There are also three opt-in checks:
+There are also four opt-in checks:
 
 ```bash
 npm run test:pyodide  # sanity-check the Web Worker against real Pyodide
 npm run check:explain # verify every example's trace explains cleanly
+npm run check:planner # score the planner against the 122-case quality corpus
 npm run check:browser # drive the real app in headless Chrome (no npm dependency)
 ```
+
+`check:planner` replays every recorded program through the real concept detector,
+recognizer and planner, and compares the chosen canvas with a hand-written
+expectation table (`src/planner/quality.js`). It fails if a case is missing, a
+required behaviour has no case, a plan is unregistered or unsupported, a plan
+claims an algorithm its evidence does not prove, or the planner stops being
+deterministic. It then runs the same corpus through the AI validator with a
+scripted mock — that measures validation and rejection, not a model.
 
 `check:browser` starts its own dev server and headless Chrome, then checks the motion
 canvas against real layout: consecutive swaps, an interrupted swap at 1x and 4x, mid-move
@@ -271,7 +283,11 @@ operation, Back/Next/seek/reset, invalid input), opens a lesson's program in the
 visualizer, and checks both themes, reduced motion at 390px, keyboard focus and arrow-key
 seeking. The planner checks open a scalar run on Motion, a recognized sort on Adaptive and
 observed recursion on the call tree, verify the one-line reason, and prove that a manual
-canvas pick is never overwritten by a later plan. The release regressions cover a successful
+canvas pick is never overwritten by a later plan. The AI scenarios run the real
+handler behind a mock upstream and check the deterministic canvas appears first, a
+valid answer refines it without moving the cursor, invalid/error/timeout answers
+change nothing, a late answer for an older run is ignored, a manual pick wins, an
+edit cancels the request, and no third panel appears. The release regressions cover a successful
 run's status label, a 200-element list, a cyclic list, runaway recursion and its capped call
 strip, a caught exception, and the skip link. The stage checks cover scalar-only values, a
 returned string beside its printed output (`greet()`), backward seeking, reset, both themes

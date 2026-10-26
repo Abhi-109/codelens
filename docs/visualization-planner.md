@@ -152,6 +152,7 @@ identical input. In order:
 | Recursion **observed** in the trace | Call tree (`tree`) | `observed_recursion` |
 | Nested calls **observed**, with a collection | Combined (`combined`) | `nested_calls_with_collections` |
 | Nested calls **observed** | Call tree (`tree`) | `nested_calls` |
+| Nested loops, no collection | Control flow (`flow`) | `nested_loop` |
 | ≥2 conditions, no functions, no collections | Control flow (`flow`) | `branch_heavy` |
 | Any collection concept | Motion (`motion`) | `collection_motion` |
 | Everything else | Motion (`motion`) | `generic_values` |
@@ -183,53 +184,170 @@ new panel and it disappears when the learner picks another canvas.
 
 ## Optional AI provider
 
-AI is off by default. There is no backend in this repository (the deployment is
-a static Vite app on Vercel), so the browser cannot hold a provider key. The
-integration is a narrow, tested boundary; it becomes operational only when the
-deployment supplies a same-origin endpoint.
+AI is off by default and always optional. It answers one question — "would a
+different canvas explain this run better?" — and it may only choose among the
+renderers this build already has. It cannot add an event, a value, a return, an
+output, a comparison, an exception, or a sorting/searching/traversal claim.
 
-Configuration (public, never a secret):
+### Trust boundary
 
-- build time: `VITE_PLANNER_ENDPOINT=/api/plan`
-- runtime injection: `window.__CODELENS_PLANNER_ENDPOINT__ = "/api/plan"`
+```
+browser ──POST /api/plan──► server route ──► fixed provider URL
+  │                            │
+  │ no key, no upstream URL    │ key in env, prompt owned here
+  │ validated answer only      │ bounded, validated, classified
+  └────────────────────────────┘
+```
 
-The endpoint must accept `POST application/json` with the request from
-`buildAiRequest` and return:
+The provider key is **server-only**. It is read from `process.env` by
+`server/planner/config.js`, sent only in the upstream `Authorization` header and
+never returned to the browser. A static bundle cannot keep a secret, so the
+browser never holds one: it sends a same-origin request with no credential.
+
+What the server refuses before it ever calls upstream:
+
+| Check | Result |
+|---|---|
+| Method other than `POST` | 405 `rejected`, `Allow: POST` |
+| `Origin` present and not the request's own host (or `null`) | 403 `rejected` |
+| `Content-Type` not `application/json` | 415 `rejected` |
+| Declared or actual body over 32 KB | 413 `oversized` |
+| Body is not JSON | 400 `invalid_json` |
+| Body fails the v1 schema | 400 `invalid_schema` + field detail |
+| No `PLANNER_PROVIDER_KEY` | 503 `not_configured`, upstream untouched |
+| Over 10 requests per client per 60 s | 429 `rate_limited` + `Retry-After` |
+| Upstream slower than 6 s | 504 `timeout` |
+| Upstream body over 16 KB | 502 `oversized` |
+| Model names an unregistered renderer, an unknown concept, or a renderer whose evidence is absent | 502 `rejected` / `invalid_schema` + detail |
+
+Every error body is `{ error: { code, detail? } }`. The upstream body, the key,
+stack traces and file paths are never echoed. `cache-control: no-store` on every
+response; no source or trace is logged or retained.
+
+Rate limiting is a bounded in-memory window per server instance (500 client keys).
+It is abuse mitigation, not authentication: it does not survive a cold start and
+does not identify a user. Origin checks raise the cost of cross-site use; they are
+not auth either. A public deployment that needs real access control must add it in
+front of the route.
+
+### The request
+
+The browser sends facts, not instructions — the server owns the prompt
+(`server/planner/prompt.js`). Schema v1, validated field by field:
 
 ```json
 {
-  "primary": "tree",
-  "concepts": ["recursion"],
-  "emphasis": ["calls", "values"],
-  "explanation": "standard"
+  "request_version": 1,
+  "task": "choose_visualization",
+  "source": "…at most 8000 chars…",
+  "source_truncated": false,
+  "concepts": [{ "id": "recursion", "strength": "observed", "evidence": ["trace.frames"] }],
+  "trace": { "events": 21, "calls": 1, "returns": 1, "comparisons": 4, "exceptions": 0,
+             "outputs": 2, "maxDepth": 1, "recursive": false, "hasFrames": true,
+             "termination": "completed" },
+  "renderers": [{ "id": "tree", "purpose": "…", "concepts": [], "requiredEvidence": ["call_events"] }],
+  "deterministic": { "primary": "motion", "reasons": ["generic_values"] },
+  "has_flow": true
 }
 ```
 
-Only `primary` is required. Unknown fields are rejected. `concepts` must be a
-subset of the concepts the deterministic detector found; the model cannot add a
-concept or change its evidence strength. The plan's provenance and
-`ai_selected` reason are set by the client, not by the model.
+`renderers` must deep-equal this build's registry; a widened capability list is
+rejected, so the client cannot talk the server into a canvas that needs evidence
+this run does not have. The full trace, the cursor, the step index and any secret
+are absent by construction.
 
-`src/planner/aiProvider.js` handles transport: 4 s default timeout, caller
-cancellation, response-size cap (8 KB), and classified errors
-(`not_configured`, `cancelled`, `timeout`, `network`, `rate_limited`,
-`http_error`, `oversized`, `invalid_json`, `invalid_schema`, `rejected`).
-`src/planner/aiPlanner.js` validates the answer against the registry and the
-detected concepts, and caches valid plans in a bounded 8-entry cache keyed by
-the full request (source + concepts + renderer list). A different source misses
-the cache.
+### The answer
 
-Every failure — including a late response for an older run — leaves the
-deterministic plan and the trace untouched. The request contains bounded source
-(8 KB), concept ids/evidence refs and a trace *summary*; it does not contain the
-full trace, secrets or unrelated files. User source is labelled untrusted; a
-comment that says "ignore your instructions" is data, not an instruction.
+The server returns the model's **selection**, not a materialised plan:
 
-**Deployment blocker:** to enable AI in production, the deployment must add a
-server route that holds the credential and forwards the validated request. No
-such route exists in this repository, so AI-assisted planning is implemented and
-unit-tested but not operational in the shipped static build. The deterministic
-path is complete without it.
+```json
+{ "primary": "tree", "emphasis": ["calls", "values"], "explanation": "standard" }
+```
+
+`primary` is required; `concepts` appears only when the model picked some, and is
+then the intersection the server validated. The browser re-validates with its own
+full evidence and builds the plan (`provenance: "ai"`, reason `ai_selected`), so a
+compromised or confused server still cannot produce an unsupported canvas.
+
+### Configuration
+
+| Name | Where | Purpose |
+|---|---|---|
+| `PLANNER_PROVIDER_KEY` | server env only | Upstream credential. Absent ⇒ `not_configured`. |
+| `PLANNER_PROVIDER_URL` | server env only | One fixed endpoint. Never taken from a request. |
+| `PLANNER_MODEL` | server env only | Model name for the chat completion. |
+| `VITE_PLANNER_ENDPOINT` | public build env | Same-origin route, e.g. `/api/plan`. |
+| `window.__CODELENS_PLANNER_ENDPOINT__` | public runtime | Same value, injected after load. |
+
+`.env.example` lists them; `.env*` is git-ignored. Nothing secret may use a
+`VITE_` prefix — those values are inlined into the bundle.
+
+### Deployment (Vercel)
+
+`api/plan.js` is a Vercel Node function and `vercel.json` caps it at 15 s. To turn
+AI on:
+
+1. Set the three `PLANNER_*` variables in the Vercel project (Production and
+   Preview).
+2. Set `VITE_PLANNER_ENDPOINT=/api/plan` for the build.
+3. Deploy and confirm `POST /api/plan` answers `503 not_configured` when the key
+   is removed — that is the honest "off" state, not an error page.
+
+Without those steps the route still exists but reports `not_configured`, and the
+deterministic planner is the whole product. That is a supported configuration.
+
+### Client lifecycle
+
+The deterministic plan is computed, validated and shown **first**; the AI request
+starts after that and never blocks rendering.
+
+- One in-flight request. A new run, an edit to the source, or unmounting aborts
+  it (`AbortController`), so an answer cannot land on a run it does not describe.
+- An answer is applied only for the same run and only while the learner has not
+  picked a canvas. A manual pick is final for that run.
+- A validated answer is cached by a key covering the endpoint and the whole
+  request (source, concepts, trace summary, renderer list, deterministic plan);
+  8 entries, oldest evicted. A different source or deployment misses.
+- A deterministic **fallback** (`empty_trace`, `source_*`, `fallback`) is never
+  overridden: the request is skipped entirely, because "the source did not
+  compile" is a better reason than "a model chose this".
+- Every failure is classified and silent in the UI. The deterministic canvas and
+  its why-line stay; nothing scary is shown for an optional feature.
+
+### Measured quality
+
+`npm run check:planner` scores the planner against a hand-written expectation
+table (`src/planner/quality.js`) over every recorded program: 122 cases
+(68 corpus + 54 recognition), covering the 20 required behaviours. It reports
+registered / evidence-supported / appropriate / fallback / unsupported-claim /
+nondeterminism counts and fails the build if any case drifts. It also runs the
+same corpus through the AI validator with a **scripted mock** — that measures the
+validator and the rejection path, not any real model.
+
+Latest run: 122/122 registered, 122/122 evidence-supported, 122/122 appropriate,
+1 honest fallback (`error-syntax`), 0 unsupported claims, 0 nondeterminism.
+The scripted AI accepts 122/122 and rejects 5 (4 deliberately wrong + the
+fallback case), changing 0 plans — the deterministic planner already matched every
+expectation, so the scripted comparison shows no improvement by construction.
+
+**Not verified:** no provider credential and no deployed route were available in
+this environment, so the live model path is implemented and mock-tested but not
+observed against a real provider. Do not read the numbers above as model accuracy.
+
+### Local development
+
+With no route, AI is simply off. To drive the real client against the real
+handler without a key:
+
+```bash
+CODELENS_PLANNER_DEV_MOCK=1 npm run dev
+```
+
+then set `window.__CODELENS_PLANNER_ENDPOINT__ = "/api/plan?case=tree"` in the
+console. Scenarios: `tree`, `motion`, `invalid`, `error`, `timeout`, and
+`name@delayMs` for a delayed answer. The dev plugin is `apply: "serve"` and
+mounts nothing unless that variable is set, so it cannot reach production.
+
 
 ## Adding a renderer safely
 
@@ -248,12 +366,21 @@ lab stand in for a Python trace renderer.
 ## Running the tests
 
 ```bash
-node --test src/planner/concepts.test.mjs src/planner/renderers.test.mjs \
-  src/planner/plan.test.mjs src/planner/planner.test.mjs \
-  src/planner/aiProvider.test.mjs src/planner/aiPlanner.test.mjs
+npm run test:js          # includes every planner and server test below
+npm run check:planner    # the 122-case quality corpus
+npm run check:browser    # real browser, real handler, mock upstream
 ```
 
-They are part of `npm run test:js`. The browser harness
-(`npm run check:browser`) additionally verifies automatic selection, the
-why-line, manual override, cursor preservation, stale-plan replacement and the
-AI-disabled build.
+Planner and boundary suites:
+
+- `src/planner/{concepts,renderers,plan,planner,aiProvider,aiPlanner,quality}.test.mjs`
+- `server/planner/{request,provider,handler,dev}.test.mjs`
+- `api/plan.test.mjs`
+
+The server suites inject `fetchImpl`, a rate limiter and the environment, so they
+never touch the network and need no key. The browser harness starts Vite with
+`CODELENS_PLANNER_DEV_MOCK=1` and drives the real handler over HTTP: valid answer,
+invalid answer, upstream error, timeout, a stale answer for an older run, a manual
+pin, an edit that cancels a request, cursor stability and the absence of a third
+panel. It also confirms AI stays off when no endpoint is configured.
+

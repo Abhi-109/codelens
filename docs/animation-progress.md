@@ -1029,3 +1029,33 @@ remaining animation-spec work is unchanged: Phase 4 (frames, recursion, objects)
   deterministic path is complete without it.
 - Gates: 136 Python tests, 823 JS tests, lint, production build, `check:explain`,
   `test:pyodide`, 195/195 browser checks. Docs: `docs/visualization-planner.md`.
+
+## Phase 7B notes: secure AI planner activation
+- The credential moved server-side. `api/plan.js` is a Vercel Node function over a pure
+  `handlePlannerRequest` core; a Vite dev plugin mounts the same handler only when
+  `CODELENS_PLANNER_DEV_MOCK` is set. The browser sends no key and never chooses an
+  upstream URL.
+- The route enforces POST, same-origin, JSON content type, a 32 KB request cap, strict v1
+  schema, a 6 s provider timeout, a 16 KB response cap, a per-instance rate limit and an
+  explicit `not_configured` when the key is absent. Errors are `{ code, detail? }`; the
+  upstream body, key, stack and file paths never reach the client.
+- No second planner, parser, schema or renderer: the route reuses `plan.js`,
+  `renderers.js` and `aiPlanner.js`. The renderer list in the request must equal the real
+  registry, so the client cannot widen a capability. The server returns the model's
+  selection; the browser re-validates it against its own evidence and builds the plan.
+- Lifecycle: deterministic plan first, one in-flight request, abort on a new run / source
+  edit / unmount, cache keyed by endpoint plus the whole request, and a deterministic
+  fallback is never overridden by a model. Optional-AI failures stay silent in the UI.
+- Planner quality is now measured: `src/planner/quality.js` holds a hand-written
+  expectation for every recorded program (122 cases, 20 required behaviours) and
+  `npm run check:planner` fails on any drift. Current: 122/122 registered, 122/122
+  evidence-supported, 122/122 appropriate, 1 honest fallback (`error-syntax`), 0
+  unsupported claims, 0 nondeterminism. A new `nested_loop` rule opens Control flow for
+  loops nested two deep without a collection.
+- The scripted-AI comparison accepts 122/122 and rejects 5 (4 deliberately wrong answers
+  plus the fallback case), changing 0 plans. That measures the validator, not a model.
+- Gates: 136 Python tests, 871 JS tests, lint, production build, `check:planner`,
+  212/212 browser checks. `check:explain` and `test:pyodide` were not re-run: no worker,
+  tracer or explanation change.
+- Not verified live: no provider credential and no deployed route were available, so the
+  model path is implemented and mock-tested only. Docs: `docs/visualization-planner.md`.
