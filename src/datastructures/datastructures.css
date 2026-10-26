@@ -1,0 +1,461 @@
+/* The data-structure lab: a page, not the workspace.
+ *
+ * It borrows the site's tokens and type scale, and keeps the same colour
+ * meanings the Python canvas uses: blue acts, gold compares, green is proven.
+ * There is no decorative motion here; the only movement is the drawing
+ * changing when the step changes.
+ */
+
+.ds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-5) 0 0;
+  padding: 3px var(--space-3);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-pill);
+  background: var(--accent-bg);
+  font: 600 11px/1.6 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.ds-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-5) 0 var(--space-6);
+}
+
+.ds-switch-link {
+  padding: 5px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  text-decoration: none;
+  transition: border-color var(--dur-fast), color var(--dur-fast);
+}
+
+.ds-switch-link:hover {
+  border-color: var(--accent);
+  color: var(--text-h);
+}
+
+.ds-switch-link.is-current {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ds-lab {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.ds-controls,
+.ds-stage {
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.ds-controls h2 {
+  margin: 0 0 var(--space-3);
+  font: 600 11px/1.4 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.ds-op {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border);
+}
+
+.ds-op:first-of-type {
+  border-top: 0;
+}
+
+.ds-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex: 1;
+}
+
+.ds-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.ds-field input {
+  width: 68px;
+  height: var(--control-sm);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-h);
+  font: 13px var(--mono);
+}
+
+.ds-btn {
+  height: var(--control-sm);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--raised);
+  color: var(--text-h);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--dur-fast), background var(--dur-fast);
+}
+
+.ds-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.ds-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ds-btn-play {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.ds-error {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--danger);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--danger-bg);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-h);
+}
+
+.ds-limits {
+  margin: var(--space-4) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.ds-limits strong {
+  color: var(--text-h);
+}
+
+.ds-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.ds-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  padding: var(--space-4);
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.ds-empty {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.ds-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Arrays --------------------------------------------------------------- */
+
+.ds-array {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ds-cells {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ds-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 48px;
+}
+
+.ds-value {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-h);
+  font: 600 15px var(--mono);
+  transition: border-color var(--dur-fast), background var(--dur-fast);
+}
+
+.ds-cell-empty .ds-value {
+  border-style: dashed;
+  background: transparent;
+}
+
+.ds-index {
+  font: 11px var(--mono);
+  color: var(--text);
+}
+
+.ds-note {
+  margin: 0;
+  font: 12px var(--mono);
+  color: var(--text);
+}
+
+/* --- Linked list, stack, queue ------------------------------------------- */
+
+.ds-linked,
+.ds-queue {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ds-chain {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ds-chain-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.ds-node,
+.ds-plate {
+  display: grid;
+  place-items: center;
+  min-width: 46px;
+  height: 46px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-h);
+  font: 600 14px var(--mono);
+  transition: border-color var(--dur-fast), background var(--dur-fast);
+}
+
+.ds-link,
+.ds-end,
+.ds-null {
+  font: 12px var(--mono);
+  color: var(--text);
+}
+
+.ds-null {
+  padding: 0 var(--space-1);
+}
+
+.ds-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ds-empty-cell {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 46px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: 12px var(--mono);
+  color: var(--text);
+}
+
+/* --- Tree and graph ------------------------------------------------------- */
+
+.ds-tree,
+.ds-graph {
+  width: 100%;
+  max-height: 360px;
+  height: auto;
+}
+
+.ds-edge {
+  stroke: var(--border-strong);
+  stroke-width: 1.4;
+}
+
+.ds-tree-node circle,
+.ds-graph-node circle {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  transition: stroke var(--dur-fast), fill var(--dur-fast);
+}
+
+.ds-tree-node text,
+.ds-graph-node text {
+  fill: var(--text-h);
+  font: 600 13px var(--mono);
+}
+
+/* --- Marks ---------------------------------------------------------------- */
+
+.ds-cell.is-active .ds-value,
+.ds-node.is-active,
+.ds-plate.is-active,
+.ds-tree-node.is-active circle,
+.ds-graph-node.is-active circle {
+  border-color: var(--accent);
+  stroke: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.ds-cell.is-compare .ds-value,
+.ds-node.is-compare,
+.ds-plate.is-compare,
+.ds-tree-node.is-compare circle,
+.ds-graph-node.is-compare circle {
+  border-color: var(--compare-ring);
+  stroke: var(--compare-ring);
+  background: var(--compare-bg);
+  fill: var(--compare-bg);
+  box-shadow: inset 0 0 0 1px var(--compare-ring);
+}
+
+.ds-cell.is-done .ds-value,
+.ds-node.is-done,
+.ds-plate.is-done,
+.ds-tree-node.is-done circle,
+.ds-graph-node.is-done circle {
+  border-color: var(--ok);
+  stroke: var(--ok);
+  box-shadow: inset 0 0 0 1px var(--ok);
+}
+
+.ds-cell.is-found .ds-value,
+.ds-node.is-found,
+.ds-plate.is-found,
+.ds-tree-node.is-found circle,
+.ds-graph-node.is-found circle {
+  border-color: var(--ok);
+  stroke: var(--ok);
+  stroke-width: 3;
+  background: var(--accent-bg);
+  fill: var(--accent-bg);
+  box-shadow: 0 0 0 2px var(--ok);
+}
+
+/* --- Step text and transport --------------------------------------------- */
+
+.ds-text {
+  min-height: 44px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-h);
+}
+
+.ds-transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.ds-readout {
+  font: 12px var(--mono);
+  color: var(--text);
+}
+
+.ds-slider {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--accent);
+}
+
+.ds-step-source {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+@media (max-width: 860px) {
+  .ds-lab {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ds-controls {
+    order: 2;
+  }
+}
+
+@media (max-width: 520px) {
+  .ds-view {
+    min-height: 180px;
+    padding: var(--space-3);
+  }
+
+  .ds-transport .ds-btn {
+    flex: 1;
+  }
+
+  .ds-slider {
+    order: 10;
+    flex-basis: 100%;
+  }
+}

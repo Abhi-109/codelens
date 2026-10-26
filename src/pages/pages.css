@@ -594,6 +594,17 @@
   color: var(--text);
 }
 
+.ds-item-name {
+  font-weight: 600;
+}
+
+.ds-item-blurb {
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--text);
+}
+
 .ds-item:hover,
 .docs-item:hover {
   border-color: var(--accent);

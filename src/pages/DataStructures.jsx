@@ -1,18 +1,12 @@
-/* Data structure visualizer (Phase 4). The route, breadcrumbs and structure
- * list are real; the operations themselves arrive with that phase, so this
- * page says so rather than pretending to run anything. */
+/* Data-structure lab index. The list comes from the same model the lab
+ * reads, so a structure cannot appear here without an operation model
+ * behind it. */
 
 import { Link } from '../router.jsx';
 import { PageHeader } from '../shell/AppShell.jsx';
-import { EmptyState } from '../shell/states.jsx';
+import { STRUCTURES } from '../datastructures/model.js';
+import '../datastructures/datastructures.css';
 import './pages.css';
-
-const STRUCTURES = [
-  { type: 'array', name: 'Array' },
-  { type: 'stack', name: 'Stack' },
-  { type: 'queue', name: 'Queue' },
-  { type: 'linked-list', name: 'Linked list' },
-];
 
 export default function DataStructures() {
   return (
@@ -20,19 +14,15 @@ export default function DataStructures() {
       <PageHeader
         crumbs={[{ label: 'Visualize', to: '/get-started' }, { label: 'Data Structures' }]}
         title="Data structure visualizer"
-        subtitle="Watch arrays, stacks, queues and linked lists change as you apply operations to them — separate from the Python tracer."
+        subtitle="Apply operations and step through a recorded change to an array, linked list, stack, queue, tree or graph — separate from the Python tracer."
       />
-      <EmptyState title="Not built yet">
-        <p>
-          The structure pickers below are the planned set. The visualizer itself is
-          the next milestone after the Python visualizer work; nothing here runs yet.
-        </p>
-      </EmptyState>
+      <p className="ds-badge">Authored operation model · not a Python trace</p>
       <ul className="ds-list">
-        {STRUCTURES.map((s) => (
-          <li key={s.type}>
-            <Link to={`/visualizer/data-structures/${s.type}`} className="ds-item">
-              {s.name}
+        {STRUCTURES.map((structure) => (
+          <li key={structure.type}>
+            <Link to={`/visualizer/data-structures/${structure.type}`} className="ds-item">
+              <span className="ds-item-name">{structure.name}</span>
+              <span className="ds-item-blurb">{structure.blurb}</span>
             </Link>
           </li>
         ))}
