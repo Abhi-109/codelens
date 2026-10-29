@@ -213,7 +213,7 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 136 Python tests: the tracer and its comparison events, the
                       # flowchart model, the static program profile and the corpus
-npm run test:js       # 871 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 917 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6
                       # dict/set/object contents and lifecycle), the pure motion
@@ -241,7 +241,9 @@ npm run test:js       # 871 JS tests: the animation diff vocabulary, the one-tra
                       # error endings), the timeline and comparison helpers,
                       # output/input/error entries, the design tokens' contrast,
                       # the lesson and documentation content, the built-in
-                      # example registry, the data-structure operation model,
+                      # example registry, the data-structure operation model and
+                      # its hash table (four hash functions, chaining plus
+                      # linear/quadratic/double probing, tombstones and resizes),
                       # the deterministic concept detector, the renderer
                       # capability registry, the versioned plan validator, the
                       # deterministic planner, the optional AI provider, the
@@ -278,10 +280,11 @@ scripted mock — that measures validation and rejection, not a model.
 `check:browser` starts its own dev server and headless Chrome, then checks the motion
 canvas against real layout: consecutive swaps, an interrupted swap at 1x and 4x, mid-move
 Back and slider seeks, a burst of steps, comparisons, persistent green positions, themes,
-reduced motion, and short and long arrays. It also drives the data-structure lab (every
-operation, Back/Next/seek/reset, invalid input), opens a lesson's program in the
-visualizer, and checks both themes, reduced motion at 390px, keyboard focus and arrow-key
-seeking. The planner checks open a scalar run on Motion, a recognized sort on Adaptive and
+reduced motion, and short and long arrays. It also drives the data-structure lab (all
+seven structures: every operation, Back/Next/seek/reset, invalid input, the four hash
+strategies, tombstones, a resize and the hash-table exercises), opens a lesson's program
+in the visualizer and a hash lesson's seeded table, and checks both themes, reduced
+motion at 390px, keyboard focus and arrow-key seeking. The planner checks open a scalar run on Motion, a recognized sort on Adaptive and
 observed recursion on the call tree, verify the one-line reason, and prove that a manual
 canvas pick is never overwritten by a later plan. The AI scenarios run the real
 handler behind a mock upstream and check the deterministic canvas appears first, a
@@ -345,7 +348,7 @@ codelens/
 │   │   ├── preview.js          # real trace -> preview frames (pure, reuses stepView)
 │   │   ├── preview.test.mjs    # every frame checked against the corpus recording
 │   │   ├── preview-fixture.json # a recorded run of one built-in example
-│   │   ├── lessons.js          # the seven lessons, as tested data
+│   │   ├── lessons.js          # the eighteen lessons, as tested data
 │   │   ├── lessons.test.mjs    # objectives, examples and checkpoints are complete
 │   │   ├── docsContent.js      # the five documentation pages, as tested data
 │   │   ├── docsContent.test.mjs # every mode and Inspect tab is documented
@@ -354,10 +357,15 @@ codelens/
 │   ├── examples.js         # the built-in programs, with stable ids for lesson links
 │   ├── examples.test.mjs
 │   ├── datastructures/     # the authored lab: operations, frames and drawings
-│   │   ├── model.js        # pure operations -> frames (capacity, LIFO, FIFO, BST, BFS/DFS)
+│   │   ├── model.js        # pure operations -> frames (array, list, stack, queue, BST, graph)
+│   │   ├── hashTable.js    # hashing, chaining/probing, tombstones, resizing, presets
+│   │   ├── frames.js       # the shared snapshot + marks + sentence frame
 │   │   ├── model.test.mjs  # boundaries, duplicates, determinism, independent snapshots
-│   │   ├── StructureView.jsx # one snapshot -> array/list/stack/queue/tree/graph
-│   │   ├── DataStructureLab.jsx # controls, cursor, play/pause, reset
+│   │   ├── hashTable.test.mjs # every strategy, the hash functions, resizes, presets
+│   │   ├── structures.test.mjs # the six non-hash structures' extended operations
+│   │   ├── StructureView.jsx # one snapshot -> array/list/stack/queue/tree/graph/hash
+│   │   ├── HashTableExtras.jsx # predict-the-bucket, strategy comparison, complexity
+│   │   ├── DataStructureLab.jsx # controls, cursor, play/pause, reset, preset links
 │   │   └── datastructures.css
 │   ├── App.jsx             # the Python visualizer: orchestrator + tracer wiring
 │   ├── App.css

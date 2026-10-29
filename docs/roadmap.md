@@ -31,10 +31,15 @@ project is left in a runnable, demoable state after each task.
       documentation pages, both generated from tested data
       (`src/pages/lessons.js`, `src/pages/docsContent.js`); a lesson's example
       link opens that program in the visualizer without running it
-- [x] Data-structure lab: arrays (with capacity growth), linked lists, stacks,
-      queues, binary search trees and a fixed graph, on an authored operation
-      model with Back/Next/Reset/Play and per-step snapshots
-      (`src/datastructures/`)
+- [x] Data-structure lab: arrays (manual resize and clear), linked lists (singly
+      and doubly, backward traversal, cycle construction and detection), stacks
+      (including search), queues (simple, circular and priority), binary search
+      trees (including leaf/one-child/two-child deletion), an editable graph
+      (nodes, edges, start node, direction) and a full **hash table** (four hash
+      functions, chaining plus linear/quadratic/double probing, tombstones, load
+      factor, resizing and rehashing), on an authored operation model with
+      Back/Next/Reset/Play and per-step snapshots (`src/datastructures/`,
+      [data-structures-lab.md](data-structures-lab.md))
 
 - [x] Replace the Vite template `README.md` with a real one
 - [x] Add `.gitattributes` and normalize line endings to LF
@@ -741,3 +746,37 @@ Gates: 136 Python tests, 871 JS tests, lint, production build, `check:planner`
 (122/122 appropriate), `check:browser` (212/212). `check:explain` and
 `test:pyodide` were not re-run: this phase did not touch the worker, `tracer.py`
 or the explanation layer.
+
+## Data Structures Lab expansion
+
+The lab grew from six teaching structures to seven, and the six existing ones
+gained the operations the page used to list under "Not offered". The hash table
+is a complete, tested model rather than a diagram.
+
+- [x] Shared `frames.js`: one snapshot + marks + sentence + structured detail,
+      so Back and seeking stay exact for every structure
+- [x] Array: manual resize and clear; linked list: doubly linked mode, backward
+      traversal, explicit cycles (construct, detect, break); stack: search;
+      queue: circular and stable priority modes; BST: deletion of a leaf, a
+      one-child node and a two-child node; graph: add/remove nodes and edges,
+      choose the start node, switch direction
+- [x] Hash table: division, multiplication, polynomial and first-character
+      hashes; separate chaining, linear, quadratic and double probing;
+      tombstones with reuse; load factor and configurable threshold; automatic
+      and manual resize plus forced rehash; clear; ten recorded operations
+- [x] Learning extras computed from the same model: predict-the-bucket, a
+      collision hint, a measured four-strategy comparison and an expected vs
+      worst-case table
+- [x] Eleven hash-table lessons in a new Learn section, opening the lab with a
+      prepared dataset (`?preset=`); one lesson names the strategy its dataset
+      needs, because tombstones only exist under open addressing
+- [x] Browser checks for the hash journey, every strategy on the same keys,
+      tombstones, the before/after strip during a resize, the predict check and
+      a seeded lesson link
+- [ ] Deferred, and recorded as such on the page: Robin Hood hashing, cuckoo
+      hashing, incremental rehashing and universal hashing. The priority queue
+      stays a documented stable sorted-array model, not a heap.
+
+Gates: 136 Python tests, 917 JS tests, lint, production build, 230 browser
+checks. `check:explain` and `test:pyodide` were not re-run: no worker, tracer or
+explanation-layer change.

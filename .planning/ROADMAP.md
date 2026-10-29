@@ -8,6 +8,7 @@ CodeLens records real Python execution and draws it. Phase 7A added the decision
 
 - [x] **Phase 7: Automatic visualization planner (7A)** - Detect concepts, validate a plan, select a real renderer from trace evidence, and optionally refine with AI.
 - [x] **Phase 9: Secure AI planner activation (7B)** - A same-origin server route holds the provider credential, validates every request and response, and the planner gains a measured quality corpus.
+- [x] **Phase 10: Data Structures Lab expansion** - Seven complete teaching structures, with a full hash table (four hash functions, four collision strategies, tombstones, resizing) and eleven seeded lessons.
 
 ## Phase Details
 
@@ -35,9 +36,24 @@ Plans:
 Plans:
 - [x] 09-01: Seven workstreams (A–G) with per-task verification
 
+### Phase 10: Data Structures Lab expansion
+**Goal**: The authored lab covers seven structures completely, including a hash table whose hashing, collision handling, deletion and resizing are explicit, reversible and explained, with lessons that open a prepared dataset.
+**Depends on**: the existing operation-model lab (Tier 1)
+**Success Criteria** (what must be TRUE):
+  1. Every structure the page lists offers the operations its lessons claim, and no operation changes state on an error.
+  2. The hash table supports four hash functions and four collision strategies, with tombstones, load factor, automatic/manual resize and forced rehash.
+  3. Any stored key can be read back after any sequence of operations, and every step is an independent snapshot (Back and seek are exact).
+  4. The page states its deferred variants instead of implying them.
+  5. Lessons link to a real structure and a real preset; `test:js`, `test:tracer`, `lint`, `build` and `check:browser` pass.
+**Plans**: 1 plan
+
+Plans:
+- [x] 10-01: Shared frames, six extended structures, the hash engine, drawings, lessons, tests and docs
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 7. Automatic visualization planner (7A) | 1/1 | Complete | 2026-10-26 |
 | 9. Secure AI planner activation (7B) | 1/1 | Complete | 2026-10-26 |
+| 10. Data Structures Lab expansion | 1/1 | Complete | 2026-10-29 |

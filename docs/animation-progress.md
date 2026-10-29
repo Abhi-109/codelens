@@ -208,11 +208,14 @@ remaining animation-spec work is unchanged: Phase 4 (frames, recursion, objects)
 - **The data-structure lab is an authored model, not a Python trace.** `model.js` applies one
   operation to a plain state and records frames; each frame is an independent snapshot plus
   one sentence and its marks. Back/Next/seek therefore draw a past frame directly and a later
-  highlight cannot survive. The page says "not a Python trace" in a badge. Six structures:
-  array (capacity doubles), linked list, stack, queue, BST (duplicate kept once) and a fixed
-  graph (BFS/DFS from A). Errors leave the state unchanged and say why.
-- **Deliberate limits, stated on the page:** no tree deletion, no graph editing or start-node
-  choice, no manual array resize, no doubly linked lists or priority queues.
+  highlight cannot survive. The page says "not a Python trace" in a badge. Seven structures:
+  array (resize and clear), linked list (singly/doubly, cycles), stack (search), queue
+  (simple/circular/priority), BST (deletion), an editable graph (nodes, edges, start,
+  direction) and a hash table (four hash functions, four collision strategies, tombstones,
+  load factor, resizing). Details: [data-structures-lab.md](data-structures-lab.md).
+- **Deliberate limits, stated on the page:** no Robin Hood, cuckoo, incremental-rehash or
+  universal hashing; the priority queue is a stable sorted array, not a heap; the table is
+  capped at 97 slots and its hashes are teaching functions, not security.
 - **Verification.** `check:browser` grew a product-page section: every structure and
   operation, Back/Next/seek/reset, invalid input, capacity growth, play/pause, BST duplicate
   and in-order, BFS/DFS, lesson index → lesson → example loaded unrun, both themes, reduced
