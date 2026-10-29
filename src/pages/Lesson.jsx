@@ -10,6 +10,7 @@ import { Link } from '../router.jsx';
 import { PageHeader } from '../shell/AppShell.jsx';
 import { NotFoundState } from '../shell/states.jsx';
 import { exampleById } from '../examples.js';
+import { structureByType } from '../datastructures/model.js';
 import { findLesson, lessonNeighbours } from './lessons.js';
 import { Blocks, Checkpoints } from './Prose.jsx';
 import './pages.css';
@@ -17,7 +18,8 @@ import './pages.css';
 export default function Lesson({ section, lesson }) {
   const entry = findLesson(section, lesson);
   if (!entry) return <NotFoundState />;
-  const example = exampleById(entry.exampleId);
+  const example = entry.exampleId ? exampleById(entry.exampleId) : null;
+  const lab = entry.lab ? structureByType(entry.lab.type) : null;
   const { previous, next } = lessonNeighbours(section, lesson);
 
   return (
@@ -59,6 +61,21 @@ export default function Lesson({ section, lesson }) {
             The program opens in the editor. Press Run to record it, then step through the
             events this lesson describes.
           </p>
+        </section>
+      ) : lab ? (
+        <section className="lesson-example" aria-labelledby="lesson-example">
+          <h2 id="lesson-example">Try it: the {lab.name} lab</h2>
+          <p className="lesson-hint">
+            The lab is an authored operation model, not a Python trace. This lesson opens it
+            with a prepared dataset so the first step already shows what the lesson describes.
+          </p>
+          <Link
+            className="btn btn-primary"
+            to={`/visualizer/data-structures/${lab.type}${entry.lab.preset ? `?preset=${entry.lab.preset}` : ''}`}
+          >
+            Open the {lab.name} lab
+            <span aria-hidden="true">→</span>
+          </Link>
         </section>
       ) : null}
 

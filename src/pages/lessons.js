@@ -282,6 +282,461 @@ export const LESSON_SECTIONS = [
     ],
   },
   {
+    id: "hash-tables",
+    title: "Hash tables",
+    lessons: [
+      {
+        id: "what-is-hashing",
+        title: "What hashing does",
+        summary:
+          "A key becomes a number, the number becomes a bucket, and a lookup can go straight there instead of scanning.",
+        objectives: [
+          "Trace a key through raw hash, modulo and bucket index.",
+          "Predict the bucket a key targets before pressing Insert.",
+          "Explain why the same key always lands in the same bucket.",
+        ],
+        lab: { type: "hash-table", preset: "sparse" },
+        body: [
+          {
+            p: "A hash table turns a key into a position. The key is not compared against every stored key; it is converted into a number, that number is reduced to a bucket index, and the table looks only there.",
+          },
+          { h: "One key, three numbers" },
+          {
+            list: [
+              "The raw hash is the key converted to an integer. For text keys this lab sums the character codes; an integer-looking key uses its integer value.",
+              "The bucket index is the raw hash reduced to the table's capacity. With division hashing that is raw mod capacity.",
+              "The animation shows that journey above the buckets, and the detail row repeats the numbers as you step.",
+            ],
+          },
+          {
+            p: "Load the sparse dataset and insert a key. The first step is the hash step, the second stores the value. Back moves to the hash step again and removes the stored value, because each step is drawn from its own recorded snapshot.",
+          },
+          { h: "The hash function matters" },
+          {
+            p: "Four functions are offered under Advanced. Division and multiplication use the character sum or integer value; polynomial mixes the characters with a base-31 recurrence; first-character keeps only the first code, which is deliberately poor and will collide constantly. Try first-character on this dataset to see a bad hash produce a crowded table.",
+          },
+          {
+            note: "Keys are exact and case-sensitive in this lab. `Apple` and `apple` are different keys and may hash to different buckets.",
+          },
+        ],
+        checkpoints: [
+          {
+            q: "At capacity 13 with division hashing, why does `apple` land in bucket 10?",
+            a: "The character codes sum to 530, and 530 mod 13 is 10. The raw hash is 530; the bucket is the remainder.",
+          },
+          {
+            q: "Does changing the capacity change the raw hash of a key?",
+            a: "No. The raw hash is a property of the key and the hash function. The capacity changes only how that number is reduced to an index.",
+          },
+        ],
+      },
+      {
+        id: "collisions-are-normal",
+        title: "Collisions are normal",
+        summary:
+          "Two different keys can share a bucket. A collision is a fact to resolve, not an error in the table.",
+        objectives: [
+          "Recognise a collision step in the animation.",
+          "Explain why a finite table cannot avoid collisions entirely.",
+          "Name the four strategies the lab offers for resolving one.",
+        ],
+        lab: { type: "hash-table", preset: "colliders" },
+        body: [
+          {
+            p: "The keys `ab` and `ba` have the same character sum, so they have the same raw hash; at this capacity they also target the same bucket. The table cannot give them different buckets without changing the hash or the capacity, so it must have a rule for what to do next.",
+          },
+          { h: "What the step says" },
+          {
+            list: [
+              "The collision step marks the occupied bucket in amber and names the key already there.",
+              "The inserted step then shows where the new key actually went, which is not the bucket it hashed to.",
+              "The probe count in the detail row includes every slot or chain entry the operation inspected.",
+            ],
+          },
+          {
+            p: "Try the same dataset under each strategy using Advanced settings. Chaining puts both keys in one bucket; probing walks to another slot. The collision is unchanged; only the resolution differs.",
+          },
+          {
+            note: "With more keys than buckets, collisions are guaranteed by the pigeonhole principle. Good hashing spreads them out; it does not remove them.",
+          },
+        ],
+        checkpoints: [
+          {
+            q: "Why can a hash table with 7 buckets and 8 keys not avoid a collision?",
+            a: "There are more keys than buckets, so at least one bucket must receive two keys.",
+          },
+          {
+            q: "Is a collision a bug in the program?",
+            a: "No. It is an expected event that the collision strategy resolves. A bug would be losing a key or failing to find one that is stored.",
+          },
+        ],
+      },
+      {
+        id: "separate-chaining",
+        title: "Separate chaining",
+        summary:
+          "Each bucket holds a chain of entries, so one bucket can store many keys and the load factor may pass 1.",
+        objectives: [
+          "Read a chain and explain the order entries were added.",
+          "Explain why chaining tolerates a load factor above 1.",
+          "Tell how deletion differs from open addressing.",
+        ],
+        lab: { type: "hash-table", preset: "colliders" },
+        body: [
+          {
+            p: "Separate chaining keeps a list in every bucket. A collision does not move the new key: it is appended to the chain in the bucket the key hashed to. Lookup then walks that chain comparing keys.",
+          },
+          { h: "Lookup is a short walk" },
+          {
+            list: [
+              "The hash step names the bucket.",
+              "Each comparison step marks the chain entry being compared and leaves the earlier ones in place.",
+              "The found step marks the matching entry; a miss ends when the chain has no more entries.",
+            ],
+          },
+          {
+            p: "Deletion removes the entry from the chain and closes the gap. Nothing is left behind, because an empty chain position does not stop a future lookup — the chain itself is the record.",
+          },
+          { h: "Load above 1" },
+          {
+            p: "Load factor is keys divided by buckets. Chaining allows it to exceed 1: eight keys in seven buckets is a perfectly valid chained table with one bucket holding two entries. Probing strategies cannot do that, because they need a genuinely empty slot to stop a search. Raise the threshold above 1.00 under Advanced and watch the table keep accepting keys after it is technically full.",
+          },
+        ],
+        checkpoints: [
+          {
+            q: "Two keys hash to bucket 3 and both are inserted. What does bucket 3 hold?",
+            a: "A chain of two entries, in insertion order. Lookup compares the keys one at a time.",
+          },
+          {
+            q: "Why is deletion simple under chaining?",
+            a: "The chain is just removed from. There is no empty-slot marker that a later search depends on, so no tombstone is needed.",
+          },
+        ],
+      },
+      {
+        id: "linear-probing",
+        title: "Linear probing",
+        summary:
+          "When a slot is taken, the search moves one slot to the right until it finds an empty one.",
+        objectives: [
+          "Follow a probe sequence across slot boundaries.",
+          "Explain what an empty slot proves to a lookup.",
+          "Predict where a colliding key will be stored.",
+        ],
+        lab: { type: "hash-table", preset: "linear" },
+        body: [
+          {
+            p: "Open addressing stores every entry in the table itself, so a collision must be resolved by choosing another slot. Linear probing chooses the next slot, then the next, wrapping around at the end.",
+          },
+          { h: "The probe sequence" },
+          {
+            p: "For a key hashing to bucket 6 at capacity 7, the sequence is 6, 0, 1, 2 and so on. Each occupied slot produces a collision step and advances one place. The insert step names the slot that finally accepted the key, which may be far from the hash bucket.",
+          },
+          { h: "Why an empty slot matters" },
+          {
+            p: "A lookup follows the same sequence and stops at the first empty slot: if the key were stored, it would have been placed before that point. This is the invariant the whole strategy depends on, and the reason deletion cannot simply empty a slot — the next lesson on tombstones covers that.",
+          },
+          {
+            note: "In this lab the load factor is checked after an insert. Cross the threshold and the table grows and rehashes every key before the next operation.",
+          },
+        ],
+        checkpoints: [
+          {
+            q: "`ac` hashes to bucket 5 and `ca` also hashes to bucket 5. Where does `ca` go?",
+            a: "Bucket 5 is occupied, so the next probe is bucket 6; if that is free, `ca` is stored there.",
+          },
+          {
+            q: "Why can a lookup stop as soon as it sees an empty slot?",
+            a: "Every key that probed past that point would have been stored in the first empty slot it found. An empty slot means no such key continued past it.",
+          },
+        ],
+      },
+      {
+        id: "primary-clustering",
+        title: "Clusters and primary clustering",
+        summary:
+          "Linear probing turns collisions into runs of occupied slots, and a run makes the next collision more likely.",
+        objectives: [
+          "See a cluster form from several colliding keys.",
+          "Explain why clustering makes probes longer than the load factor suggests.",
+          "Describe how quadratic probing and double hashing reduce it.",
+        ],
+        lab: { type: "hash-table", preset: "clustering" },
+        body: [
+          {
+            p: "This dataset is chosen so several keys collide. Under linear probing, each collision extends a run of occupied slots. A key that lands anywhere inside the run must walk to the far end of it, even if its own hash bucket was free a moment earlier.",
+          },
+          { h: "The run is the problem" },
+          {
+            list: [
+              "Watch the collision steps: once a run starts, later keys keep hitting it.",
+              "Compare the probe counts in the detail row with the load factor. The probes are longer than the load alone would suggest.",
+              "A deletion leaves a tombstone inside the run, so later lookups still walk past it.",
+            ],
+          },
+          {
+            p: "The strategy comparison below the lab inserts the same keys into every strategy at this capacity. Chaining avoids long slot runs; quadratic probing jumps further; double hashing uses a per-key step so two keys that collide do not follow the same path.",
+          },
+          {
+            note: "Clustering is not a bug in the implementation. It is the known cost of a probe sequence that is the same for every key, which is exactly what linear probing uses.",
+          },
+        ],
+        checkpoints: [
+          {
+            q: "Why does one collision make the next insertion slower?",
+            a: "It lengthens an occupied run. A later key whose probe path enters that run has to traverse it before finding a free slot.",
+          },
+          {
+            q: "Does a bigger capacity remove clustering?",
+            a: "It lowers the load factor and makes clusters less likely, but any two keys with the same probe path still form a run. The strategy, not just the size, causes it.",
+          },
+        ],
+      },
+      {
+        id: "quadratic-probing",
+        title: "Quadratic probing",
+        summary:
+          "Instead of stepping one slot at a time, the probe jumps 0, 2, 6, 12 places to break up runs.",
+        objectives: [
+          "Follow the quadratic offset sequence.",
+          "Explain how the jumps reduce primary clustering.",
+          "Recognise the coverage limit of this probe sequence.",
+        ],
+        lab: { type: "hash-table", preset: "quadratic" },
+        body: [
+          {
+            p: "Quadratic probing keeps the same starting bucket but changes the step: the i-th probe is at base + i + i². The first few offsets are 0, 2, 6, 12, so two keys that start in the same bucket quickly take different paths.",
+          },
+          { h: "What improves" },
+          {
+            p: "Runs of adjacent occupied slots stop forming, because a collision does not simply hand the key to the next slot. Two keys that collide once are unlikely to collide again on the next probe.",
+          },
+          { h: "What it costs" },
+          {
+            p: "The offsets are still a fixed sequence, so keys with the same base can revisit the same slots: base + 6 and base + 20 can name one bucket at a small capacity. This lab stops when the sequence repeats and reports that every reachable slot was inspected. If free slots existed outside the sequence, the insert is refused rather than moved; grow the table or switch strategy.",
+          },
+          {
+            note: "Quadratic probing does not guarantee that a non-full table can accept another key. Double hashing with a prime capacity does, which is the next lesson.",
+          },
+        ],
+        checkpoints: [
+          {
+            q: "What are the first four offsets from the base bucket?",
+            a: "0, 2, 6 and 12, from i + i² for i = 0, 1, 2, 3.",
+          },
+          {
+            q: "Why can a quadratic insert fail while the table still shows an empty slot?",
+            a: "The probe sequence can repeat before it visits every slot. An empty slot outside the reachable sequence cannot be used by this key.",
+          },
+        ],
+      },
+      {
+        id: "double-hashing",
+        title: "Double hashing",
+        summary:
+          "A second hash gives each key its own step size, so colliding keys do not follow the same probe path.",
+        objectives: [
+          "Explain where the step size comes from.",
+          "Read the full-cycle guarantee that a prime capacity provides.",
+          "Compare its probe counts with linear and quadratic probing.",
+        ],
+        lab: { type: "hash-table", preset: "double" },
+        body: [
+          {
+            p: "Double hashing keeps open addressing but replaces the fixed step with a per-key step: 1 + (raw hash mod (capacity - 1)). The first probe is the hash bucket; every later probe adds that step and wraps.",
+          },
+          { h: "Different keys, different paths" },
+          {
+            p: "`ab` and `ba` hash to the same bucket but have the same raw hash here, so they share a step too. Change one character and the step changes: the next collision takes a different route. That is what removes the shared-run problem of linear probing.",
+          },
+          { h: "The prime capacity rule" },
+          {
+            p: "For the walk to reach every slot, the step must be coprime with the capacity. A prime capacity makes every step from 1 to capacity - 1 coprime, so the sequence covers the table. This lab therefore refuses a non-prime capacity for double hashing, and grows to the next prime rather than doubling.",
+          },
+          {
+            note: "A step of zero would loop forever. The formula starts at 1, which is why the `1 +` is there.",
+          },
+        ],
+        checkpoints: [
+          {
+            q: "Why does double hashing require a prime capacity in this lab?",
+            a: "With a prime capacity every step value is coprime with the capacity, so the probe sequence visits every slot before repeating.",
+          },
+          {
+            q: "Two keys collide on the first probe. Do they collide again immediately?",
+            a: "Only if they also share a step. Their second slots are base + step, and the steps differ when the raw hashes differ.",
+          },
+        ],
+      },
+      {
+        id: "tombstones",
+        title: "Deletion and tombstones",
+        summary:
+          "An open-addressed delete cannot leave an empty slot, so it leaves a marker that says `keep looking`.",
+        objectives: [
+          "Explain why emptying a deleted slot would break lookups.",
+          "Recognise a tombstone in the table and in the detail row.",
+          "Describe when a tombstone is reused.",
+        ],
+        lab: { type: "hash-table", preset: "deletions" },
+        body: [
+          {
+            p: "This dataset loads five keys under linear probing, then deletes two of them. The deleted slots are not empty: they hold a tombstone.",
+          },
+          { h: "Why not empty the slot" },
+          {
+            p: "A lookup stops at the first empty slot because an empty slot proves no key continued past it. If a delete wrote an empty slot in the middle of a probe path, a key stored after it would become unreachable: the search would stop before reaching it. The tombstone keeps the `keep looking` signal while removing the key from the count.",
+          },
+          { h: "Reuse" },
+          {
+            p: "An insert remembers the first tombstone it passes, keeps probing to an empty slot (or until the path repeats), and only then stores into the remembered tombstone. A tombstone is therefore a place to fill later, not an empty slot that ends a search.",
+          },
+          {
+            note: "Tombstones occupy slots without counting as keys. A table can show a low load factor and still probe slowly because most of its slots are tombstones. A rehash drops them.",
+          },
+        ],
+        checkpoints: [
+          {
+            q: "Why does the lookup of a key that probed past a deleted slot still succeed?",
+            a: "The tombstone does not stop the probe. The search continues past it and finds the key further along.",
+          },
+          {
+            q: "Does a tombstone count towards the load factor?",
+            a: "No. The count is stored keys only, so the load factor ignores tombstones even though they still occupy slots and lengthen probes.",
+          },
+        ],
+      },
+      {
+        id: "load-factor-and-resizing",
+        title: "Load factor, growth and rehashing",
+        summary:
+          "When the table gets too full it allocates a bigger one and reinserts every key, because indices change.",
+        objectives: [
+          "Compute the load factor from keys and capacity.",
+          "Explain why a resize must rehash every key.",
+          "Read the before/after strip during a rebuild.",
+        ],
+        lab: { type: "hash-table", preset: "resize" },
+        body: [
+          {
+            p: "Load factor is stored keys divided by capacity. This dataset loads eight keys into a seven-bucket table; once the inserts finish, the load factor is above the default 0.75 threshold, so the table grows and every key is rehashed.",
+          },
+          { h: "Rebuild, not copy" },
+          {
+            list: [
+              "The first rebuild step states the old and new capacity and keeps the old table visible as a `before` strip.",
+              "Each key is then reinserted with the new capacity, so its index is computed again rather than copied.",
+              "The final step reports that every key is reachable at its new index.",
+            ],
+          },
+          { h: "The threshold is a policy" },
+          {
+            p: "The threshold is not part of hashing; it is a trade between memory and probe length. Lower it and the table stays sparse and fast but wastes slots. Raise it and probes get longer before growth. Chaining may use a threshold above 1.00; open addressing may not, because it needs a genuinely empty slot to stop a search.",
+          },
+          {
+            note: "One resize costs linear work even though an ordinary insert is expected constant time. Amortised across a doubling sequence the cost per insert is still constant.",
+          },
+        ],
+        checkpoints: [
+          {
+            q: "Eight keys in a seven-bucket table: what is the load factor?",
+            a: "8 / 7 ≈ 1.14. That is legal for chaining and impossible for open addressing, which must keep at least one empty slot.",
+          },
+          {
+            q: "Why can the entries not simply be copied into the new table?",
+            a: "The bucket index depends on the capacity. A key that was in bucket 6 at capacity 7 can be in bucket 13 at capacity 14, so it must be hashed again.",
+          },
+        ],
+      },
+      {
+        id: "choosing-a-strategy",
+        title: "Choosing a collision strategy",
+        summary:
+          "Chaining, linear, quadratic and double hashing trade memory, probe length and simplicity differently.",
+        objectives: [
+          "Read the comparison table as measured probe and collision counts.",
+          "Name the workload where chaining is the safer choice.",
+          "Explain why no strategy is always best.",
+        ],
+        lab: { type: "hash-table", preset: "colliders" },
+        body: [
+          {
+            p: "The comparison below the lab runs the same key set through all four strategies at the current capacity with resizing off. The counts come from the real insert path, so they agree with the steps you just watched.",
+          },
+          { h: "What each column means" },
+          {
+            list: [
+              "Collisions counts inspections that found a different key.",
+              "Probes counts every entry or slot inspected, including the successful one.",
+              "Average and max describe the distribution; a good average with one very long insert is still a latency risk.",
+              "Placed and failed show whether every key found a home at this capacity.",
+            ],
+          },
+          { h: "Rules of thumb" },
+          {
+            p: "Chaining is simple, tolerates load above 1 and makes deletion trivial, at the cost of pointers and cache locality. Linear probing is compact and fast until clusters form. Quadratic probing breaks up primary clusters but cannot promise full coverage. Double hashing gives the most uniform spread but needs a prime capacity and a second hash.",
+          },
+          {
+            note: "Timing a tiny table in a browser measures noise, not algorithms. These counts are the honest comparison; the complexity table states what happens as n grows.",
+          },
+        ],
+        checkpoints: [
+          {
+            q: "Which strategy can hold more keys than the table has buckets?",
+            a: "Separate chaining. Every bucket can hold a chain, so the load factor may exceed 1. Open addressing needs at least one empty slot to terminate a search.",
+          },
+          {
+            q: "Why does the comparison turn resizing off?",
+            a: "So all four strategies are measured at the same capacity. A strategy that grew would be answering a different question.",
+          },
+        ],
+      },
+      {
+        id: "hash-table-complexity",
+        title: "Complexity and honest limits",
+        summary:
+          "Expected constant time depends on the hash and the load, and the worst case is linear.",
+        objectives: [
+          "State the expected and worst-case cost of insert, search and delete.",
+          "Explain why a resize is linear even when inserts are not.",
+          "Name the guarantees this teaching model deliberately does not make.",
+        ],
+        lab: { type: "hash-table", preset: "sparse" },
+        body: [
+          {
+            p: "The complexity table below the lab states the usual answer: expected constant time for insert, search, delete and update; linear worst case; linear for a rebuild. The word `expected` is doing real work in that sentence.",
+          },
+          { h: "What expected means" },
+          {
+            p: "Constant time assumes a hash that spreads this workload and a load factor held below some bound. Neither is a property of the word `hash table`. A poor hash — first-character in this lab — sends many keys to one bucket, and then a lookup is a linear scan of that bucket or cluster.",
+          },
+          { h: "What this lab does not claim" },
+          {
+            list: [
+              "It is a teaching model, not a production library. Keys are short strings and the table is capped at 97 slots.",
+              "It does not implement Robin Hood hashing, cuckoo hashing, incremental rehashing or universal hashing. Those are separate designs with their own trade-offs.",
+              "A resize is a full rebuild, not an incremental migration, so a single resize step is visibly linear.",
+              "Hash values shown here are educational and deterministic, not cryptographic and not collision-resistant against an attacker.",
+            ],
+          },
+          {
+            note: "If you can predict which keys collide, an adversary can too. That is why production systems use keyed hashing; it is outside what this lab models.",
+          },
+        ],
+        checkpoints: [
+          {
+            q: "When is a hash-table search O(n) rather than O(1)?",
+            a: "When many keys share a bucket or cluster, so the search has to inspect a number of entries proportional to n.",
+          },
+          {
+            q: "Why is a rehash O(n) if each insert is expected O(1)?",
+            a: "A rehash must reinsert every stored key once, so its cost is proportional to the number of keys.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: "practice",
     title: "Practice",
     lessons: [

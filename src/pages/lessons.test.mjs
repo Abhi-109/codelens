@@ -10,6 +10,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { exampleById } from "../examples.js";
+import { structureByType } from "../datastructures/model.js";
+import { HASH_PRESETS } from "../datastructures/hashTable.js";
 import { LESSON_ORDER, LESSON_SECTIONS, findLesson, lessonNeighbours } from "./lessons.js";
 
 const BLOCK_KEYS = ["p", "h", "list", "note", "code"];
@@ -48,10 +50,23 @@ test("every lesson is teachable and complete", () => {
   }
 });
 
-test("every lesson links to a program the visualizer can open", () => {
+test("every lesson links to a program or a lab that really opens", () => {
   for (const lesson of LESSON_ORDER) {
+    const where = `${lesson.section}/${lesson.id}`;
+    assert.ok(!(lesson.exampleId && lesson.lab), `${where} links one place, not two`);
+    if (lesson.lab) {
+      const structure = structureByType(lesson.lab.type);
+      assert.ok(structure, `${where} points at a real structure (${lesson.lab.type})`);
+      if (lesson.lab.preset) {
+        assert.ok(
+          HASH_PRESETS[lesson.lab.preset],
+          `${where} opens a real dataset (${lesson.lab.preset})`,
+        );
+      }
+      continue;
+    }
     const example = exampleById(lesson.exampleId);
-    assert.ok(example, `${lesson.section}/${lesson.id} points at a real example (${lesson.exampleId})`);
+    assert.ok(example, `${where} points at a real example (${lesson.exampleId})`);
     assert.ok(example.code.trim().length > 0);
   }
 });
@@ -89,7 +104,7 @@ test("a lesson is found by its section and id, and nothing else", () => {
 });
 
 test("the previous and next links walk every lesson exactly once", () => {
-  assert.equal(LESSON_ORDER.length, 7, "this release ships seven lessons");
+  assert.equal(LESSON_ORDER.length, 18, "this release ships eighteen lessons");
   const first = lessonNeighbours(LESSON_ORDER[0].section, LESSON_ORDER[0].id);
   assert.equal(first.previous, null);
   assert.equal(first.next?.id, LESSON_ORDER[1].id);
