@@ -102,7 +102,8 @@
   color: var(--text);
 }
 
-.ds-field input {
+.ds-field input,
+.ds-field select {
   width: 68px;
   height: var(--control-sm);
   padding: 0 var(--space-2);
@@ -111,6 +112,38 @@
   background: var(--bg);
   color: var(--text-h);
   font: 13px var(--mono);
+}
+
+.ds-field select {
+  width: auto;
+  max-width: 168px;
+}
+
+.ds-op.is-selected {
+  border-left: 2px solid var(--accent);
+  padding-left: var(--space-2);
+}
+
+.ds-advanced {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.ds-advanced summary {
+  cursor: pointer;
+  font: 600 11px/1.4 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.ds-advanced summary:hover {
+  color: var(--text-h);
+}
+
+.ds-advanced-body {
+  margin-top: var(--space-2);
 }
 
 .ds-btn {
@@ -252,6 +285,37 @@
   margin: 0;
   font: 12px var(--mono);
   color: var(--text);
+}
+
+.ds-note-wide {
+  flex-basis: 100%;
+  margin-top: var(--space-1);
+}
+
+.ds-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+}
+
+.ds-detail-pair {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+}
+
+.ds-detail dt {
+  font: 11px var(--mono);
+  color: var(--text);
+}
+
+.ds-detail dd {
+  margin: 0;
+  font: 600 12px var(--mono);
+  color: var(--text-h);
 }
 
 /* --- Linked list, stack, queue ------------------------------------------- */
@@ -397,6 +461,400 @@
   box-shadow: 0 0 0 2px var(--ok);
 }
 
+/* Hash-table marks: the bucket cell carries the same meanings. */
+.ds-slot.is-active,
+.ds-chain-entry.is-active,
+.ds-bucket.is-active .ds-bucket-index {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.ds-slot.is-inserted,
+.ds-chain-entry.is-inserted {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.ds-slot.is-collision,
+.ds-chain-entry.is-collision {
+  border-color: var(--warn);
+  background: var(--compare-bg);
+}
+
+.ds-slot.is-tombstone {
+  border-style: dashed;
+  border-color: var(--warn);
+  color: var(--text);
+}
+
+.ds-slot.is-deleted,
+.ds-chain-entry.is-deleted {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.ds-slot.is-done,
+.ds-slot.is-found,
+.ds-chain-entry.is-done,
+.ds-chain-entry.is-found {
+  border-color: var(--ok);
+  box-shadow: inset 0 0 0 1px var(--ok);
+}
+
+.ds-bucket.is-done .ds-bucket-index,
+.ds-bucket.is-found .ds-bucket-index {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+/* --- Hash table ----------------------------------------------------------- */
+
+.ds-hash {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 560px;
+}
+
+.ds-buckets {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ds-bucket {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+}
+
+.ds-bucket-index {
+  flex: 0 0 2.4ch;
+  font: 11px var(--mono);
+  text-align: right;
+  color: var(--text);
+}
+
+.ds-slot,
+.ds-chain-entry {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-h);
+  font: 600 12.5px var(--mono);
+  transition: border-color var(--dur-fast), background var(--dur-fast);
+}
+
+.ds-slot {
+  flex: 1;
+}
+
+.ds-slot-empty {
+  flex: 1;
+  border-style: dashed;
+  background: transparent;
+  color: var(--text);
+  font-weight: 400;
+}
+
+.ds-slot-tombstone {
+  color: var(--warn);
+}
+
+.ds-chain-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.ds-journey,
+.ds-old-table {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  font: 11px var(--mono);
+  color: var(--text);
+}
+
+.ds-journey-chip {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.ds-journey-chip.is-on {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ds-journey-arrow {
+  color: var(--text);
+}
+
+.ds-old-table {
+  padding: var(--space-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+}
+
+.ds-old-label {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.ds-old-entries {
+  word-break: break-word;
+}
+
+/* --- Circular queue and priority queue ------------------------------------ */
+
+.ds-queue-circular {
+  width: 100%;
+  max-width: 560px;
+}
+
+.ds-slot-cells {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ds-slot-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 52px;
+  height: auto;
+  padding: var(--space-1) var(--space-2);
+}
+
+.ds-slot-cell-empty .ds-slot-value {
+  opacity: 0.4;
+}
+
+.ds-slot-address {
+  font: 10px var(--mono);
+  color: var(--text);
+}
+
+.ds-slot-value {
+  font: 600 14px var(--mono);
+  color: var(--text-h);
+}
+
+.ds-slot-tag {
+  font: 10px var(--mono);
+  color: var(--accent);
+}
+
+.ds-slot-cell.is-front {
+  border-color: var(--accent);
+}
+
+.ds-slot-cell.is-rear {
+  border-color: var(--accent-border);
+}
+
+.ds-priority {
+  margin-left: var(--space-1);
+  padding: 0 3px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font: 10px var(--mono);
+}
+
+.ds-arrow-head {
+  fill: var(--border-strong);
+}
+
+.ds-graph-node.is-start circle {
+  stroke-width: 3;
+  stroke-dasharray: 4 3;
+}
+
+/* --- Hash-table learning extras ------------------------------------------- */
+
+.ds-extras {
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border);
+}
+
+.ds-extras h2 {
+  margin: 0 0 var(--space-4);
+  font-size: 20px;
+}
+
+.ds-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.ds-facts span {
+  padding: 3px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font: 12px var(--mono);
+  color: var(--text);
+}
+
+.ds-facts strong {
+  color: var(--text-h);
+}
+
+.ds-extra-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.ds-extra-wide {
+  grid-column: 1 / -1;
+}
+
+.ds-extra-card {
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.ds-extra-card h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.ds-extra-copy {
+  margin: 0 0 var(--space-3);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.ds-predict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.ds-predict .ds-field input {
+  width: 96px;
+}
+
+.ds-feedback {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--border-strong);
+  background: var(--code-bg);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-h);
+}
+
+.ds-feedback.is-correct {
+  border-left-color: var(--ok);
+  background: var(--accent-bg);
+}
+
+.ds-feedback.is-wrong {
+  border-left-color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.ds-extra-hint {
+  margin: var(--space-2) 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.ds-link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ds-table-wrap {
+  overflow-x: auto;
+}
+
+.ds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.ds-table th,
+.ds-table td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ds-table thead th {
+  font: 600 10.5px/1.4 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.ds-table tbody th {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.ds-table td {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-table tr.is-current th,
+.ds-table tr.is-current td {
+  background: var(--accent-bg);
+  color: var(--text-h);
+}
+
+.ds-extra-list {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
 /* --- Step text and transport --------------------------------------------- */
 
 .ds-text {
@@ -447,6 +905,27 @@
 @media (max-width: 520px) {
   .ds-view {
     min-height: 180px;
+    padding: var(--space-3);
+  }
+
+  .ds-bucket-index {
+    flex-basis: 2ch;
+  }
+
+  .ds-slot,
+  .ds-chain-entry {
+    font-size: 11.5px;
+  }
+
+  .ds-slot-cells {
+    flex-wrap: wrap;
+  }
+
+  .ds-extra-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ds-extra-card {
     padding: var(--space-3);
   }
 

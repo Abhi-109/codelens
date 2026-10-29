@@ -1,10 +1,11 @@
 /* One data-structure page's interactive lab.
  *
- * The model (model.js) owns the operations and the frames. This component owns
- * only the cursor: which frame of the current operation is showing, whether it
- * is playing, and the values typed into the operation fields. Applying a new
- * operation always starts from the structure's final recorded state, so a
- * half-seeked run cannot fork into a state that never happened.
+ * The model (model.js + hashTable.js) owns the operations and the frames.
+ * This component owns only the cursor: which frame of the current operation is
+ * showing, whether it is playing, and the values typed into the operation
+ * fields. Applying a new operation always starts from the structure's final
+ * recorded state, so a half-seeked run cannot fork into a state that never
+ * happened.
  *
  * These steps are authored for teaching. They are not a Python trace, and the
  * badge on the page says so.
@@ -16,6 +17,7 @@ import { PageHeader } from '../shell/AppShell.jsx';
 import { NotFoundState } from '../shell/states.jsx';
 import { STRUCTURES, applyOperation, initialState, structureByType } from './model.js';
 import StructureView from './StructureView.jsx';
+import HashTableExtras from './HashTableExtras.jsx';
 import './datastructures.css';
 
 const STEP_MS = 750;
@@ -29,6 +31,16 @@ function startingInputs(structure) {
       Object.fromEntries(operation.fields.map((field) => [field.name, field.default])),
     ]),
   );
+}
+
+/** A lesson may deep-link to a prepared dataset: ?preset=colliders. The model
+ *  owns the dataset, so the page cannot invent one that the engine rejects. */
+function seededRun(type) {
+  if (type !== 'hash-table') return null;
+  const preset = new URLSearchParams(window.location.search).get('preset');
+  if (!preset) return null;
+  const result = applyOperation(type, initialState(type), 'load', { preset });
+  return result.error ? null : result;
 }
 
 function Transport({ run, playing, onBack, onPlay, onNext, onReset, onSeek }) {
@@ -74,6 +86,66 @@ function Transport({ run, playing, onBack, onPlay, onNext, onReset, onSeek }) {
   );
 }
 
+function StepDetail({ detail }) {
+  if (!detail) return null;
+  const rows = [
+    detail.raw !== undefined ? ['Raw hash', detail.raw] : null,
+    detail.index !== undefined ? ['Bucket', detail.index] : null,
+    detail.probes ? ['Probes', detail.probes] : null,
+    detail.count !== undefined ? ['Keys', `${detail.count} / ${detail.capacity}`] : null,
+    detail.load !== undefined ? ['Load factor', detail.load.toFixed(2)] : null,
+    detail.tombstone ? ['Deleted as', 'tombstone'] : null,
+  ].filter(Boolean);
+  if (!rows.length) return null;
+  return (
+    <dl className="ds-detail">
+      {rows.map(([term, value]) => (
+        <div key={term} className="ds-detail-pair">
+          <dt>{term}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function OperationRow({ operation, inputs, onChange, onApply, selected }) {
+  return (
+    <div className={`ds-op${selected ? ' is-selected' : ''}`}>
+      <div className="ds-fields">
+        {operation.fields.map((field) => (
+          <label key={field.name} className="ds-field">
+            <span>{field.label}</span>
+            {field.type === 'select' ? (
+              <select
+                value={inputs[field.name]}
+                onChange={(event) => onChange(operation, field, event.target.value)}
+                aria-label={`${operation.label} ${field.label}`}
+              >
+                {field.options.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type={field.type ?? 'number'}
+                value={inputs[field.name]}
+                onChange={(event) => onChange(operation, field, event.target.value)}
+                aria-label={`${operation.label} ${field.label}`}
+              />
+            )}
+          </label>
+        ))}
+      </div>
+      <button type="button" className="ds-btn" onClick={() => onApply(operation)}>
+        {operation.label}
+      </button>
+    </div>
+  );
+}
+
 export default function DataStructureLab({ type }) {
   const structure = structureByType(type);
   if (!structure) return <NotFoundState />;
@@ -81,8 +153,11 @@ export default function DataStructureLab({ type }) {
 }
 
 function Lab({ structure }) {
-  const [state, setState] = useState(() => initialState(structure.type));
-  const [run, setRun] = useState(null);
+  const seeded = useMemo(() => seededRun(structure.type), [structure.type]);
+  const [state, setState] = useState(() => seeded?.state ?? initialState(structure.type));
+  const [run, setRun] = useState(() =>
+    seeded ? { frames: seeded.frames, index: 0, label: 'Load dataset', operationId: 'load' } : null,
+  );
   const [error, setError] = useState(null);
   const [playing, setPlaying] = useState(false);
   const [inputs, setInputs] = useState(() => startingInputs(structure));
@@ -90,7 +165,7 @@ function Lab({ structure }) {
   const frame = run?.frames[run.index] ?? null;
   const viewState = frame?.state ?? state;
   const marks = useMemo(
-    () => frame?.marks ?? { active: [], compare: [], done: [], found: [] },
+    () => frame?.marks ?? { active: [], compare: [], done: [], found: [], collision: [], inserted: [], deleted: [], tombstone: [] },
     [frame],
   );
 
@@ -120,7 +195,20 @@ function Lab({ structure }) {
     }
     setError(null);
     setState(result.state);
-    setRun({ frames: result.frames, index: 0, label: operation.label });
+    setRun({ frames: result.frames, index: 0, label: operation.label, operationId: operation.id });
+    if (structure.type === 'hash-table' && ['configure', 'resize', 'load'].includes(operation.id)) {
+      // Keep the settings fields showing what the table actually uses now.
+      setInputs((current) => ({
+        ...current,
+        configure: {
+          ...current.configure,
+          strategy: result.state.strategy,
+          hashFn: result.state.hashFn,
+          threshold: result.state.threshold,
+        },
+        resize: { ...current.resize, capacity: result.state.capacity * 2 <= 97 ? result.state.capacity * 2 : result.state.capacity },
+      }));
+    }
   }
 
   function reset() {
@@ -138,6 +226,18 @@ function Lab({ structure }) {
 
   const hasSteps = Boolean(run && run.frames.length);
   const atEnd = !hasSteps || run.index >= run.frames.length - 1;
+  const primary = structure.operations.filter((operation) => !operation.advanced);
+  const advanced = structure.operations.filter((operation) => operation.advanced);
+  const row = (operation) => (
+    <OperationRow
+      key={operation.id}
+      operation={operation}
+      inputs={inputs[operation.id]}
+      onChange={changeInput}
+      onApply={apply}
+      selected={run?.operationId === operation.id}
+    />
+  );
 
   return (
     <div>
@@ -151,9 +251,7 @@ function Lab({ structure }) {
         subtitle={structure.blurb}
       />
 
-      <p className="ds-badge">
-        Authored operation model · not a Python trace
-      </p>
+      <p className="ds-badge">Authored operation model · not a Python trace</p>
 
       <nav className="ds-switch" aria-label="Structures">
         {STRUCTURES.map((entry) => (
@@ -171,26 +269,13 @@ function Lab({ structure }) {
       <div className="ds-lab">
         <section className="ds-controls" aria-labelledby="ds-operations">
           <h2 id="ds-operations">Operations</h2>
-          {structure.operations.map((operation) => (
-            <div key={operation.id} className="ds-op">
-              <div className="ds-fields">
-                {operation.fields.map((field) => (
-                  <label key={field.name} className="ds-field">
-                    <span>{field.label}</span>
-                    <input
-                      type={field.type ?? 'number'}
-                      value={inputs[operation.id][field.name]}
-                      onChange={(event) => changeInput(operation, field, event.target.value)}
-                      aria-label={`${operation.label} ${field.label}`}
-                    />
-                  </label>
-                ))}
-              </div>
-              <button type="button" className="ds-btn" onClick={() => apply(operation)}>
-                {operation.label}
-              </button>
-            </div>
-          ))}
+          {primary.map(row)}
+          {advanced.length ? (
+            <details className="ds-advanced">
+              <summary>Advanced settings</summary>
+              <div className="ds-advanced-body">{advanced.map(row)}</div>
+            </details>
+          ) : null}
           {error ? (
             <p className="ds-error" role="alert">
               {error}
@@ -205,12 +290,13 @@ function Lab({ structure }) {
           <h2 id="ds-stage-title" className="ds-sr">
             {structure.name} state
           </h2>
-          <StructureView type={structure.type} state={viewState} marks={marks} />
+          <StructureView type={structure.type} state={viewState} marks={marks} detail={frame?.detail ?? null} />
           <p className="ds-text" aria-live="polite">
             {frame
               ? frame.text
               : 'Apply an operation to record the first step. The structure below is the starting state.'}
           </p>
+          <StepDetail detail={frame?.detail ?? null} />
           <Transport
             run={run}
             playing={playing}
@@ -235,6 +321,8 @@ function Lab({ structure }) {
           ) : null}
         </section>
       </div>
+
+      {structure.type === 'hash-table' ? <HashTableExtras state={state} /> : null}
     </div>
   );
 }

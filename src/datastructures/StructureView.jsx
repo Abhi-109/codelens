@@ -1,21 +1,33 @@
 /* The drawing half of the data-structure lab.
  *
- * It only reads a snapshot and its marks: it never applies an operation or
- * invents a value. That is what lets Back, Next and seeking show a past frame
- * exactly, with no highlight left over from a step the learner did not take.
+ * It only reads a snapshot, its marks and the step's structured detail: it
+ * never applies an operation or invents a value. That is what lets Back, Next
+ * and seeking show a past frame exactly, with no highlight left over from a
+ * step the learner did not take.
  *
  * The drawing is decorative for assistive technology; each view carries a
  * spoken summary of the same state instead.
  */
 
-const MARK_CLASSES = ['active', 'compare', 'done', 'found'];
+import { strategyLabel } from './hashTable.js';
+
+const MARK_CLASSES = [
+  'active',
+  'compare',
+  'done',
+  'found',
+  'collision',
+  'inserted',
+  'deleted',
+  'tombstone',
+];
 
 const marksFor = (marks, key) =>
-  MARK_CLASSES.filter((kind) => marks[kind].includes(key)).map((kind) => `is-${kind}`).join(' ');
+  MARK_CLASSES.filter((kind) => marks[kind]?.includes(key)).map((kind) => `is-${kind}`).join(' ');
 
 const cellClass = (marks, key, base) => `${base} ${marksFor(marks, key)}`.trim();
 
-const emptyMarks = { active: [], compare: [], done: [], found: [] };
+const emptyMarks = Object.fromEntries(MARK_CLASSES.map((kind) => [kind, []]));
 
 function Empty({ children }) {
   return <p className="ds-empty">{children}</p>;
@@ -47,6 +59,7 @@ function ArrayView({ state, marks }) {
 /* --- Linked list ---------------------------------------------------------- */
 
 function ListView({ state, marks }) {
+  const cycleTo = state.cycleTo ?? null;
   return (
     <div className="ds-linked">
       <span className="ds-end" aria-hidden="true">
@@ -56,15 +69,22 @@ function ListView({ state, marks }) {
         {state.values.map((value, index) => (
           <li key={index} className="ds-chain-item">
             <span className={cellClass(marks, String(index), 'ds-node')}>{value}</span>
-            <span className="ds-link" aria-hidden="true">
-              →
-            </span>
+            <span className="ds-link">{state.doubly ? '⇄' : '→'}</span>
           </li>
         ))}
         <li className="ds-chain-item">
-          <span className="ds-null">null</span>
+          <span className="ds-null">
+            {cycleTo === null ? 'null' : `node ${cycleTo} ↩`}
+          </span>
         </li>
       </ol>
+      <span className="ds-end" aria-hidden="true">
+        tail
+      </span>
+      <p className="ds-note ds-note-wide">
+        {state.doubly ? 'doubly linked · previous and next pointers' : 'singly linked · next pointers only'}
+        {cycleTo !== null ? ` · cycle: tail → node ${cycleTo}` : ''}
+      </p>
     </div>
   );
 }
@@ -94,6 +114,40 @@ function StackView({ state, marks }) {
 }
 
 function QueueView({ state, marks }) {
+  const mode = state.mode ?? 'simple';
+
+  if (mode === 'circular') {
+    const capacity = Number(state.capacity ?? 5);
+    const front = Number(state.front ?? 0);
+    return (
+      <div className="ds-queue ds-queue-circular">
+        <span className="ds-end">front slot {front}</span>
+        <ol className="ds-slot-cells" aria-hidden="true">
+          {Array.from({ length: capacity }).map((_, physical) => {
+            const logical = (physical - front + capacity) % capacity;
+            const filled = logical < state.values.length;
+            const isFront = filled && logical === 0;
+            const isRear = filled && logical === state.values.length - 1;
+            return (
+              <li
+                key={physical}
+                className={`${cellClass(marks, String(logical), `ds-plate ds-slot-cell${filled ? '' : ' ds-slot-cell-empty'}`)}${isFront ? ' is-front' : ''}${isRear ? ' is-rear' : ''}`}
+              >
+                <span className="ds-slot-address">{physical}</span>
+                <span className="ds-slot-value">{filled ? state.values[logical] : ''}</span>
+                {isFront ? <span className="ds-slot-tag">front</span> : isRear ? <span className="ds-slot-tag">rear</span> : null}
+              </li>
+            );
+          })}
+        </ol>
+        <span className="ds-end">
+          size {state.values.length}/{capacity}
+        </span>
+      </div>
+    );
+  }
+
+  const priorities = state.priorities ?? [];
   return (
     <div className="ds-queue" aria-hidden="true">
       <span className="ds-end">front</span>
@@ -103,6 +157,7 @@ function QueueView({ state, marks }) {
         state.values.map((value, index) => (
           <span key={index} className={cellClass(marks, String(index), 'ds-plate')}>
             {value}
+            {mode === 'priority' ? <span className="ds-priority">p{priorities[index] ?? 0}</span> : null}
           </span>
         ))
       )}
@@ -176,37 +231,155 @@ function TreeView({ state, marks }) {
 
 /* --- Graph ---------------------------------------------------------------- */
 
-const GRAPH_POSITIONS = {
-  A: [100, 32],
-  B: [38, 102],
-  C: [162, 102],
-  D: [38, 176],
-  E: [162, 176],
-  F: [100, 246],
-};
-
 function GraphView({ state, marks }) {
+  const width = 320;
+  const height = 300;
+  const cx = width / 2;
+  const cy = height / 2;
+  const count = Math.max(state.nodes.length, 1);
+  const radius = state.nodes.length <= 1 ? 0 : Math.min(118, 42 + state.nodes.length * 8);
+  const position = (id) => {
+    const index = state.nodes.indexOf(id);
+    const angle = -Math.PI / 2 + (2 * Math.PI * index) / count;
+    return [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)];
+  };
+
   return (
-    <svg className="ds-graph" viewBox="0 0 200 280" role="presentation" aria-hidden="true" focusable="false">
-      {state.edges.map(([a, b]) => (
-        <line
-          key={`${a}-${b}`}
-          className="ds-edge"
-          x1={GRAPH_POSITIONS[a][0]}
-          y1={GRAPH_POSITIONS[a][1]}
-          x2={GRAPH_POSITIONS[b][0]}
-          y2={GRAPH_POSITIONS[b][1]}
-        />
-      ))}
-      {state.nodes.map((id) => (
-        <g key={id} className={cellClass(marks, id, 'ds-graph-node')}>
-          <circle cx={GRAPH_POSITIONS[id][0]} cy={GRAPH_POSITIONS[id][1]} r="17" />
-          <text x={GRAPH_POSITIONS[id][0]} y={GRAPH_POSITIONS[id][1]} dy="0.35em" textAnchor="middle">
-            {id}
-          </text>
-        </g>
-      ))}
+    <svg className="ds-graph" viewBox={`0 0 ${width} ${height}`} role="presentation" aria-hidden="true" focusable="false">
+      <defs>
+        <marker id="ds-graph-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" className="ds-arrow-head" />
+        </marker>
+      </defs>
+      {state.edges.map(([a, b]) => {
+        const [x1, y1] = position(a);
+        const [x2, y2] = position(b);
+        return (
+          <line
+            key={`${a}-${b}`}
+            className="ds-edge"
+            x1={x1}
+            y1={y1}
+            x2={x2}
+            y2={y2}
+            markerEnd={state.directed ? 'url(#ds-graph-arrow)' : undefined}
+          />
+        );
+      })}
+      {state.nodes.map((id) => {
+        const [x, y] = position(id);
+        return (
+          <g
+            key={id}
+            className={`${cellClass(marks, id, 'ds-graph-node')}${id === state.start ? ' is-start' : ''}`}
+          >
+            <title>{id === state.start ? `${id} (start)` : id}</title>
+            <circle cx={x} cy={y} r="19" />
+            <text x={x} y={y} dy="0.35em" textAnchor="middle" fontSize={id.length > 4 ? 10 : 13}>
+              {id}
+            </text>
+          </g>
+        );
+      })}
     </svg>
+  );
+}
+
+/* --- Hash table ----------------------------------------------------------- */
+
+function HashJourney({ detail }) {
+  if (!detail || (detail.raw === undefined && detail.index === undefined)) return null;
+  const stage = detail.kind;
+  const bucketOn = ['hash', 'compare', 'collision', 'tombstone', 'missing', 'insert', 'found', 'delete'].includes(stage);
+  return (
+    <div className="ds-journey" aria-hidden="true">
+      {detail.key !== undefined && detail.key !== null ? <span className="ds-journey-chip">{detail.key}</span> : null}
+      {detail.raw !== undefined ? (
+        <>
+          <span className="ds-journey-arrow">→</span>
+          <span className={`ds-journey-chip${stage === 'hash' ? ' is-on' : ''}`}>hash {detail.raw}</span>
+        </>
+      ) : null}
+      {detail.index !== undefined ? (
+        <>
+          <span className="ds-journey-arrow">→</span>
+          <span className={`ds-journey-chip${bucketOn ? ' is-on' : ''}`}>bucket {detail.index}</span>
+        </>
+      ) : null}
+      {detail.probes ? (
+        <>
+          <span className="ds-journey-arrow">→</span>
+          <span className={`ds-journey-chip${bucketOn && stage !== 'hash' ? ' is-on' : ''}`}>
+            {detail.probes} {detail.probes === 1 ? 'probe' : 'probes'}
+          </span>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function OldTable({ previous }) {
+  if (!previous) return null;
+  const entries =
+    previous.table?.flatMap?.((cell) => (Array.isArray(cell) ? cell : cell && !cell.tombstone ? [cell] : [])) ?? [];
+  return (
+    <div className="ds-old-table">
+      <span className="ds-old-label">before · capacity {previous.capacity}</span>
+      <span className="ds-old-entries">
+        {entries.length ? entries.map((entry) => `${entry.key}=${entry.value}`).join(' · ') : 'empty'}
+      </span>
+    </div>
+  );
+}
+
+function HashView({ state, marks, detail }) {
+  const open = state.strategy !== 'chaining';
+  const load = state.count / state.capacity;
+  return (
+    <div className="ds-hash">
+      <HashJourney detail={detail} />
+      <OldTable previous={state.previous} />
+      {state.count === 0 && !state.previous ? (
+        <p className="ds-empty">The table is empty. Insert a key, or load a dataset under Advanced.</p>
+      ) : null}
+      <ol className="ds-buckets" aria-hidden="true">
+        {state.table.map((cell, index) => (
+          <li key={index} className={`ds-bucket ${marksFor(marks, `b${index}`)}`.trim()}>
+            <span className="ds-bucket-index">{index}</span>
+            {open ? (
+              <span
+                className={
+                  cell === null
+                    ? 'ds-slot ds-slot-empty'
+                    : cell.tombstone
+                      ? 'ds-slot ds-slot-tombstone'
+                      : cellClass(marks, `e:${cell.key}`, 'ds-slot ds-slot-filled')
+                }
+              >
+                {cell === null ? 'empty' : cell.tombstone ? '† tombstone' : `${cell.key}=${cell.value}`}
+              </span>
+            ) : (
+              <span className="ds-chain-inline">
+                {cell.length === 0 ? (
+                  <span className="ds-slot ds-slot-empty">empty</span>
+                ) : (
+                  cell.map((entry) => (
+                    <span key={entry.key} className={cellClass(marks, `e:${entry.key}`, 'ds-chain-entry')}>
+                      {entry.key}={entry.value}
+                    </span>
+                  ))
+                )}
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+      <p className="ds-note">
+        {strategyLabel(state.strategy)} · {state.count} {state.count === 1 ? 'key' : 'keys'} · capacity{' '}
+        {state.capacity} · load {load.toFixed(2)} · {state.tombstones}{' '}
+        {state.tombstones === 1 ? 'tombstone' : 'tombstones'}
+      </p>
+    </div>
   );
 }
 
@@ -218,12 +391,20 @@ function summaryOf(type, state, marks) {
     return `Array of ${state.values.length} values: ${state.values.join(', ') || 'empty'}. Capacity ${state.capacity}.`;
   }
   if (type === 'linked-list') {
-    return `Linked list from head: ${state.values.join(' → ') || 'empty'} → null.`;
+    const cycle = state.cycleTo ?? null;
+    return `Linked list from head: ${state.values.join(' → ') || 'empty'} → ${cycle === null ? 'null' : `node ${cycle} (cycle)`}.${state.doubly ? ' Doubly linked.' : ' Singly linked.'}`;
   }
   if (type === 'stack') {
     return `Stack from top: ${[...state.values].reverse().join(', ') || 'empty'}.`;
   }
   if (type === 'queue') {
+    const mode = state.mode ?? 'simple';
+    if (mode === 'circular') {
+      return `Circular queue of ${state.capacity} slots, front at slot ${state.front}, holding ${state.values.join(', ') || 'nothing'}.`;
+    }
+    if (mode === 'priority') {
+      return `Priority queue from front: ${state.values.map((value, index) => `${value} (priority ${state.priorities?.[index] ?? 0})`).join(', ') || 'empty'}.`;
+    }
     return `Queue from front: ${state.values.join(', ') || 'empty'}.`;
   }
   if (type === 'bst') {
@@ -237,10 +418,14 @@ function summaryOf(type, state, marks) {
     walk(state.root);
     return `Binary search tree in order: ${values.join(', ') || 'empty'}.${visited}`;
   }
-  return `Graph nodes ${state.nodes.join(', ')}.${visited}`;
+  if (type === 'hash-table') {
+    const load = state.count / state.capacity;
+    return `Hash table: ${state.count} keys in ${state.capacity} buckets using ${strategyLabel(state.strategy)}, load factor ${load.toFixed(2)}, ${state.tombstones} tombstones.${visited}`;
+  }
+  return `Graph nodes ${state.nodes.join(', ')}.${state.directed ? ' Directed.' : ' Undirected.'}${state.start ? ` Start ${state.start}.` : ''}${visited}`;
 }
 
-export default function StructureView({ type, state, marks = emptyMarks }) {
+export default function StructureView({ type, state, marks = emptyMarks, detail = null }) {
   const view = {
     array: ArrayView,
     'linked-list': ListView,
@@ -248,6 +433,7 @@ export default function StructureView({ type, state, marks = emptyMarks }) {
     queue: QueueView,
     bst: TreeView,
     graph: GraphView,
+    'hash-table': HashView,
   }[type];
   if (!view) return null;
   const View = view;
@@ -257,7 +443,7 @@ export default function StructureView({ type, state, marks = emptyMarks }) {
       {type === 'linked-list' && state.values.length === 0 ? (
         <Empty>The list is empty. Prepend or append a value to start it.</Empty>
       ) : (
-        <View state={state} marks={marks} />
+        <View state={state} marks={marks} detail={detail} />
       )}
     </div>
   );
