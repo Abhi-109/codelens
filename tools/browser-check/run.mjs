@@ -1408,6 +1408,20 @@ const readLab = (browser) =>
       compare: all(".ds-cell.is-compare .ds-value"),
       found: all(".ds-cell.is-found .ds-value"),
       active: all(".ds-cell.is-active .ds-value, .ds-node.is-active, .ds-plate.is-active"),
+      slots: all(".ds-slot, .ds-chain-entry"),
+      filled: all(".ds-slot-filled"),
+      tombstones: all(".ds-slot-tombstone"),
+      hashFound: all(".ds-slot.is-found, .ds-chain-entry.is-found"),
+      hashCollisions: all(".ds-slot.is-collision, .ds-chain-entry.is-collision"),
+      buckets: all(".ds-bucket"),
+      journey: text(".ds-journey"),
+      detail: text(".ds-detail"),
+      oldTable: text(".ds-old-table"),
+      feedback: text(".ds-feedback"),
+      tableRows: all(".ds-table tbody tr"),
+      strategyRows: [...(document.querySelector(".ds-table")?.querySelectorAll("tbody tr") ?? [])].map(
+        (row) => row.textContent,
+      ),
       error: text(".ds-error"),
       stepMax: slider ? Number(slider.max) : 0,
       stepValue: slider ? Number(slider.value) : 0,
@@ -1427,7 +1441,7 @@ async function productPages(browser) {
 
   await openRoute(browser, "/visualizer/data-structures");
   await browser.waitFor(
-    'document.querySelectorAll(".ds-item").length === 6',
+    'document.querySelectorAll(".ds-item").length === 7',
     15000,
     "the structure list",
   );
@@ -1435,8 +1449,8 @@ async function productPages(browser) {
     '[...document.querySelectorAll(".ds-item-name")].map((el) => el.textContent)',
   );
   check(
-    cards.length === 6 && cards.includes("Binary search tree") && cards.includes("Graph"),
-    "all six structures are offered",
+    cards.length === 7 && cards.includes("Binary search tree") && cards.includes("Graph") && cards.includes("Hash table"),
+    "all seven structures are offered",
     cards.join(", "),
   );
   await browser.screenshot("ds-index");
@@ -1658,10 +1672,125 @@ async function productPages(browser) {
     String(dfs.text),
   );
 
+  // Hash table: hashing, chaining, probing, tombstones, resize and extras.
+  await openRoute(browser, "/visualizer/data-structures");
+  await openRoute(browser, "/visualizer/data-structures/hash-table");
+  await browser.waitFor('document.querySelector(".ds-buckets")', 10000, "the hash table lab");
+  const emptyHash = await readLab(browser);
+  check(
+    emptyHash.slots.length === 7 && emptyHash.slots.every((slot) => slot === "empty"),
+    "the hash table starts empty with seven buckets",
+    emptyHash.slots.join(","),
+  );
+  check(
+    emptyHash.strategyRows.length === 4 &&
+      emptyHash.strategyRows[0].includes("Separate chaining") &&
+      emptyHash.strategyRows[3].includes("Double hashing"),
+    "the strategy comparison measures all four strategies",
+    emptyHash.strategyRows.join(" / "),
+  );
+  await browser.clickText("Insert / update");
+  await sleep(150);
+  const hashed = await readLab(browser);
+  check(
+    hashed.readout === "1 / 2" &&
+      hashed.journey?.includes("hash 530") &&
+      hashed.journey?.includes("bucket 5"),
+    "an insert records the hash journey before it stores",
+    `${hashed.readout} | ${hashed.journey}`,
+  );
+  await browser.click('[aria-label="Next lab step"]');
+  await sleep(100);
+  const stored = await readLab(browser);
+  check(
+    stored.slots.some((slot) => slot === "apple=4") && stored.text.includes("apple=4"),
+    "the insert stores the pair in the hashed bucket",
+    `${stored.slots.join(",")} | ${stored.text}`,
+  );
+  await browser.clickText("Search");
+  await sleep(150);
+  await browser.click('[aria-label="Next lab step"]');
+  await sleep(100);
+  const hashFound = await readLab(browser);
+  check(
+    hashFound.hashFound.length === 1 && hashFound.text.includes("Found apple=4"),
+    "a search marks the entry it found",
+    `${hashFound.hashFound.join(",")} | ${hashFound.text}`,
+  );
+  await browser.setValue('input[aria-label="Predicted bucket"]', 5);
+  await browser.clickText("Check");
+  await sleep(100);
+  check(
+    (await readLab(browser)).feedback?.includes("Correct"),
+    "the predict exercise checks against the real hash",
+    String((await readLab(browser)).feedback),
+  );
+
+  // The same colliding keys resolve differently under each strategy.
+  const strategyBuckets = async (preset, bucket, expected) => {
+    await openRoute(browser, "/visualizer/data-structures");
+    await openRoute(browser, `/visualizer/data-structures/hash-table?preset=${preset}`);
+    await browser.waitFor('document.querySelector(".ds-buckets")', 10000, `${preset} loaded`);
+    const run = await readLab(browser);
+    await browser.setValue('input[aria-label="Lab step"]', run.stepMax);
+    await sleep(120);
+    const view = await readLab(browser);
+    check(
+      view.buckets[bucket]?.includes(expected),
+      `${preset} places the second colliding key in bucket ${bucket}`,
+      view.buckets[bucket] ?? "no bucket",
+    );
+    return view;
+  };
+
+  const chained = await strategyBuckets("colliders", 6, "ab=1");
+  check(
+    chained.buckets[6]?.includes("ba=2"),
+    "separate chaining keeps both colliding keys in one bucket",
+    chained.buckets[6],
+  );
+  const linearTable = await strategyBuckets("linear", 0, "ba=2");
+  check(
+    linearTable.buckets[6]?.includes("ab=1"),
+    "linear probing keeps the first key in its bucket",
+    linearTable.buckets[6],
+  );
+  await strategyBuckets("quadratic", 1, "ba=2");
+  await strategyBuckets("double", 3, "ba=2");
+  const tombed = await strategyBuckets("deletions", 4, "ant=1");
+  check(
+    tombed.tombstones.length === 2 && tombed.text.includes("tombstone"),
+    "an open-addressed delete leaves two tombstones",
+    `${tombed.tombstones.length} | ${tombed.text}`,
+  );
+
+  // A resize keeps the old table visible while it rehashes into the new one.
+  await openRoute(browser, "/visualizer/data-structures");
+  await openRoute(browser, "/visualizer/data-structures/hash-table?preset=resize");
+  await browser.waitFor('document.querySelector(".ds-buckets")', 10000, "the resize dataset");
+  const resizeRun = await readLab(browser);
+  // The rebuild block ends with 11 frames: start, allocate, one per key, done.
+  await browser.setValue('input[aria-label="Lab step"]', resizeRun.stepMax - 9);
+  await sleep(120);
+  const rebuilding = await readLab(browser);
+  check(
+    rebuilding.oldTable?.includes("before · capacity 7"),
+    "a resize shows the table it is replacing",
+    String(rebuilding.oldTable),
+  );
+  await browser.setValue('input[aria-label="Lab step"]', rebuilding.stepMax);
+  await sleep(120);
+  const grownTable = await readLab(browser);
+  check(
+    grownTable.buckets.length === 14,
+    "the resize grows the table and rehashes every key",
+    `${grownTable.buckets.length} buckets | ${grownTable.text}`,
+  );
+
   // Lessons: the index, one lesson, and its program loaded unrun.
   await openRoute(browser, "/learn");
   await browser.waitFor(
-    'document.querySelectorAll(".learn-lesson").length === 7',
+    'document.querySelectorAll(".learn-lesson").length === 18',
     10000,
     "the lesson index",
   );
@@ -1720,6 +1849,30 @@ async function productPages(browser) {
   check(
     (await browser.evaluate('document.querySelectorAll(".checkpoint").length')) >= 2,
     "going back returns to the lesson",
+  );
+
+  // A lab lesson opens its structure with the prepared dataset, not a program.
+  await openRoute(browser, "/learn/hash-tables/linear-probing");
+  await browser.waitFor('document.querySelector(".lesson")', 10000, "a hash-table lesson");
+  const labLesson = await browser.evaluate(`(() => ({
+    link: document.querySelector('a[href^="/visualizer/data-structures/"]')?.getAttribute("href"),
+    code: document.querySelector(".lesson-code")?.textContent ?? null,
+  }))()`);
+  check(
+    labLesson.link === "/visualizer/data-structures/hash-table?preset=linear" && !labLesson.code,
+    "a lab lesson links to the prepared table, not a Python program",
+    JSON.stringify(labLesson),
+  );
+  await browser.click('a[href^="/visualizer/data-structures/"]');
+  await browser.waitFor('document.querySelector(".ds-buckets")', 10000, "the seeded hash lab");
+  const seeded = await readLab(browser);
+  await browser.setValue('input[aria-label="Lab step"]', seeded.stepMax);
+  await sleep(150);
+  const seededEnd = await readLab(browser);
+  check(
+    seeded.stepMax > 0 && seededEnd.buckets[0]?.includes("ba=2"),
+    "the lesson opens the table with its dataset recorded",
+    `${seeded.stepMax} steps | ${seededEnd.buckets[0]}`,
   );
 
   // Themes on the lab.
