@@ -32,7 +32,14 @@ test("every structure is complete and has a URL-safe type", () => {
       for (const field of operation.fields) {
         assert.ok(field.name && field.label);
         assert.ok(field.default !== undefined, `${operation.id}.${field.name} has a default`);
-        if (field.type) assert.ok(['text', 'number'].includes(field.type));
+        if (field.type) assert.ok(['text', 'number', 'select'].includes(field.type));
+        if (field.type === 'select') {
+          assert.ok(field.options.length >= 2, `${operation.id}.${field.name} offers real choices`);
+          assert.ok(
+            field.options.some((option) => option.value === field.default),
+            `${operation.id}.${field.name} has a valid default`,
+          );
+        }
       }
     }
   }
