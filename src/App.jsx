@@ -13,26 +13,16 @@ import { recognizeProgram } from "./tracer/recognition";
 import { buildRunStory } from "./tracer/runStory.js";
 import { changeLog, variableSeries } from "./tracer/stepView";
 import { buildExecutionGraph } from "./flowchart/executionGraph.js";
-import ControlFlowChart from "./flowchart/ControlFlowChart.jsx";
-import AdaptiveView, { AdaptiveTools } from "./visualizer/AdaptiveView.jsx";
+import { AdaptiveTools } from "./visualizer/AdaptiveView.jsx";
 import { resolveAdaptiveView } from "./visualizer/adaptive.js";
-import CombinedView from "./visualizer/CombinedView.jsx";
 import Inspector from "./visualizer/Inspector.jsx";
 import MotionStage from "./visualizer/motion/MotionStage.jsx";
 import { planMotion } from "./visualizer/motion/plan.js";
 import { useReducedMotion } from "./visualizer/motion/useReducedMotion.js";
 import PlaybackBar from "./visualizer/PlaybackBar.jsx";
 import RunStoryCard from "./visualizer/RunStoryCard.jsx";
-import CallTree from "./visualizer/CallTree.jsx";
-import TimelinePane from "./visualizer/TimelinePane.jsx";
 import VisualizationPane from "./visualizer/VisualizationPane.jsx";
-import {
-  closeComparison,
-  initialComparison,
-  openComparison,
-  setComparisonEndpoint,
-  swapComparison,
-} from "./visualizer/compare.js";
+
 import { loadSpeed, playbackIntervalMs, saveSpeed } from "./visualizer/playback.js";
 import {
   LEARNING_MODES,
@@ -246,8 +236,6 @@ function Workspace() {
   const {
     source,
     result,
-    flow,
-    flowGraph,
     index,
     playing,
     speed,
@@ -269,7 +257,6 @@ function Workspace() {
   // Comparison mode owns only its two endpoints and whether it is open. The
   // playback step stays in `index`, so opening or changing a comparison can
   // never move the run.
-  const [comparison, setComparison] = useState(initialComparison);
   const [showAfter, setShowAfter] = useState(false);
   const [inputsText, setInputsText] = useState("");
   const [dismissed, setDismissed] = useState(() => new Set());
@@ -497,27 +484,10 @@ function Workspace() {
     dispatch(sessionActions.setStep(clampStep(i, trace.length)));
   };
 
-  // Comparison handlers touch only the comparison state. None of them calls
-  // `jumpTo`, so choosing endpoints leaves the playback position alone.
-  const startComparison = () => setComparison((state) => openComparison(state, index, trace.length));
-  const stopComparison = () => setComparison((state) => closeComparison(state));
-  const changeEndpoint = (which, value) =>
-    setComparison((state) => setComparisonEndpoint(state, which, value, trace.length));
-  const swapEndpoints = () => setComparison((state) => swapComparison(state));
-  const useCurrentAsEndpoint = (which) => changeEndpoint(which, index);
 
   // Selecting a call only chooses whose variables to show. It never moves the
   // step: the stack panel is a lens on the current moment, not a time machine.
   const selectFrame = (frameId) => dispatch(sessionActions.selectFrame(frameId));
-
-  // A call-tree box explicitly offers "go to where this call started", so this
-  // one both selects the call and jumps. The two intents stay separate. Scene
-  // items can pass the recorded start index directly.
-  const jumpToCall = (frameId, firstIndex) => {
-    dispatch(sessionActions.selectFrame(frameId));
-    const at = Number.isInteger(firstIndex) ? firstIndex : traceIndex.firstCallIndex(frameId);
-    if (at >= 0) jumpTo(at);
-  };
 
   // Clicking a line of code jumps to the next step (at or after here) that runs it.
   const jumpToLine = (number) => {
@@ -582,7 +552,6 @@ function Workspace() {
       if (!pinnedViz.current) dispatch(sessionActions.selectViz(nextPlan.primary));
 
       setWatched(null);
-      setComparison(initialComparison());
       setDismissed(new Set());
     } catch (error) {
       if (!gate.isLatest(run)) return;
