@@ -32,6 +32,38 @@ mock `/api/plan` in the Vite dev server without a key.
 - `POST /api/plan` with no key configured → 503 `not_configured`.
 - With a key, a valid request returns 200 with `{ primary, emphasis, explanation }`.
 
+## Beam / OpenCode provider note
+
+The only "Beam" model available in this environment is `opencode/beam-free` (OpenCode
+platform, model ID `opencode/beam-free`). It is **not** an OpenAI-compatible HTTP
+endpoint that the Vercel server route can call with a Bearer token: the route in
+`api/plan.js` speaks `/v1/chat/completions` with `authorization: Bearer <key>`.
+OmniRoute (the local gateway) exposes an OpenAI-compatible surface, but its
+OpenCode credentials are currently exhausted ("No active credentials for
+provider: opencode"), so it cannot serve Beam today.
+
+Therefore, for a Beam-backed deployment you need one of:
+
+1. An OpenCode API key / endpoint that exposes an OpenAI-compatible
+   `/v1/chat/completions` route for `opencode/beam-free`, or
+2. An alternative OpenAI-compatible provider (e.g. OpenAI `gpt-4o-mini`) with a
+   valid API key, used as the configured provider.
+
+Do not silently substitute a different model. Record the exact identifier used.
+
+## Setup checklist (external)
+
+- [ ] Obtain a provider API key for an OpenAI-compatible chat completions endpoint.
+- [ ] Set `PLANNER_PROVIDER_KEY` (server-only) in Vercel Production and Preview.
+- [ ] Set `PLANNER_PROVIDER_URL` if not the OpenAI default.
+- [ ] Set `PLANNER_MODEL` to the exact model identifier.
+- [ ] Set `VITE_PLANNER_ENDPOINT=/api/plan` for the frontend.
+- [ ] Deploy to preview first.
+- [ ] Run `npm run check:planner:live` with the key in the environment.
+- [ ] Confirm 200 responses, accepted plans and latency.
+- [ ] Run the 122-case live evaluation if budget permits.
+- [ ] Promote to production only after preview validation.
+
 ## Real provider validation
 
 Run `npm run check:planner:live` with `PLANNER_PROVIDER_KEY` set. The script
