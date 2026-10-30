@@ -482,6 +482,14 @@
   background: var(--compare-bg);
 }
 
+.ds-slot.is-swap,
+.ds-chain-entry.is-swap {
+  border-style: dashed;
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 .ds-slot.is-tombstone {
   border-style: dashed;
   border-color: var(--warn);
@@ -565,6 +573,14 @@
   background: transparent;
   color: var(--text);
   font-weight: 400;
+}
+
+.ds-slot-distance {
+  margin-left: auto;
+  padding-left: var(--space-2);
+  font: 10.5px var(--mono);
+  color: var(--text);
+  letter-spacing: 0.02em;
 }
 
 .ds-slot-tombstone {
@@ -835,6 +851,76 @@
 .ds-graph-node.is-start circle {
   stroke-width: 3;
   stroke-dasharray: 4 3;
+}
+
+.ds-graph-node.is-current circle {
+  stroke: var(--accent);
+  stroke-width: 3;
+  fill: var(--accent-bg);
+}
+
+.ds-edge.is-active {
+  stroke: var(--accent);
+  stroke-width: 2.4;
+}
+
+.ds-graph-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ds-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.ds-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ds-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+}
+
+.ds-legend-swatch.is-start {
+  border-style: dashed;
+  border-width: 2px;
+}
+
+.ds-legend-swatch.is-current {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+}
+
+.ds-legend-swatch.is-done {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.ds-legend-swatch.is-edge {
+  width: 18px;
+  height: 0;
+  border: 0;
+  border-top: 2px solid var(--accent);
+  border-radius: 0;
+}
+
+.ds-graph-order {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
 }
 
 /* --- Hash-table learning extras ------------------------------------------- */

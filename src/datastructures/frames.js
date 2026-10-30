@@ -15,6 +15,7 @@ export const MARK_KINDS = [
   'inserted',
   'deleted',
   'tombstone',
+  'swap',
 ];
 
 export const noMarks = () =>

@@ -124,6 +124,23 @@ negative and string keys.
 | Linear probing | next slot, wrapping | the first empty slot | writes a tombstone |
 | Quadratic probing | base + `i + i²`, wrapping | the first empty slot | writes a tombstone |
 | Double hashing | base + `i × step`, wrapping | the first empty slot | writes a tombstone |
+| Robin Hood | next slot, wrapping; a key that has probed further than the resident takes the slot and the resident continues | the first empty slot, or a resident closer to home than the probe | shifts later cluster members back one slot; no tombstone |
+
+Robin Hood's displacement is real state, not a relabelled linear probe:
+`probeDistance()` measures `(slot − home) mod capacity`, the insert swaps when
+the carried key's distance is greater than the resident's, and the frame that
+does it is marked `swap` and names the displaced key. A lookup stops early when
+a resident's distance is smaller than the probe's, because no later key in that
+cluster can be further out. Deletion empties the slot and slides each following
+member back while its distance is positive, so keys stay reachable and
+`tombstones` stays 0. The table is never left mutated by a failed insert: a full
+table is checked before any displacement cascade starts. Slots show their
+distance as `d0`, `d1`, and so on.
+
+A verifier may check the invariant per cluster — distances do not decrease
+along a contiguous run of occupied slots, wrapping included — and the tests pin
+the exact placement, the swap marks, the early exit, the backward shift and the
+failed full-table insert.
 
 Two honest limits are part of the contract, not bugs:
 
@@ -168,6 +185,24 @@ the new one is allocated, every key is reinserted with the new capacity, and the
 final frame states that all keys are reachable. Indices are never copied.
 `Force rehash` does the same at the current capacity, which is the way to drop
 tombstones.
+
+### Prediction challenges
+
+Two cards below the table ask the learner to predict before the engine answers.
+`predictInsert()` and `predictResize()` clone the state and run the real
+`insertCore()` (and the real `maybeGrow()`), so the checked answer is never an
+estimate:
+
+- **Predict the next slot** — home bucket plus the probe rule of the current
+  strategy. For Robin Hood the prompt distinguishes the first probe from the
+  final placement, because a swap can move the key past it.
+- **Will it resize?** — compares the post-insert load to the threshold. The
+  growth check runs only after a *new* key is placed; updating a key already
+  stored does not change the count and never triggers growth. A full table
+  cannot grow.
+
+Each card's **Replay** button runs the lab's real operation through the same
+path as the buttons above, so the prediction and the animation agree.
 
 ### Presets
 

@@ -63,6 +63,7 @@ export const HASH_STRATEGIES = [
   { id: 'linear', label: 'Linear probing' },
   { id: 'quadratic', label: 'Quadratic probing' },
   { id: 'double', label: 'Double hashing' },
+  { id: 'robin-hood', label: 'Robin Hood hashing' },
 ];
 
 /** Playground datasets. `pairs` preserve insertion order; `deletes` run after
@@ -132,6 +133,17 @@ export const HASH_PRESETS = {
     capacity: 7,
     strategy: 'double',
     pairs: COLLIDING_PAIRS,
+  },
+  robinhood: {
+    label: 'Robin Hood: a key jumps the queue',
+    capacity: 7,
+    strategy: 'robin-hood',
+    pairs: [
+      ['1', 'one'],
+      ['2', 'two'],
+      ['8', 'eight'],
+      ['15', 'fifteen'],
+    ],
   },
   sequential: {
     label: 'Sequential integer keys',
@@ -509,10 +521,18 @@ export function hashBreakdown(hashFn, key, capacity, params) {
 
 
 const probeIndex = (strategy, base, step, i, capacity) => {
-  if (strategy === 'linear') return (base + i) % capacity;
+  if (strategy === 'linear' || strategy === 'robin-hood') return (base + i) % capacity;
   if (strategy === 'quadratic') return (base + i + i * i) % capacity;
   return (base + i * step) % capacity;
 };
+
+/** How far an entry sits from the bucket its key hashes to, wrapping around the
+ *  table. Robin Hood compares these distances; the view labels each slot with
+ *  one. It is exported so tests and the drawing use the engine's arithmetic. */
+export function probeDistance(hashFn, key, index, capacity, params) {
+  const home = bucketIndex(hashFn, key, capacity, params);
+  return ((index - home) % capacity + capacity) % capacity;
+}
 
 const entriesOf = (state) =>
   state.strategy === 'chaining'
@@ -605,6 +625,168 @@ const capacityError = (input, state, capacity) => {
 
 /* --- Insert ---------------------------------------------------------------- */
 
+/** Robin Hood placement: walk the cluster carrying the entry. If the carried
+ *  entry is further from home than the resident, it takes the slot and the
+ *  resident becomes the carried entry. That is a real displacement, not a
+ *  relabelled linear probe, and the frames name each swap. */
+function insertRobinHood(state, key, value, sink) {
+  const base = bucketIndex(state.hashFn, key, state.capacity, state.universal);
+  const detail = (kind, extra) => detailOf(state, kind, { key, index: base, ...extra });
+  let carried = { key, value };
+  let home = base;
+  let probes = 0;
+  let collisions = 0;
+  let swaps = 0;
+  if (sink) {
+    sink.push(frame(state, hashLine(state, key, base), { active: [`b${base}`] }, hashDetail(state, key, base)));
+  }
+
+  // A full table cannot place a new key, and a failed displacement cascade could
+  // strand the carried entry. Check first so a full table is never mutated.
+  if (state.count >= state.capacity) {
+    const existing = lookupRobinHood(state, key, sink);
+    if (existing.found) {
+      const from = existing.entry.value;
+      existing.entry.value = value;
+      if (sink) {
+        sink.push(
+          frame(
+            state,
+            `Bucket ${existing.slot} already holds ${key}; update its value from ${from} to ${value}. No duplicate key is created.`,
+            { found: [`e:${key}`] },
+            detail('update', { index: existing.slot, probes: existing.probes }),
+          ),
+        );
+      }
+      return { placed: true, updated: true, probes: existing.probes, collisions, swaps, slot: existing.slot };
+    }
+    if (sink) {
+      sink.push(
+        frame(
+          state,
+          `Every slot is occupied and ${key} is not one of them, so it cannot be inserted. Rehash or grow the table.`,
+          {},
+          detail('failed', { probes: existing.probes }),
+        ),
+      );
+    }
+    return { placed: false, updated: false, probes: existing.probes, collisions, swaps, slot: -1 };
+  }
+
+  for (let i = 0; i < state.capacity; i += 1) {
+    const at = (base + i) % state.capacity;
+    const distance = (at - home + state.capacity) % state.capacity;
+    probes += 1;
+    const slot = state.table[at];
+
+    if (slot === null) {
+      state.table[at] = carried;
+      state.count += 1;
+      if (sink) {
+        sink.push(
+          frame(
+            state,
+            carried.key === key
+              ? `Bucket ${at} is empty; store ${key}=${value} there after ${probeWord(probes)} (distance ${distance}).`
+              : `Bucket ${at} is empty; the displaced ${carried.key}=${carried.value} lands there after ${probeWord(probes)} (distance ${distance}).`,
+            { inserted: [`e:${carried.key}`], active: [`b${at}`] },
+            detail('insert', {
+              index: at,
+              probes,
+              distance,
+              swaps,
+              collision: collisions > 0,
+            }),
+          ),
+        );
+      }
+      return { placed: true, updated: false, probes, collisions, swaps, slot: at };
+    }
+
+    // Robin Hood never writes tombstones, so a legacy one cannot appear here;
+    // treating it as an empty slot keeps a hand-built state from trapping a key.
+    if (slot.tombstone) {
+      state.table[at] = carried;
+      state.count += 1;
+      state.tombstones -= 1;
+      if (sink) {
+        sink.push(
+          frame(
+            state,
+            `Bucket ${at} is a tombstone, so ${carried.key}=${carried.value} reuses it after ${probeWord(probes)}.`,
+            { inserted: [`e:${carried.key}`], active: [`b${at}`] },
+            detail('insert', { index: at, probes, distance, swaps, reusedTombstone: true }),
+          ),
+        );
+      }
+      return { placed: true, updated: false, probes, collisions, swaps, slot: at };
+    }
+
+    if (slot.key === carried.key) {
+      const from = slot.value;
+      slot.value = carried.value;
+      if (sink) {
+        sink.push(
+          frame(
+            state,
+            `Bucket ${at} already holds ${carried.key}; update its value from ${from} to ${carried.value}. No duplicate key is created.`,
+            { found: [`e:${carried.key}`] },
+            detail('update', { index: at, probes, distance }),
+          ),
+        );
+      }
+      return { placed: true, updated: true, probes, collisions, swaps, slot: at };
+    }
+
+    const residentHome = bucketIndex(state.hashFn, slot.key, state.capacity, state.universal);
+    const residentDistance = (at - residentHome + state.capacity) % state.capacity;
+    collisions += 1;
+
+    if (distance > residentDistance) {
+      const incoming = carried;
+      const displaced = { key: slot.key, value: slot.value };
+      state.table[at] = incoming;
+      carried = displaced;
+      home = residentHome;
+      swaps += 1;
+      if (sink) {
+        sink.push(
+          frame(
+            state,
+            `Bucket ${at} holds ${displaced.key} at distance ${residentDistance}, less than ${incoming.key}'s distance ${distance}: Robin Hood takes the slot. ${displaced.key}=${displaced.value} is displaced and keeps probing.`,
+            { swap: [`e:${incoming.key}`], active: [`b${at}`] },
+            detail('swap', { index: at, probes, distance, residentDistance, displaced: displaced.key, swaps }),
+          ),
+        );
+      }
+      continue;
+    }
+
+    if (sink) {
+      sink.push(
+        frame(
+          state,
+          `Bucket ${at} holds ${slot.key} at distance ${residentDistance}, and ${carried.key} is at distance ${distance}, so it does not jump the queue. Probe on.`,
+          { collision: [`b${at}`] },
+          detail('collision', { index: at, probes, distance, residentDistance }),
+        ),
+      );
+    }
+  }
+
+  if (sink) {
+    sink.push(
+      frame(
+        state,
+        `Every slot was inspected in ${probeWord(probes)} and none is free, so ${key} cannot be inserted. Rehash or grow the table.`,
+        {},
+        detail('failed', { probes }),
+      ),
+    );
+  }
+  return { placed: false, updated: false, probes, collisions, swaps, slot: -1 };
+}
+
 /** Place or update one entry. `sink` is an array of frames, or null when the
  *  caller only wants the counters (the strategy comparison does that). */
 function insertCore(state, key, value, sink) {
@@ -663,6 +845,8 @@ function insertCore(state, key, value, sink) {
     }
     return { placed: true, updated: false, probes, collisions, slot: base };
   }
+
+  if (state.strategy === 'robin-hood') return insertRobinHood(state, key, value, sink);
 
   const step = state.strategy === 'double' ? hashStep(state.hashFn, key, state.capacity) : 0;
   const seen = new Set();
@@ -778,6 +962,82 @@ function insertCore(state, key, value, sink) {
 
 /* --- Search, contains and deletion ---------------------------------------- */
 
+function lookupRobinHood(state, key, sink, forContains) {
+  const base = bucketIndex(state.hashFn, key, state.capacity, state.universal);
+  const detail = (kind, extra) => detailOf(state, kind, { key, index: base, ...extra });
+  const missText = forContains
+    ? `${key} is not in the table, so contains(${key}) is false.`
+    : `${key} is not in the table.`;
+  let probes = 0;
+  if (sink) sink.push(frame(state, hashLine(state, key, base), { active: [`b${base}`] }, hashDetail(state, key, base)));
+
+  for (let i = 0; i < state.capacity; i += 1) {
+    const at = (base + i) % state.capacity;
+    probes += 1;
+    const slot = state.table[at];
+
+    if (slot === null) {
+      if (sink) {
+        sink.push(
+          frame(state, `Bucket ${at} is empty, so the probe stops: ${missText}`, {}, detail('missing', { index: at, probes })),
+        );
+      }
+      return { found: false, probes, base, slot: at };
+    }
+
+    if (slot.tombstone) continue;
+
+    if (slot.key === key) {
+      if (sink) {
+        sink.push(
+          frame(
+            state,
+            forContains
+              ? `Bucket ${at} holds ${key}=${slot.value}; contains(${key}) is true.`
+              : `Found ${key}=${slot.value} in bucket ${at} after ${probeWord(probes)}.`,
+            { found: [`e:${key}`] },
+            detail('found', { index: at, probes, value: slot.value }),
+          ),
+        );
+      }
+      return { found: true, entry: slot, probes, base, slot: at };
+    }
+
+    const residentDistance = probeDistance(state.hashFn, slot.key, at, state.capacity, state.universal);
+    if (residentDistance < i) {
+      if (sink) {
+        sink.push(
+          frame(
+            state,
+            `Bucket ${at} holds ${slot.key} at distance ${residentDistance}, less than this probe's distance ${i}. Robin Hood's invariant says no later key can be further out, so the probe stops early: ${missText}`,
+            {},
+            detail('missing', { index: at, probes, distance: i, residentDistance }),
+          ),
+        );
+      }
+      return { found: false, probes, base, slot: at };
+    }
+
+    if (sink) {
+      sink.push(
+        frame(
+          state,
+          `Bucket ${at} holds ${slot.key} at distance ${residentDistance}, not ${key}: collision, keep probing.`,
+          { collision: [`b${at}`] },
+          detail('collision', { index: at, probes, distance: i, residentDistance }),
+        ),
+      );
+    }
+  }
+
+  if (sink) {
+    sink.push(
+      frame(state, `The probe sequence repeated without finding ${key}. ${missText}`, {}, detail('missing', { probes })),
+    );
+  }
+  return { found: false, probes, base };
+}
+
 function lookupCore(state, key, sink, forContains = false) {
   const base = bucketIndex(state.hashFn, key, state.capacity, state.universal);
   const detail = (kind, extra) => detailOf(state, kind, { key, index: base, ...extra });
@@ -823,6 +1083,8 @@ function lookupCore(state, key, sink, forContains = false) {
     }
     return { found: false, probes, base };
   }
+
+  if (state.strategy === 'robin-hood') return lookupRobinHood(state, key, sink, forContains);
 
   const step = state.strategy === 'double' ? hashStep(state.hashFn, key, state.capacity) : 0;
   const seen = new Set();
@@ -929,6 +1191,45 @@ function deleteCore(state, key, sink) {
           detailOf(state, 'delete', { key, index: found.base, probes: found.probes }),
         ),
       );
+    }
+    return { deleted: true, probes: found.probes };
+  }
+
+  if (state.strategy === 'robin-hood') {
+    // Backward shift: empty the hole, then slide later cluster members back one
+    // slot while their distance stays positive. No tombstone is created.
+    let hole = found.slot;
+    state.table[hole] = null;
+    state.count -= 1;
+    if (sink) {
+      sink.push(
+        frame(
+          state,
+          `Delete ${key} from bucket ${hole}. Robin Hood does not write a tombstone: keys later in the cluster shift back one slot, so a lookup can still stop at an empty slot.`,
+          { deleted: [`b${hole}`] },
+          detailOf(state, 'delete', { key, index: hole, probes: found.probes }),
+        ),
+      );
+    }
+    for (let moved = 0; moved < state.capacity; moved += 1) {
+      const next = (hole + 1) % state.capacity;
+      const slot = state.table[next];
+      if (slot === null || slot.tombstone) break;
+      const distance = probeDistance(state.hashFn, slot.key, next, state.capacity, state.universal);
+      if (distance === 0) break;
+      state.table[hole] = slot;
+      state.table[next] = null;
+      if (sink) {
+        sink.push(
+          frame(
+            state,
+            `Shift ${slot.key}=${slot.value} back from bucket ${next} to bucket ${hole} (it was ${distance} ${distance === 1 ? 'slot' : 'slots'} from home). Its distance drops by one and it stays reachable.`,
+            { swap: [`e:${slot.key}`], active: [`b${hole}`] },
+            detailOf(state, 'shift', { key: slot.key, index: hole, from: next, distance: distance - 1, probes: found.probes }),
+          ),
+        );
+      }
+      hole = next;
     }
     return { deleted: true, probes: found.probes };
   }
@@ -1283,6 +1584,69 @@ export function findCollision(hashFn, capacity, keys = [], params) {
     seen.set(index, key);
   }
   return null;
+}
+
+/* --- Engine previews for the prediction challenges ------------------------ */
+
+/* Both previews run the same insert/growth code as the lab on a deep copy of
+ * the state. Nothing here estimates: the answer a learner checks is the answer
+ * the real operation would produce. */
+
+const cloneState = (state) => JSON.parse(JSON.stringify(state));
+
+const previewKeyError = (key) => {
+  const text = String(key ?? '').trim();
+  if (!text) return { error: 'Type a key first.' };
+  if (text.length > 24) return { error: 'Keys are limited to 24 characters in this lab.' };
+  return { key: text };
+};
+
+/** The real insert's outcome, without changing the table. */
+export function previewInsert(state, key, value = '1') {
+  const checked = previewKeyError(key);
+  if (checked.error) return checked;
+  const copy = cloneState(state);
+  const result = insertCore(copy, checked.key, String(value), null);
+  const home = bucketIndex(state.hashFn, checked.key, state.capacity, state.universal);
+  return {
+    key: checked.key,
+    home,
+    nextProbe: (home + 1) % state.capacity,
+    placed: result.placed,
+    updated: result.updated,
+    slot: result.slot,
+    probes: result.probes,
+    swaps: result.swaps ?? 0,
+    grows: copy.capacity !== state.capacity,
+    capacity: copy.capacity,
+  };
+}
+
+/** The real insert plus the real growth policy: did the table grow, and to
+ *  what? A duplicate update never triggers the growth check, exactly as in the
+ *  insert operation. */
+export function previewResize(state, key, value = '1') {
+  const checked = previewKeyError(key);
+  if (checked.error) return checked;
+  const copy = cloneState(state);
+  const from = copy.capacity;
+  const result = insertCore(copy, checked.key, String(value), null);
+  if (result.placed && !result.updated) maybeGrow(copy, []);
+  const afterCount = state.count + (result.placed && !result.updated ? 1 : 0);
+  return {
+    key: checked.key,
+    placed: result.placed,
+    updated: result.updated,
+    grows: copy.capacity !== from,
+    from,
+    to: copy.capacity,
+    threshold: state.threshold,
+    countBefore: state.count,
+    countAfter: afterCount,
+    loadBefore: state.count / from,
+    loadAfter: afterCount / from,
+    growsByPolicy: afterCount / from > state.threshold,
+  };
 }
 
 /** A small set of candidate keys used by the collision detective and the

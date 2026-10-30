@@ -23,6 +23,9 @@ import {
   hashBreakdown,
   hashStep,
   nextCapacity,
+  previewInsert,
+  previewResize,
+  probeDistance,
   rawHash,
   universalParams,
   universalProblem,
@@ -260,6 +263,157 @@ test("double hashing uses a non-zero, coprime step and reaches every slot", () =
   assertEveryKeyReadable(current, ["7", "14", "21", "35", "42", "49"].map((key) => ({ key, value: key })));
 });
 
+test("Robin Hood inserts displace residents instead of relabelling linear probing", () => {
+  let state = fresh({ strategy: "robin-hood", table: Array(7).fill(null), threshold: 0.95 });
+  const runs = [];
+  for (const key of ["1", "2", "8", "15"]) {
+    const result = ok(state, "insert", { key, value: key });
+    runs.push(result);
+    state = result.state;
+  }
+
+  // 1, 8 and 15 all hash to bucket 1. When a carried key has probed further
+  // than the resident, it takes the slot and the resident moves outward.
+  assert.deepEqual(state.table.map((slot) => slot?.key ?? null), [null, "1", "8", "15", "2", null, null]);
+  assert.equal(state.count, 4);
+  assert.equal(state.tombstones, 0);
+
+  const swaps = runs.flatMap((result) => result.frames).filter((entry) => entry.detail?.kind === "swap");
+  assert.ok(swaps.length >= 2, "the later inserts really displace a resident");
+  assert.ok(swaps.every((entry) => entry.marks.swap.length === 1), "a swap is its own mark, not a relabelled collision");
+  assert.match(swaps[0].text, /Robin Hood takes the slot/);
+  assert.match(swaps[0].text, /is displaced and keeps probing/);
+
+  const cluster = [1, 2, 3, 4].map((index) =>
+    probeDistance(state.hashFn, state.table[index].key, index, state.capacity),
+  );
+  assert.deepEqual(cluster, [0, 1, 2, 2], "distance grows along the cluster and never decreases");
+
+  const updated = ok(state, "update", { key: "8", value: "80" });
+  assert.equal(updated.state.count, 4, "an update is not a second key");
+  assert.equal(updated.state.table[2].value, "80");
+  assert.match(updated.frames.at(-1).text, /Update 8 from 8 to 80/);
+  assertEveryKeyReadable(updated.state, [
+    { key: "1", value: "1" },
+    { key: "2", value: "2" },
+    { key: "15", value: "15" },
+    { key: "8", value: "80" },
+  ]);
+});
+
+test("Robin Hood homes and distances wrap around the end of the table", () => {
+  let state = fresh({ strategy: "robin-hood", table: Array(7).fill(null) });
+  for (const key of ["0", "5", "6", "13"]) state = ok(state, "insert", { key, value: key }).state;
+  assert.equal(state.table[5].key, "5");
+  assert.equal(state.table[6].key, "6");
+  assert.equal(state.table[0].key, "13", "13 hashes to 6, probes past 6 into 0 and displaces 0");
+  assert.equal(state.table[1].key, "0", "the displaced key wraps forward to slot 1");
+  assert.equal(probeDistance("division", "13", 0, 7), 1);
+  assert.equal(probeDistance("division", "0", 1, 7), 1);
+  assertEveryKeyReadable(state, [
+    { key: "0", value: "0" },
+    { key: "5", value: "5" },
+    { key: "6", value: "6" },
+    { key: "13", value: "13" },
+  ]);
+});
+
+test("Robin Hood lookup stops when the resident is closer to home than the probe", () => {
+  let state = fresh({ strategy: "robin-hood", table: Array(7).fill(null) });
+  for (const key of ["5", "6", "7"]) state = ok(state, "insert", { key, value: key }).state;
+
+  const missing = ok(state, "search", { key: "13" });
+  const last = missing.frames.at(-1);
+  assert.equal(last.detail.kind, "missing");
+  assert.equal(last.detail.index, 0);
+  assert.match(last.text, /distance 0, less than this probe's distance 1/);
+  assert.match(last.text, /not in the table/);
+  assert.match(last.text, /stops early/);
+});
+
+test("Robin Hood deletion shifts later cluster members back without a tombstone", () => {
+  let state = fresh({ strategy: "robin-hood", table: Array(7).fill(null) });
+  for (const key of ["1", "2", "8", "15"]) state = ok(state, "insert", { key, value: key }).state;
+
+  const deleted = ok(state, "delete", { key: "8" });
+  assert.equal(deleted.state.count, 3);
+  assert.equal(deleted.state.tombstones, 0, "no tombstone is written");
+  assert.equal(deleted.state.table[1].key, "1");
+  assert.equal(deleted.state.table[2].key, "15");
+  assert.equal(deleted.state.table[3].key, "2");
+  assert.equal(deleted.state.table[4], null);
+  const shifts = deleted.frames.filter((entry) => entry.detail?.kind === "shift");
+  assert.equal(shifts.length, 2);
+  assert.match(shifts[0].text, /Shift 15=15 back from bucket 3 to bucket 2/);
+  assert.match(shifts[1].text, /Shift 2=2 back from bucket 4 to bucket 3/);
+  assertEveryKeyReadable(deleted.state, [
+    { key: "1", value: "1" },
+    { key: "2", value: "2" },
+    { key: "15", value: "15" },
+  ]);
+
+  const again = ok(deleted.state, "delete", { key: "1" });
+  assert.equal(again.state.table[1].key, "15");
+  assert.equal(again.state.table[2].key, "2");
+  assert.equal(again.state.count, 2);
+  assert.equal(again.state.tombstones, 0);
+  assertEveryKeyReadable(again.state, [
+    { key: "15", value: "15" },
+    { key: "2", value: "2" },
+  ]);
+});
+
+test("Robin Hood survives growth and rehashing with every key readable", () => {
+  let state = fresh({ strategy: "robin-hood", capacity: 7, threshold: 0.75, table: Array(7).fill(null) });
+  const pairs = [];
+  for (const key of ["1", "8", "15", "22", "29", "36", "43"]) {
+    pairs.push({ key, value: key });
+    state = ok(state, "insert", { key, value: key }).state;
+  }
+  assert.ok(state.capacity > 7, "the workload grows the table");
+  assert.equal(state.count, pairs.length);
+  assert.equal(state.tombstones, 0);
+  assertEveryKeyReadable(state, pairs);
+
+  for (const [index, slot] of state.table.entries()) {
+    if (!slot) continue;
+    assert.equal(
+      probeDistance(state.hashFn, slot.key, index, state.capacity),
+      ((index - bucketIndex(state.hashFn, slot.key, state.capacity)) % state.capacity + state.capacity) % state.capacity,
+    );
+  }
+
+  const rehashed = ok(state, "rehash", {});
+  assert.equal(rehashed.state.count, pairs.length);
+  assertEveryKeyReadable(rehashed.state, pairs);
+});
+
+test("Robin Hood reports a full table without losing a stored key", () => {
+  const full = fresh({
+    strategy: "robin-hood",
+    table: Array.from({ length: 7 }, (_, index) => ({ key: String(index), value: String(index) })),
+    count: 7,
+    threshold: 1,
+  });
+  const result = run(full, "insert", { key: "7", value: "7" });
+  assert.ok(!result.error);
+  assert.equal(result.state.count, 7);
+  assert.equal(result.state.table.filter(Boolean).length, 7);
+  assert.match(result.frames.at(-1).text, /cannot be inserted/);
+  assert.ok(!result.state.table.some((slot) => slot?.key === "7"), "a failed insert places no new key");
+  for (let index = 0; index < 7; index += 1) {
+    assert.equal(
+      result.state.table[index].key,
+      String(index),
+      "a failed insert does not displace a stored key",
+    );
+  }
+
+  const duplicate = ok(full, "insert", { key: "3", value: "30" });
+  assert.equal(duplicate.state.count, 7, "inserting an existing key still updates on a full table");
+  assert.equal(duplicate.state.table[3].value, "30");
+});
+
 test("crossing the load threshold rehashes every key into a bigger table", () => {
   let state = fresh({ capacity: 7, threshold: 0.75 });
   const pairs = [];
@@ -482,8 +636,8 @@ test("a dataset may name the strategy it needs to be visible", () => {
 
 test("the strategy comparison uses the same workload and reports real counts", () => {
   const rows = compareStrategies({ keys: ["ab", "ba", "ac", "ca", "bb"], capacity: 7, hashFn: "division" });
-  assert.equal(rows.length, 4);
-  assert.equal(new Set(rows.map((row) => row.id)).size, 4);
+  assert.equal(rows.length, 5);
+  assert.equal(new Set(rows.map((row) => row.id)).size, 5);
   for (const row of rows) {
     assert.equal(row.capacity, 7);
     assert.equal(row.keys, 5);
@@ -495,6 +649,91 @@ test("the strategy comparison uses the same workload and reports real counts", (
   const again = compareStrategies({ keys: ["ab", "ba", "ac", "ca", "bb"], capacity: 7, hashFn: "division" });
   assert.deepEqual(rows, again);
   assert.ok(rows.find((row) => row.id === "chaining").collisions > 0, "the colliding keys really collide");
+});
+
+test("previewInsert answers with the real insert and leaves the table untouched", () => {
+  for (const { id } of HASH_STRATEGIES) {
+    let state = fresh({
+      strategy: id,
+      table: id === "chaining" ? Array.from({ length: 7 }, () => []) : Array(7).fill(null),
+      threshold: 1,
+    });
+    for (const key of ["1", "2", "8"]) state = ok(state, "insert", { key, value: key }).state;
+    const before = JSON.parse(JSON.stringify(state));
+    const preview = previewInsert(state, "15", "15");
+    assert.ok(!preview.error, id);
+    assert.deepEqual(state, before, `${id}: a preview leaves the table untouched`);
+    const real = ok(state, "insert", { key: "15", value: "15" });
+    const placed = real.frames.find((entry) => entry.detail?.kind === "insert");
+    assert.equal(preview.slot, placed.detail.index, `${id}: the preview slot is the real slot`);
+    assert.equal(preview.placed, true);
+    assert.equal(preview.home, bucketIndex(state.hashFn, "15", state.capacity));
+    assert.equal(preview.probes, placed.detail.probes, `${id}: the preview probe count is real`);
+
+    const duplicate = previewInsert(state, "1", "9");
+    assert.equal(duplicate.updated, true, `${id}: an existing key is an update`);
+    assert.equal(duplicate.placed, true);
+    const realUpdate = ok(state, "update", { key: "1", value: "9" });
+    assert.equal(duplicate.slot, realUpdate.frames.at(-1).detail.index, `${id}: the update slot is real`);
+  }
+});
+
+test("previewResize follows the real growth policy at the boundary and for updates", () => {
+  let state = fresh({ capacity: 10, threshold: 0.5, table: Array.from({ length: 10 }, () => []) });
+  for (const key of ["a", "b", "c", "d"]) state = ok(state, "insert", { key, value: "1" }).state;
+  assert.equal(state.count, 4);
+  assert.equal(state.capacity, 10);
+
+  const boundary = previewResize(state, "e");
+  assert.equal(boundary.loadAfter, 0.5);
+  assert.equal(boundary.growsByPolicy, false, "exactly at the threshold does not grow");
+  assert.equal(boundary.grows, false);
+  assert.equal(boundary.to, 10);
+
+  state = ok(state, "insert", { key: "e", value: "1" }).state;
+  assert.equal(state.capacity, 10, "the boundary insert did not grow");
+  const over = previewResize(state, "f");
+  assert.equal(over.loadAfter, 0.6);
+  assert.equal(over.growsByPolicy, true);
+  assert.equal(over.grows, true);
+  assert.equal(over.to, 20);
+
+  const duplicate = previewResize(state, "e");
+  assert.equal(duplicate.updated, true);
+  assert.equal(duplicate.grows, false, "an update never runs the growth check");
+  assert.equal(duplicate.countAfter, state.count);
+
+  for (const { id } of HASH_STRATEGIES) {
+    let strategyState = fresh({
+      strategy: id,
+      capacity: 7,
+      threshold: 0.1,
+      table: id === "chaining" ? Array.from({ length: 7 }, () => []) : Array(7).fill(null),
+    });
+    strategyState = ok(strategyState, "insert", { key: "a", value: "1" }).state;
+    const grows = previewResize(strategyState, "b");
+    assert.equal(grows.grows, true, `${id}: the real policy grows past the threshold`);
+    assert.ok(grows.to > grows.from, `${id}: the target capacity is larger`);
+  }
+});
+
+test("previews refuse a bad key and never claim a full table can grow", () => {
+  const full = fresh({
+    strategy: "robin-hood",
+    table: Array.from({ length: 7 }, (_, index) => ({ key: String(index), value: String(index) })),
+    count: 7,
+    threshold: 1,
+  });
+  const placement = previewInsert(full, "7");
+  assert.equal(placement.placed, false);
+  assert.equal(placement.slot, -1);
+  assert.equal(placement.grows, false);
+  const resized = previewResize(full, "7");
+  assert.equal(resized.grows, false);
+  assert.equal(resized.countAfter, 7);
+
+  assert.match(previewInsert(full, "").error, /Type a key/);
+  assert.match(previewResize(full, "x".repeat(25)).error, /24 characters/);
 });
 
 test("the collision detective finds a deterministic pair without randomness", () => {
@@ -570,7 +809,7 @@ test("a different seed moves some buckets, and collisions are still possible", (
   const pair = findCollision("universal", 11, CANDIDATE_KEYS, universalParams(17));
   if (pair) assert.equal(bucketIndex("universal", pair.a, 11, universalParams(17)), pair.index);
   const rows = compareStrategies({ keys, capacity: 11, hashFn: "universal", params: universalParams(17) });
-  assert.equal(rows.length, 4);
+  assert.equal(rows.length, 5);
   assert.ok(rows.every((row) => Number.isFinite(row.loadFactor)));
 });
 

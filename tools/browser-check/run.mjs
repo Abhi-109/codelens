@@ -1413,6 +1413,8 @@ const readLab = (browser) =>
       tombstones: all(".ds-slot-tombstone"),
       hashFound: all(".ds-slot.is-found, .ds-chain-entry.is-found"),
       hashCollisions: all(".ds-slot.is-collision, .ds-chain-entry.is-collision"),
+      swap: all(".ds-slot.is-swap, .ds-chain-entry.is-swap"),
+      distances: all(".ds-slot-distance"),
       buckets: all(".ds-bucket"),
       journey: text(".ds-journey"),
       hashNote: text(".ds-hash .ds-note"),
@@ -1428,6 +1430,7 @@ const readLab = (browser) =>
       strategyRows: [...(document.querySelector(".ds-table")?.querySelectorAll("tbody tr") ?? [])].map(
         (row) => row.textContent,
       ),
+      extraCards: all(".ds-extra-card"),
       error: text(".ds-error"),
       stepMax: slider ? Number(slider.max) : 0,
       stepValue: slider ? Number(slider.value) : 0,
@@ -1689,10 +1692,11 @@ async function productPages(browser) {
     emptyHash.slots.join(","),
   );
   check(
-    emptyHash.strategyRows.length === 4 &&
+    emptyHash.strategyRows.length === 5 &&
       emptyHash.strategyRows[0].includes("Separate chaining") &&
-      emptyHash.strategyRows[3].includes("Double hashing"),
-    "the strategy comparison measures all four strategies",
+      emptyHash.strategyRows[3].includes("Double hashing") &&
+      emptyHash.strategyRows[4].includes("Robin Hood"),
+    "the strategy comparison measures all five strategies",
     emptyHash.strategyRows.join(" / "),
   );
   await browser.clickText("Insert / update");
@@ -1904,6 +1908,159 @@ async function productPages(browser) {
   );
   await strategyBuckets("quadratic", 1, "ba=2");
   await strategyBuckets("double", 3, "ba=2");
+
+  // Robin Hood: a real displacement swap, per-slot distance, lookup and a
+  // backward-shift delete (no tombstone).
+  await openRoute(browser, "/visualizer/data-structures");
+  await openRoute(browser, "/visualizer/data-structures/hash-table?preset=robinhood");
+  await browser.waitFor('document.querySelector(".ds-buckets")', 10000, "the Robin Hood dataset");
+  const robinRun = await readLab(browser);
+  let swapView = null;
+  for (let step = 0; step <= robinRun.stepMax; step += 1) {
+    await browser.setValue('input[aria-label="Lab step"]', step);
+    await sleep(30);
+    const seen = await readLab(browser);
+    if (seen.swap.length && seen.text?.includes("displaced")) {
+      swapView = seen;
+      break;
+    }
+  }
+  check(
+    Boolean(swapView) && swapView.swap.length === 1,
+    "Robin Hood records a real displacement swap",
+    swapView ? `${swapView.text} | ${swapView.swap.join(",")}` : "no swap frame",
+  );
+  await browser.setValue('input[aria-label="Lab step"]', robinRun.stepMax);
+  await sleep(120);
+  const robinEnd = await readLab(browser);
+  check(
+    robinEnd.buckets[1]?.includes("1=one") &&
+      robinEnd.buckets[2]?.includes("8=eight") &&
+      robinEnd.buckets[3]?.includes("15=fifteen") &&
+      robinEnd.buckets[4]?.includes("2=two") &&
+      robinEnd.distances.join(",") === "d0,d1,d2,d2",
+    "Robin Hood stores the displaced keys with honest distances",
+    `${robinEnd.buckets.slice(1, 5).join(" / ")} | ${robinEnd.distances.join(",")}`,
+  );
+  await browser.setValue('input[aria-label="Search Key"]', "2");
+  await browser.clickText("Search");
+  await sleep(150);
+  await browser.setValue('input[aria-label="Lab step"]', (await readLab(browser)).stepMax);
+  await sleep(100);
+  check(
+    (await readLab(browser)).text?.includes("Found 2=two"),
+    "a displaced key is still found",
+    String((await readLab(browser)).text),
+  );
+  await browser.setValue('input[aria-label="Delete Key"]', "1");
+  await browser.clickText("Delete");
+  await sleep(150);
+  await browser.setValue('input[aria-label="Lab step"]', (await readLab(browser)).stepMax);
+  await sleep(120);
+  const robinDeleted = await readLab(browser);
+  check(
+    robinDeleted.tombstones.length === 0 &&
+      robinDeleted.buckets[1]?.includes("8=eight") &&
+      robinDeleted.buckets[2]?.includes("15=fifteen") &&
+      robinDeleted.buckets[3]?.includes("2=two"),
+    "Robin Hood deletes by shifting the cluster back, not with a tombstone",
+    `${robinDeleted.buckets.slice(1, 4).join(" / ")} | tombstones ${robinDeleted.tombstones.length}`,
+  );
+
+  // Prediction challenges: the cards answer with the real engine insert and
+  // the real growth policy, and replay runs the real operation.
+  await openRoute(browser, "/visualizer/data-structures");
+  await openRoute(browser, "/visualizer/data-structures/hash-table");
+  await browser.waitFor('document.querySelector(".ds-buckets")', 10000, "a fresh hash table");
+  await browser.setValue('input[aria-label="Predict next slot key"]', "apple");
+  await browser.setValue('input[aria-label="Predicted slot"]', 3);
+  await browser.clickText("Check slot");
+  await sleep(100);
+  check(
+    (await readLab(browser)).feedback?.includes("lands in slot 5, not 3"),
+    "the slot prediction is checked against the engine's real placement",
+    String((await readLab(browser)).feedback),
+  );
+  await browser.setValue('input[aria-label="Predicted slot"]', 5);
+  await browser.clickText("Check slot");
+  await sleep(100);
+  check(
+    (await readLab(browser)).feedback?.includes("Correct: apple lands in slot 5"),
+    "a correct slot prediction is recognised",
+    String((await readLab(browser)).feedback),
+  );
+  await browser.clickText("Replay placement");
+  await sleep(200);
+  await browser.setValue('input[aria-label="Lab step"]', (await readLab(browser)).stepMax);
+  await sleep(120);
+  const replayed = await readLab(browser);
+  check(
+    replayed.slots.some((slot) => slot === "apple=1"),
+    "replaying a prediction runs the real insert",
+    `${replayed.readout} | ${replayed.slots.join(",")}`,
+  );
+
+  // Robin Hood's prompt tells the learner to predict the final slot.
+  await browser.click(".ds-advanced summary");
+  await sleep(100);
+  const pickStrategy = (value) =>
+    browser.evaluate(`(() => {
+      const el = document.querySelector('select[aria-label="Apply settings Collision strategy"]');
+      if (!el) return false;
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set;
+      setter.call(el, ${JSON.stringify(value)});
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      return el.value;
+    })()`);
+  await pickStrategy("robin-hood");
+  await browser.clickText("Apply settings");
+  await sleep(150);
+  const robinPrompt = (await readLab(browser)).extraCards.join(" | ");
+  check(
+    robinPrompt.includes("final slot, not the next probe"),
+    "Robin Hood's challenge distinguishes the next probe from the final slot",
+    robinPrompt,
+  );
+
+  // A resize prediction uses the real growth threshold and the update rule.
+  await openRoute(browser, "/visualizer/data-structures");
+  await openRoute(browser, "/visualizer/data-structures/hash-table");
+  await browser.waitFor('document.querySelector(".ds-buckets")', 10000, "a fresh hash table");
+  await browser.click(".ds-advanced summary");
+  await sleep(100);
+  await pick('select[aria-label="Apply settings Hash function"]', "division");
+  await browser.setValue('input[aria-label="Apply settings Load threshold"]', 0.1);
+  await browser.clickText("Apply settings");
+  await sleep(150);
+  await browser.setValue('input[aria-label="Resize prediction key"]', "apple");
+  await browser.clickText("Yes, it grows");
+  await sleep(100);
+  check(
+    (await readLab(browser)).feedback?.includes("Correct") &&
+      (await readLab(browser)).feedback?.includes("grows from 7 to 14"),
+    "a resize prediction uses the real growth threshold",
+    String((await readLab(browser)).feedback),
+  );
+  await browser.clickText("Replay resize");
+  await sleep(200);
+  await browser.setValue('input[aria-label="Lab step"]', (await readLab(browser)).stepMax);
+  await sleep(120);
+  const grew = await readLab(browser);
+  check(
+    grew.buckets.length === 14 && grew.slots.some((slot) => slot === "apple=1"),
+    "replaying a resize grows the table for real",
+    `${grew.buckets.length} buckets | ${grew.slots.join(",")}`,
+  );
+  await browser.setValue('input[aria-label="Resize prediction key"]', "apple");
+  await browser.clickText("No, it stays");
+  await sleep(100);
+  check(
+    (await readLab(browser)).feedback?.includes("Correct") &&
+      (await readLab(browser)).feedback?.includes("already stored"),
+    "a duplicate update never runs the growth check",
+    String((await readLab(browser)).feedback),
+  );
+
   const tombed = await strategyBuckets("deletions", 4, "ant=1");
   check(
     tombed.tombstones.length === 2 && tombed.text.includes("tombstone"),
