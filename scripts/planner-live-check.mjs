@@ -7,8 +7,6 @@
 // This script does NOT fake a live test: if credentials are missing it exits 1
 // with a clear message and performs no provider request.
 
-import { readFileSync } from "node:fs";
-
 const env = process.env;
 const key = (env.PLANNER_PROVIDER_KEY ?? "").trim();
 const url = (env.PLANNER_PROVIDER_URL ?? "").trim() || "https://api.openai.com/v1/chat/completions";
