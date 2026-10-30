@@ -49,13 +49,6 @@ import { loadViz, saveViz } from "./visualizer/vizMode.js";
 import { clampStep } from "./visualizer/workspace.js";
 import { detectConcepts } from "./planner/concepts.js";
 import { describePlan, planVisualization } from "./planner/planner.js";
-import {
-  buildAiRequest,
-  createPlanCache,
-  isAiResultCurrent,
-  planWithAi,
-} from "./planner/aiPlanner.js";
-import { createAiProvider, plannerEndpoint } from "./planner/aiProvider.js";
 import { ExecutionSessionProvider } from "./visualizer/session/ExecutionSessionProvider.jsx";
 import { useExecutionSession } from "./visualizer/session/useExecutionSession.js";
 import { createInitialSession, sessionActions } from "./visualizer/session/session.js";
@@ -288,10 +281,6 @@ function Workspace() {
   const [planState, setPlanState] = useState(null);
   const pinnedViz = useRef(false);
   const planRun = useRef(null);
-  const aiProvider = useRef(null);
-  const aiCache = useRef(null);
-  // One in-flight AI request at a time: a new run, an edit or unmount cancels it.
-  const aiAbort = useRef(null);
   const reducedMotion = useReducedMotion();
 
   const timer = useRef(null);
@@ -315,9 +304,6 @@ function Workspace() {
 
   useEffect(() => onEngineStatus(setEngine), []);
 
-  // Unmounting ends the optional request; nothing may set state afterwards.
-  useEffect(() => () => aiAbort.current?.abort(), []);
-
   useEffect(() => saveColumns(columns), [columns]);
 
   // Both preferences are written through a handler, so a blocked or missing
@@ -334,8 +320,6 @@ function Workspace() {
     if (chosen === "textbook" && mode !== "textbook") setViz("flow");
   };
   const setSource = (next) => {
-    // An answer for the old source is now pointless, so stop waiting for it.
-    aiAbort.current?.abort();
     sourceRef.current = next;
     dispatch(sessionActions.setSource(next));
   };
@@ -548,8 +532,6 @@ function Workspace() {
     const gate = runGate.current;
     const runSource = sourceRef.current;
     const run = gate.begin(runSource);
-    // The previous run's AI request must not compete with this one.
-    aiAbort.current?.abort();
     dispatch(sessionActions.startRun());
     setPlanState(null);
     planRun.current = null;
@@ -600,48 +582,6 @@ function Workspace() {
       planRun.current = run;
       setPlanState(nextPlan);
       if (!pinnedViz.current) dispatch(sessionActions.selectViz(nextPlan.primary));
-
-      // AI is optional and late by design: the deterministic canvas is already
-      // on screen. A validated answer may refine it only for this same run.
-      const endpoint = plannerEndpoint();
-      if (endpoint) {
-        // A changed endpoint is a different deployment; do not reuse its answers.
-        if (!aiProvider.current || aiProvider.current.endpoint !== endpoint) {
-          aiProvider.current = createAiProvider({ endpoint });
-        }
-        if (!aiCache.current) aiCache.current = createPlanCache();
-        const controller = new AbortController();
-        aiAbort.current = controller;
-        const request = buildAiRequest({
-          source: runSource,
-          analysis,
-          plan: nextPlan,
-          hasFlow: Boolean(f),
-        });
-        planWithAi({
-          provider: aiProvider.current,
-          request,
-          analysis,
-          deterministic: nextPlan,
-          hasFlow: Boolean(f),
-          cache: aiCache.current,
-          signal: controller.signal,
-        }).then(({ plan: aiPlan }) => {
-          if (!aiPlan || controller.signal.aborted) return;
-          if (!gate.isLatest(run) || !gate.isCurrent(run, sourceRef.current)) return;
-          if (
-            !isAiResultCurrent({
-              expectedRun: run,
-              currentRun: planRun.current,
-              pinned: pinnedViz.current,
-            })
-          ) {
-            return;
-          }
-          setPlanState(aiPlan);
-          dispatch(sessionActions.selectViz(aiPlan.primary));
-        });
-      }
 
       setWatched(null);
       setComparison(initialComparison());

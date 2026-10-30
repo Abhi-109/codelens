@@ -386,7 +386,7 @@ async function planner(browser) {
     "the why-line disappears after a manual choice",
     String(await planHint(browser)),
   );
-  await browser.clickText("Call tree");
+  await browser.clickText("Motion");
   await sleep(300);
   check(
     (await browser.evaluate(`Number(document.querySelector('input[aria-label="Step"]').value)`)) ===
@@ -451,155 +451,6 @@ async function planner(browser) {
 
   await reloadWorkspace(browser);
 }
-
-// --- planner: optional AI through a mock endpoint ---------------------------
-
-const setPlannerCase = (browser, scenario) =>
-  browser.evaluate(
-    scenario
-      ? `window.__CODELENS_PLANNER_ENDPOINT__ = ${JSON.stringify(`/api/plan?case=${scenario}`)}`
-      : "window.__CODELENS_PLANNER_ENDPOINT__ = null",
-  );
-
-const openEditor = (browser) =>
-  browser.evaluate(`(() => {
-    const edit = [...document.querySelectorAll("button")].find(
-      (button) => button.textContent.trim() === "Edit",
-    );
-    if (edit) edit.click();
-    return Boolean(edit);
-  })()`);
-
-async function plannerAi(browser) {
-  console.log("\n--- planner AI: mock endpoint, validation and lifecycle ---");
-  await reloadWorkspace(browser);
-
-  // A slow valid answer. The deterministic canvas is already on screen, and
-  // accepting the answer must not move the shared cursor.
-  await setPlannerCase(browser, "tree@900");
-  await openPlanned(browser, SCALARS);
-  check(
-    (await selectedCanvas(browser)) === "Motion",
-    "the deterministic plan renders before the AI answers",
-    String(await selectedCanvas(browser)),
-  );
-  await seek(browser, 2);
-  await browser.waitFor(
-    `document.querySelector('.viz-pane [role="tablist"] [role="tab"][aria-selected="true"]')?.textContent.trim() === "Call tree"`,
-    8000,
-    "the validated AI plan",
-  );
-  check(true, "a validated AI answer refines the canvas", "Call tree");
-  check(
-    (await browser.evaluate(`Number(document.querySelector('input[aria-label="Step"]').value)`)) === 2,
-    "accepting an AI plan never moves the shared cursor",
-  );
-  check(
-    /optional planner/.test((await planHint(browser)) ?? ""),
-    "the why-line names the optional planner",
-    String(await planHint(browser)),
-  );
-
-  // Every failure keeps the deterministic canvas and its honest reason.
-  for (const scenario of ["invalid", "error"]) {
-    await setPlannerCase(browser, scenario);
-    await openPlanned(browser, SCALARS);
-    await sleep(1200);
-    check(
-      (await selectedCanvas(browser)) === "Motion",
-      `an ${scenario} answer leaves the deterministic canvas`,
-      String(await selectedCanvas(browser)),
-    );
-    check(
-      /no specialized pattern/.test((await planHint(browser)) ?? ""),
-      `an ${scenario} answer keeps the deterministic reason`,
-      String(await planHint(browser)),
-    );
-  }
-
-  // The endpoint never answers; the client's own timeout is the bound.
-  await setPlannerCase(browser, "timeout");
-  await openPlanned(browser, SCALARS);
-  await sleep(4600);
-  check(
-    (await selectedCanvas(browser)) === "Motion",
-    "a timed-out request leaves the deterministic canvas",
-    String(await selectedCanvas(browser)),
-  );
-
-  // A newer run wins: the older answer arrives late and changes nothing. Run B
-  // asks for nothing, so only run A's slow answer is still in the air.
-  await setPlannerCase(browser, "tree@3000");
-  await openPlanned(browser, SCALARS);
-  await setPlannerCase(browser, null);
-  await openPlanned(browser, BUBBLE);
-  check(
-    (await selectedCanvas(browser)) === "Adaptive",
-    "the newer run's plan is applied while an older request is pending",
-    String(await selectedCanvas(browser)),
-  );
-  await sleep(3200);
-  check(
-    (await selectedCanvas(browser)) === "Adaptive",
-    "a late answer for an older run is ignored",
-    String(await selectedCanvas(browser)),
-  );
-
-  // A manual pick wins over the optional planner.
-  await reloadWorkspace(browser);
-  await setPlannerCase(browser, "motion@800");
-  await openPlanned(browser, RECURSION);
-  check(
-    (await selectedCanvas(browser)) === "Call tree",
-    "recursion still opens the call tree without AI",
-    String(await selectedCanvas(browser)),
-  );
-  await browser.clickText("Motion");
-  await sleep(1500);
-  check(
-    (await selectedCanvas(browser)) === "Motion",
-    "a manual pick is not overwritten by a later AI answer",
-    String(await selectedCanvas(browser)),
-  );
-  check((await planHint(browser)) === null, "the why-line stays hidden after a manual pick");
-
-  // Editing the source cancels the request that was already in flight.
-  await setPlannerCase(browser, "tree@800");
-  await openPlanned(browser, SCALARS);
-  await openEditor(browser);
-  await browser.waitFor(
-    `document.querySelector('textarea[aria-label="Your Python code"]')`,
-    15000,
-    "the code editor",
-  );
-  await browser.setValue(
-    'textarea[aria-label="Your Python code"]',
-    `${SCALARS}\nprint(total)\n`,
-    "HTMLTextAreaElement",
-  );
-  await sleep(1400);
-  check(
-    (await selectedCanvas(browser)) === "Motion",
-    "editing the source cancels the pending answer",
-    String(await selectedCanvas(browser)),
-  );
-
-  check(
-    (await browser.evaluate(`document.querySelectorAll(".viz-pane").length`)) === 1 &&
-      (await browser.evaluate(
-        `Boolean(document.querySelector('textarea[aria-label="Your Python code"]') ?? document.querySelector('.viz-pane'))`,
-      )),
-    "the optional planner adds no third panel",
-  );
-  check(
-    (await browser.evaluate(`document.querySelector("[data-ai-panel], .ai-panel") === null`)) === true,
-    "there is no permanent AI panel",
-  );
-
-  await reloadWorkspace(browser);
-}
-
-// --- A. the interruption regression ----------------------------------------
 
 async function interruption(browser) {
   console.log("\n--- interruption: two adjacent swaps ---");
@@ -2539,7 +2390,6 @@ async function main() {
       "the code editor",
     );
     await planner(browser);
-    await plannerAi(browser);
     await interruption(browser);
     await bubbleSort(browser);
     await playbackAndLayout(browser);

@@ -70,7 +70,7 @@ test("an unusable choice falls back to Motion rather than blanking the pane", ()
 
 test("choosing a canvas carries every other part of the workspace through", () => {
   const workspace = {
-    viz: "tree",
+    viz: "motion",
     index: 41,
     playing: true,
     speed: 2,
@@ -100,8 +100,8 @@ test("an unknown canvas keeps the current one instead of blanking the pane", () 
 });
 
 test("picking the canvas already showing changes nothing at all", () => {
-  const state = { viz: "tree", index: 9 };
-  assert.equal(selectViz(state, "tree"), state, "the same object, so nothing re-renders");
+  const state = { viz: "motion", index: 9 };
+  assert.equal(selectViz(state, "motion"), state, "the same object, so nothing re-renders");
 });
 
 test("the learning mode and the canvas never answer for each other", () => {

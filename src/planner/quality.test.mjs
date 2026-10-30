@@ -12,10 +12,7 @@ import { planVisualization } from "./planner.js";
 import {
   EXPECTED_CANVAS,
   REQUIRED_CATEGORIES,
-  SCRIPTED_WRONG,
   evaluateCase,
-  evaluateWithScriptedAi,
-  scriptedAnswer,
   summarize,
 } from "./quality.js";
 import { recognizeProgram } from "../tracer/recognition.js";
@@ -112,31 +109,4 @@ test("no case claims an algorithm its evidence does not prove", () => {
   }
 });
 
-test("the scripted AI comparison exercises acceptance and rejection", () => {
-  const plans = new Map(cases.map((entry) => [entry.name, entry.plan]));
-  const withExpected = cases.map((entry) => ({ ...entry, expected: EXPECTED_CANVAS[entry.name] }));
-  const aiRows = evaluateWithScriptedAi({ cases: withExpected, deterministicPlans: plans });
-  const summary = summarize(aiRows);
 
-  assert.equal(summary.total, 122);
-  // The deliberately wrong answers plus every run whose deterministic plan is a
-  // fallback (there, the model is not asked to overrule an honest reason).
-  assert.equal(summary.rejected.count, SCRIPTED_WRONG.length + rows.filter((row) => row.fallback).length);
-  for (const name of SCRIPTED_WRONG) {
-    assert.equal(aiRows.find((row) => row.name === name).rejected, true, `${name} was not rejected`);
-  }
-  assert.equal(summary.appropriate.rate, 1, JSON.stringify(summary.misses));
-  assert.equal(summary.unsupportedClaims, 0);
-  // A rejected answer keeps the deterministic plan, so nothing regresses.
-  for (const name of SCRIPTED_WRONG) {
-    const deterministic = plans.get(name);
-    assert.equal(aiRows.find((row) => row.name === name).primary, deterministic.primary);
-  }
-});
-
-test("the scripted mock answers an expected canvas only when it is renderable", () => {
-  const entry = cases.find((row) => row.name === "if-nested");
-  assert.deepEqual(scriptedAnswer({ ...entry, expected: "flow" }), { primary: "flow" });
-  const noEvents = { ...entry, analysis: { ...entry.analysis, trace: { ...entry.analysis.trace, events: 0 } } };
-  assert.deepEqual(scriptedAnswer({ ...noEvents, expected: "motion" }), { primary: "graph" });
-});

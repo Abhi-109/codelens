@@ -8,7 +8,6 @@
 // the program's name says "sort". Those cases are grouped under "misleading
 // names".
 
-import { aiPlanFromResponse } from "./aiPlanner.js";
 import { canRender, rendererIds } from "./renderers.js";
 
 export const EXPECTED_CANVAS = Object.freeze({
@@ -227,39 +226,6 @@ export function summarize(rows) {
   };
 }
 
-/** Cases where the scripted mock deliberately answers an unregistered renderer,
- * so the harness measures the rejection path as well as the happy one. */
-export const SCRIPTED_WRONG = Object.freeze(["nested-loops", "fibonacci", "linear-index", "dict-basics"]);
 
-/**
- * A scripted stand-in for a model, used to exercise the AI path without a
- * provider. It answers the expected canvas when the evidence can support it and
- * an unregistered id for `SCRIPTED_WRONG`, so the rejection path is measured
- * too. It is a mock, not a claim about any real model's accuracy.
- */
-export function scriptedAnswer({ name, expected, analysis, hasFlow = true }) {
-  if (SCRIPTED_WRONG.includes(name)) return { primary: "graph" };
-  if (canRender(expected, { trace: analysis?.trace ?? {}, hasFlow }).ok) return { primary: expected };
-  return { primary: "graph" };
-}
 
-/**
- * Run the same corpus through the AI validator with scripted answers. A rejected
- * answer keeps the deterministic plan, which is the behaviour the client has.
- */
-export function evaluateWithScriptedAi({ cases, deterministicPlans }) {
-  return cases.map((entry) => {
-    const answer = scriptedAnswer(entry);
-    const result = aiPlanFromResponse(answer, {
-      analysis: entry.analysis,
-      deterministic: deterministicPlans.get(entry.name),
-      hasFlow: entry.hasFlow !== false,
-    });
-    const rejected = !result.plan;
-    const row = evaluateCase({
-      ...entry,
-      plan: result.plan ?? deterministicPlans.get(entry.name),
-    });
-    return { ...row, rejected };
-  });
-}
+
