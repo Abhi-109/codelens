@@ -526,8 +526,10 @@ export default function MotionStage({ plan, trace = [], result = null }) {
 
         {showEmpty ? (
           <p className="motion-no-values">
-            This step has no values that can be reconstructed. The Variables and Output tabs
-            keep the full recording.
+            {view.lineText
+              ? `Line ${view.lineText.trim().split("\\n")[0]}: execution step with no reconstructable state change.`
+              : "Execution step with no reconstructable state change."}
+            {" "}Inspect keeps the full recording.
           </p>
         ) : null}
 
