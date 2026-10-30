@@ -771,19 +771,31 @@ function graphFrames(state, op, input) {
     const order = [];
     const queue = [start];
     const discovered = new Set(queue);
+    const parent = new Map([[start, null]]);
     while (queue.length) {
       const at = queue.shift();
       order.push(at);
       const next = neighbours(at).filter((id) => !discovered.has(id));
       for (const id of next) {
         discovered.add(id);
+        parent.set(id, at);
         queue.push(id);
       }
       frames.push(
-        frame(state, `Visit ${at}. ${queue.length ? `Queue: ${queue.join(', ')}.` : 'The queue is empty.'}`, {
-          active: [at],
-          done: keys(order),
-        }),
+        frame(
+          state,
+          `Visit ${at}. ${queue.length ? `Queue: ${queue.join(', ')}.` : 'The queue is empty.'}`,
+          { active: [at], done: keys(order) },
+          {
+            kind: 'bfs',
+            current: at,
+            order: [...order],
+            queue: [...queue],
+            stack: [],
+            via: parent.get(at),
+            edge: parent.get(at) ? [parent.get(at), at] : null,
+          },
+        ),
       );
     }
     const unreachable = state.nodes.filter((id) => !discovered.has(id));
@@ -792,6 +804,15 @@ function graphFrames(state, op, input) {
         state,
         `Breadth-first order: ${order.join(' → ')}.${unreachable.length ? ` Unreachable from ${start}: ${unreachable.join(', ')}.` : ''}`,
         { done: keys(order) },
+        {
+          kind: 'bfs',
+          current: null,
+          order: [...order],
+          queue: [],
+          stack: [],
+          via: null,
+          edge: null,
+        },
       ),
     );
     return { state, frames };
@@ -800,15 +821,27 @@ function graphFrames(state, op, input) {
   // depth-first, recursive, following the edge order above
   const order = [];
   const seen = new Set();
+  const parent = new Map([[start, null]]);
   const walk = (at) => {
     seen.add(at);
     order.push(at);
     const next = neighbours(at).filter((id) => !seen.has(id));
+    for (const id of next) parent.set(id, at);
     frames.push(
-      frame(state, `Visit ${at}.${next.length ? ` Next unvisited: ${next.join(', ')}.` : ' No unvisited neighbours.'}`, {
-        active: [at],
-        done: keys(order),
-      }),
+      frame(
+        state,
+        `Visit ${at}.${next.length ? ` Next unvisited: ${next.join(', ')}.` : ' No unvisited neighbours.'}`,
+        { active: [at], done: keys(order) },
+        {
+          kind: 'dfs',
+          current: at,
+          order: [...order],
+          queue: [],
+          stack: [...next].reverse(),
+          via: parent.get(at),
+          edge: parent.get(at) ? [parent.get(at), at] : null,
+        },
+      ),
     );
     for (const id of next) if (!seen.has(id)) walk(id);
   };
@@ -819,6 +852,15 @@ function graphFrames(state, op, input) {
       state,
       `Depth-first order: ${order.join(' → ')}.${unreachable.length ? ` Unreachable from ${start}: ${unreachable.join(', ')}.` : ''}`,
       { done: keys(order) },
+      {
+        kind: 'dfs',
+        current: null,
+        order: [...order],
+        queue: [],
+        stack: [],
+        via: null,
+        edge: null,
+      },
     ),
   );
   return { state, frames };
@@ -972,9 +1014,9 @@ export const STRUCTURES = [
     type: 'hash-table',
     name: 'Hash table',
     blurb:
-      'Hash a key to a bucket, resolve collisions with chaining or probing, delete with tombstones, and watch a resize rehash every key.',
+      'Hash a key to a bucket, resolve collisions with chaining, probing or Robin Hood displacement, and watch a resize rehash every key.',
     limits:
-      'Robin Hood hashing, cuckoo hashing, incremental rehashing and universal hashing; those advanced variants are a recorded follow-up, not part of this table.',
+      'cuckoo hashing and incremental rehashing; those advanced variants are a recorded follow-up, not part of this table.',
     start: clone(HASH_START),
     operations: [
       { id: 'insert', label: 'Insert / update', fields: [hashField('key', 'Key', 'apple'), hashField('value', 'Value', '4')] },

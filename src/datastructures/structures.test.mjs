@@ -9,6 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { applyOperation, initialState } from "./model.js";
+import { layoutGraph } from "./graphLayout.js";
 
 const run = (type, state, op, input = {}) => applyOperation(type, state, op, input);
 const ok = (type, state, op, input = {}) => {
@@ -337,4 +338,41 @@ test("an emptied graph explains itself instead of inventing a traversal", () => 
   assert.equal(state.start, null);
   assert.match(run("graph", state, "bfs", {}).error, /no nodes/);
   assert.match(run("graph", state, "dfs", {}).error, /no nodes/);
+});
+
+test("the graph layout places every node inside the viewBox without overlap", () => {
+  const state = initialState("graph");
+  const layout = layoutGraph(state);
+  const minGap = 30;
+  const ids = state.nodes;
+  for (const id of ids) {
+    const point = layout.positions.get(id);
+    assert.ok(point, `${id} has a position`);
+    assert.ok(point.x >= 0 && point.x <= layout.width, `${id} x inside viewBox`);
+    assert.ok(point.y >= 0 && point.y <= layout.height, `${id} y inside viewBox`);
+  }
+  for (let i = 0; i < ids.length; i += 1) {
+    for (let j = i + 1; j < ids.length; j += 1) {
+      const a = layout.positions.get(ids[i]);
+      const b = layout.positions.get(ids[j]);
+      const distance = Math.hypot(a.x - b.x, a.y - b.y);
+      assert.ok(distance >= minGap, `${ids[i]} and ${ids[j]} do not overlap (${distance})`);
+    }
+  }
+  // Deterministic: the same state yields the same positions.
+  const again = layoutGraph(state);
+  assert.deepEqual([...layout.positions], [...again.positions]);
+});
+
+test("the graph layout handles a disconnected graph and a single node", () => {
+  let state = initialState("graph");
+  state = applyOperation("graph", state, "add-node", { id: "G" }).state;
+  const layout = layoutGraph(state);
+  assert.ok(layout.positions.has("G"));
+  assert.ok(layout.width > 0 && layout.height > 0);
+
+  const single = layoutGraph({ nodes: ["Z"], edges: [], directed: false, start: "Z" });
+  assert.equal(single.positions.size, 1);
+  const point = single.positions.get("Z");
+  assert.ok(point.x >= 0 && point.y >= 0);
 });

@@ -10,7 +10,8 @@
  */
 
 import { useState } from 'react';
-import { hashBreakdown, hashFunctionLabel, strategyLabel } from './hashTable.js';
+import { hashBreakdown, hashFunctionLabel, probeDistance, strategyLabel } from './hashTable.js';
+import { layoutGraph } from './graphLayout.js';
 
 const MARK_CLASSES = [
   'active',
@@ -21,6 +22,7 @@ const MARK_CLASSES = [
   'inserted',
   'deleted',
   'tombstone',
+  'swap',
 ];
 
 const marksFor = (marks, key) =>
@@ -232,57 +234,105 @@ function TreeView({ state, marks }) {
 
 /* --- Graph ---------------------------------------------------------------- */
 
-function GraphView({ state, marks }) {
-  const width = 320;
-  const height = 300;
-  const cx = width / 2;
-  const cy = height / 2;
-  const count = Math.max(state.nodes.length, 1);
-  const radius = state.nodes.length <= 1 ? 0 : Math.min(118, 42 + state.nodes.length * 8);
-  const position = (id) => {
-    const index = state.nodes.indexOf(id);
-    const angle = -Math.PI / 2 + (2 * Math.PI * index) / count;
-    return [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)];
+function GraphView({ state, marks, detail }) {
+  const layout = useMemo(() => layoutGraph(state), [state]);
+  const positions = layout.positions;
+  const R = 19;
+  const nodePosition = (id) => positions.get(id) ?? { x: R + 4, y: R + 4 };
+
+  const trim = (from, to) => {
+    const a = nodePosition(from);
+    const b = nodePosition(to);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return {
+      x1: a.x + (dx / len) * R,
+      y1: a.y + (dy / len) * R,
+      x2: b.x - (dx / len) * R,
+      y2: b.y - (dy / len) * R,
+    };
   };
 
+  const activeEdge = detail?.edge ?? null;
+  const isActiveEdge = (a, b) =>
+    activeEdge &&
+    ((activeEdge[0] === a && activeEdge[1] === b) ||
+      (!state.directed && activeEdge[0] === b && activeEdge[1] === a));
+
+  const curveFor = (a, b) => {
+    const p = trim(a, b);
+    // A gentle curve keeps long edges readable; straight would cross nodes.
+    const mx = (p.x1 + p.x2) / 2;
+    const my = (p.y1 + p.y2) / 2;
+    const dx = p.x2 - p.x1;
+    const dy = p.y2 - p.y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const bend = Math.min(24, len * 0.12);
+    return `M${p.x1},${p.y1} Q${mx - (dy / len) * bend},${my + (dx / len) * bend} ${p.x2},${p.y2}`;
+  };
+
+  const queue = detail?.queue ?? [];
+  const stack = detail?.stack ?? [];
+  const order = detail?.order ?? marks.done ?? [];
+  const current = detail?.current ?? (marks.active?.[0] ?? null);
+
   return (
-    <svg className="ds-graph" viewBox={`0 0 ${width} ${height}`} role="presentation" aria-hidden="true" focusable="false">
-      <defs>
-        <marker id="ds-graph-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-          <path d="M0,0 L8,4 L0,8 z" className="ds-arrow-head" />
-        </marker>
-      </defs>
-      {state.edges.map(([a, b]) => {
-        const [x1, y1] = position(a);
-        const [x2, y2] = position(b);
-        return (
-          <line
-            key={`${a}-${b}`}
-            className="ds-edge"
-            x1={x1}
-            y1={y1}
-            x2={x2}
-            y2={y2}
-            markerEnd={state.directed ? 'url(#ds-graph-arrow)' : undefined}
-          />
-        );
-      })}
-      {state.nodes.map((id) => {
-        const [x, y] = position(id);
-        return (
-          <g
-            key={id}
-            className={`${cellClass(marks, id, 'ds-graph-node')}${id === state.start ? ' is-start' : ''}`}
-          >
-            <title>{id === state.start ? `${id} (start)` : id}</title>
-            <circle cx={x} cy={y} r="19" />
-            <text x={x} y={y} dy="0.35em" textAnchor="middle" fontSize={id.length > 4 ? 10 : 13}>
-              {id}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+    <div className="ds-graph-wrap">
+      <svg
+        className="ds-graph"
+        viewBox={layout.viewBox}
+        role="presentation"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <defs>
+          <marker id="ds-graph-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0,0 L8,4 L0,8 z" className="ds-arrow-head" />
+          </marker>
+        </defs>
+        {state.edges.map(([a, b]) => {
+          const active = isActiveEdge(a, b);
+          return (
+            <path
+              key={`${a}-${b}`}
+              className={`ds-edge${active ? ' is-active' : ''}`}
+              d={curveFor(a, b)}
+              markerEnd={state.directed ? 'url(#ds-graph-arrow)' : undefined}
+            />
+          );
+        })}
+        {state.nodes.map((id) => {
+          const { x, y } = nodePosition(id);
+          const isCurrent = current === id || marks.active?.includes(id);
+          return (
+            <g
+              key={id}
+              className={`${cellClass(marks, id, 'ds-graph-node')}${id === state.start ? ' is-start' : ''}${isCurrent ? ' is-current' : ''}`}
+            >
+              <title>{id === state.start ? `${id} (start)` : id}</title>
+              <circle cx={x} cy={y} r={R} />
+              <text x={x} y={y} dy="0.35em" textAnchor="middle" fontSize={id.length > 4 ? 10 : 13}>
+                {id}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="ds-graph-legend" aria-hidden="true">
+        <span className="ds-legend-item"><i className="ds-legend-swatch is-start" />start</span>
+        <span className="ds-legend-item"><i className="ds-legend-swatch is-current" />current</span>
+        <span className="ds-legend-item"><i className="ds-legend-swatch is-done" />visited</span>
+        <span className="ds-legend-item"><i className="ds-legend-swatch is-edge" />active edge</span>
+      </div>
+      {order.length ? (
+        <p className="ds-graph-order">
+          <strong>Order:</strong> {order.join(' → ')}
+          {queue.length ? ` · Queue: ${queue.join(', ')}` : ''}
+          {stack.length ? ` · Stack: ${stack.join(', ')}` : ''}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -489,6 +539,11 @@ function HashView({ state, marks, detail }) {
                 }
               >
                 {cell === null ? 'empty' : cell.tombstone ? '† tombstone' : `${cell.key}=${cell.value}`}
+                {state.strategy === 'robin-hood' && cell !== null && !cell.tombstone ? (
+                  <span className="ds-slot-distance">
+                    d{probeDistance(state.hashFn, cell.key, index, state.capacity, state.universal)}
+                  </span>
+                ) : null}
               </span>
             ) : (
               <span className="ds-chain-inline">
