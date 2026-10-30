@@ -66,19 +66,44 @@ function says otherwise.
 | Multiplication | same, then `floor(capacity × frac(raw × 0.618…))` |
 | Polynomial | rolling `h = h × 31 + code` as an unsigned 32-bit integer |
 | First character | the first code point only (deliberately poor) |
+| Universal | the integer encoding `k`; the family turns it into an index |
 
 `bucketIndex()` is the only place a raw hash becomes an index, so a displayed
 calculation can never disagree with the state that is changed. Division,
 polynomial and first-character use a true modulo; multiplication uses the
 golden-ratio fractional part.
 
+### Universal hashing
+
+Universal hashing is a family of functions rather than one function:
+`h(k) = ((a × k + b) mod p) mod m`, with `p = 101` (prime and above
+`MAX_CAPACITY`, so `mod p` and `mod m` stay different jobs) and `m` the table's
+current capacity. A seed picks the family member deterministically with integer
+arithmetic only: `a = 1 + ((seed × 37 + 11) mod (p − 1))`, `b = (seed × 53 + 7)
+mod p`. `a` is never zero, `a` and `b` stay inside `0..p−1`, and the same seed
+always reproduces the same parameters. Seeds are whole numbers from 0 to 100;
+the default is 17.
+
+`k` is the same integer encoding the other arithmetic functions use (an
+integer-looking key's value, otherwise the character-code sum). The parameters
+live in state, so they survive inserts, deletes, automatic growth, a manual
+resize and a forced rehash. Changing the seed is a parameter change and is
+rehashed explicitly with a frame that names the new seed and `a`/`b`/`p`; a
+seed typed while another hash function is selected is refused rather than
+silently ignored.
+
+The family bounds the chance of a collision when parameters are chosen from it.
+A fixed seed still collides for some key pairs, and changing the seed does not
+have to move every key, so the lab never claims either.
+
 ### The formula breakdown
 
-`hashBreakdown(hashFn, key, capacity)` returns the intermediate arithmetic as
-data — the input, each character's code and running sum or accumulation, the
-multiplication constant and fraction, the division remainder and quotient, the
-final index — plus the formula string and the term each step is working on.
-Every hash frame carries the same object in `detail.breakdown`.
+`hashBreakdown(hashFn, key, capacity, params)` returns the intermediate
+arithmetic as data — the input, each character's code and running sum or
+accumulation, the multiplication constant and fraction, the division remainder
+and quotient, the final index, and for universal hashing both moduli — plus the
+formula string and the term each step is working on. Every hash frame carries
+the same object in `detail.breakdown`.
 
 The panel under the buckets renders that object; it never evaluates a formula
 of its own. Stepping marks the matching formula term, the key field calls the

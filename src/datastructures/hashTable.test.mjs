@@ -15,6 +15,8 @@ import {
   HASH_START,
   HASH_STRATEGIES,
   MAX_CAPACITY,
+  UNIVERSAL_MODULUS,
+  UNIVERSAL_SEED,
   bucketIndex,
   compareStrategies,
   findCollision,
@@ -22,6 +24,8 @@ import {
   hashStep,
   nextCapacity,
   rawHash,
+  universalParams,
+  universalProblem,
 } from "./hashTable.js";
 
 const TYPE = "hash-table";
@@ -501,6 +505,113 @@ test("the collision detective finds a deterministic pair without randomness", ()
   assert.equal(bucketIndex("first-char", pair.a, 7), pair.index);
   assert.equal(bucketIndex("first-char", pair.b, 7), pair.index);
   assert.deepEqual(findCollision("first-char", 7, CANDIDATE_KEYS), pair);
+});
+
+test("universal parameters are prime, in range, reproducible and seed-driven", () => {
+  const prime = (value) => {
+    for (let n = 2; n * n <= value; n += 1) if (value % n === 0) return false;
+    return value >= 2;
+  };
+  for (const seed of [0, 1, 2, 17, 42, 100]) {
+    const params = universalParams(seed);
+    assert.equal(params.seed, seed);
+    assert.equal(params.p, UNIVERSAL_MODULUS);
+    assert.ok(prime(params.p), "p is prime");
+    assert.ok(params.p > MAX_CAPACITY, "p is above the capacity cap, so mod p and mod m are different jobs");
+    assert.ok(params.a >= 1 && params.a < params.p, `a is in 1..p-1: ${params.a}`);
+    assert.ok(params.b >= 0 && params.b < params.p, `b is in 0..p-1: ${params.b}`);
+    assert.equal(universalProblem(params), null);
+    assert.deepEqual(universalParams(seed), params, "the same seed is reproducible");
+  }
+  assert.deepEqual(universalParams(UNIVERSAL_SEED), HASH_START.universal);
+  assert.notDeepEqual(universalParams(1), universalParams(2));
+
+  assert.match(universalProblem({ seed: 0, a: 1, b: 0, p: 100 }), /must be prime/);
+  assert.match(universalProblem({ seed: 0, a: 1, b: 0, p: 7 }), /greater than the largest capacity/);
+  assert.match(universalProblem({ seed: 0, a: 0, b: 0, p: 101 }), /a must be/);
+  assert.match(universalProblem({ seed: 0, a: 1, b: 101, p: 101 }), /b must be/);
+});
+
+test("universal hashing applies both moduli and lands inside every capacity", () => {
+  const params = universalParams(17);
+  for (const capacity of [4, 7, 11, 13, 16, 97]) {
+    for (const key of ["apple", "ab", "42", "-3", "a much longer key"]) {
+      const raw = rawHash("universal", key);
+      const reduced = ((raw % params.p) + params.p) % params.p;
+      const expected = ((params.a * reduced + params.b) % params.p) % capacity;
+      assert.equal(bucketIndex("universal", key, capacity, params), expected, `${key}/${capacity}`);
+      assert.ok(expected >= 0 && expected < capacity, `${key}/${capacity} is in range`);
+
+      const detail = hashBreakdown("universal", key, capacity, params);
+      assert.equal(detail.raw, raw);
+      assert.equal(detail.index, expected);
+      assert.equal(detail.params.seed, params.seed);
+      const inner = detail.steps.find((step) => step.term === "mod p");
+      const outer = detail.steps.find((step) => step.term === "mod m");
+      assert.ok(inner && outer, "both moduli are shown as steps");
+      assert.match(outer.expression, new RegExp(`mod ${capacity} = ${expected}`));
+      assert.ok(
+        detail.steps.every((step) => detail.formula.includes(step.term)),
+        "every highlighted term is in the formula",
+      );
+    }
+  }
+});
+
+test("a different seed moves some buckets, and collisions are still possible", () => {
+  const keys = ["ant", "bee", "cat", "dog", "eel", "fox", "gnu", "hen"];
+  const moves = keys.filter(
+    (key) => bucketIndex("universal", key, 11, universalParams(17)) !== bucketIndex("universal", key, 11, universalParams(42)),
+  );
+  assert.ok(moves.length > 0, "some keys move when the seed changes");
+  assert.ok(moves.length < keys.length, "the lab never claims every key must move");
+
+  // Universal hashing bounds collision probability; it does not remove them.
+  const pair = findCollision("universal", 11, CANDIDATE_KEYS, universalParams(17));
+  if (pair) assert.equal(bucketIndex("universal", pair.a, 11, universalParams(17)), pair.index);
+  const rows = compareStrategies({ keys, capacity: 11, hashFn: "universal", params: universalParams(17) });
+  assert.equal(rows.length, 4);
+  assert.ok(rows.every((row) => Number.isFinite(row.loadFactor)));
+});
+
+test("universal parameters survive operations, resizing and rehashing", () => {
+  const params = universalParams(17);
+  let state = fresh({ hashFn: "universal", universal: params, capacity: 7, threshold: 0.75 });
+  const pairs = [];
+  for (const key of ["ant", "bee", "cat", "dog", "eel", "fox"]) {
+    pairs.push({ key, value: key });
+    const inserted = ok(state, "insert", { key, value: key });
+    assert.deepEqual(inserted.state.universal, params, `${key} keeps the parameters`);
+    state = inserted.state;
+  }
+  assert.equal(state.capacity, 14, "the workload grew the table");
+  assert.deepEqual(state.universal, params, "a resize keeps the parameters");
+  assertEveryKeyReadable(state, pairs);
+
+  const rehashed = ok(state, "rehash", {});
+  assert.deepEqual(rehashed.state.universal, params, "a forced rehash keeps the parameters");
+  const resized = ok(state, "resize", { capacity: 16 });
+  assert.deepEqual(resized.state.universal, params);
+  assertEveryKeyReadable(resized.state, pairs);
+
+  const seeded = ok(state, "configure", {
+    strategy: state.strategy,
+    hashFn: "universal",
+    seed: 42,
+    threshold: state.threshold,
+  });
+  assert.deepEqual(seeded.state.universal, universalParams(42));
+  assert.ok(seeded.frames.some((entry) => entry.detail?.kind === "resize-start"), "a seed change rehashes");
+  assert.match(seeded.frames[0].text, /seed 42/);
+  assertEveryKeyReadable(seeded.state, pairs);
+  assert.match(
+    run(state, "configure", { strategy: state.strategy, hashFn: "division", seed: 42, threshold: state.threshold }).error,
+    /only applies to universal hashing/,
+  );
+  assert.match(
+    run(state, "configure", { strategy: state.strategy, hashFn: "universal", seed: 101, threshold: state.threshold }).error,
+    /whole number from 0 to 100/,
+  );
 });
 
 test("capacity policies grow safely and stop at the supported maximum", () => {

@@ -11,7 +11,7 @@
  */
 
 import { clone, frame } from './frames.js';
-import { HASH_START, HASH_FUNCTIONS, HASH_PRESETS, HASH_STRATEGIES, hashTableFrames } from './hashTable.js';
+import { HASH_START, HASH_FUNCTIONS, HASH_PRESETS, HASH_STRATEGIES, UNIVERSAL_SEED, hashTableFrames } from './hashTable.js';
 
 const keys = (values) => values.map(String);
 
@@ -1012,6 +1012,7 @@ export const STRUCTURES = [
             'division',
             HASH_FUNCTIONS.map(({ id, label }) => ({ value: id, label })),
           ),
+          { name: 'seed', label: 'Universal seed', default: UNIVERSAL_SEED },
           { name: 'threshold', label: 'Load threshold', default: 0.75 },
         ],
         advanced: true,

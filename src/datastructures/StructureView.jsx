@@ -351,7 +351,7 @@ function HashFormula({ state, detail }) {
     fromFrame.fn === state.hashFn
       ? fromFrame
       : trimmed
-        ? hashBreakdown(state.hashFn, trimmed, state.capacity)
+        ? hashBreakdown(state.hashFn, trimmed, state.capacity, state.universal)
         : null;
   const active = breakdown ? Math.min(step, breakdown.steps.length - 1) : 0;
   const current = breakdown?.steps[active] ?? null;
@@ -510,6 +510,9 @@ function HashView({ state, marks, detail }) {
         {strategyLabel(state.strategy)} · {state.count} {state.count === 1 ? 'key' : 'keys'} · capacity{' '}
         {state.capacity} · load {load.toFixed(2)} · {state.tombstones}{' '}
         {state.tombstones === 1 ? 'tombstone' : 'tombstones'}
+        {state.hashFn === 'universal'
+          ? ` · a ${state.universal.a} · b ${state.universal.b} · p ${state.universal.p} · seed ${state.universal.seed}`
+          : ''}
       </p>
       <HashFormula state={state} detail={detail} />
     </div>

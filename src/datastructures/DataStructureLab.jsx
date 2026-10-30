@@ -204,6 +204,7 @@ function Lab({ structure }) {
           ...current.configure,
           strategy: result.state.strategy,
           hashFn: result.state.hashFn,
+          seed: result.state.universal.seed,
           threshold: result.state.threshold,
         },
         resize: { ...current.resize, capacity: result.state.capacity * 2 <= 97 ? result.state.capacity * 2 : result.state.capacity },

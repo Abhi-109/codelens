@@ -27,7 +27,7 @@ function PredictBucket({ state, suggestion }) {
   const [answer, setAnswer] = useState("");
   const [checked, setChecked] = useState(null);
 
-  const actual = bucketIndex(state.hashFn, key, state.capacity);
+  const actual = bucketIndex(state.hashFn, key, state.capacity, state.universal);
   const raw = rawHash(state.hashFn, key);
   const fresh =
     checked &&
@@ -95,7 +95,9 @@ function PredictBucket({ state, suggestion }) {
           Raw hash {raw}
           {state.hashFn === "multiplication"
             ? " scaled by the golden-ratio fraction."
-            : ` mod ${state.capacity} = ${actual}.`}
+            : state.hashFn === "universal"
+              ? `; (${state.universal.a} × (${raw} mod ${state.universal.p}) + ${state.universal.b}) mod ${state.universal.p}, then mod ${state.capacity} = ${actual}.`
+              : ` mod ${state.capacity} = ${actual}.`}
         </p>
       ) : null}
       {suggestion ? (
@@ -123,7 +125,12 @@ function PredictBucket({ state, suggestion }) {
 
 function StrategyComparison({ state, entries }) {
   const keys = entries.length >= 3 ? entries.map((entry) => entry.key) : undefined;
-  const rows = compareStrategies({ keys, capacity: state.capacity, hashFn: state.hashFn });
+  const rows = compareStrategies({
+    keys,
+    capacity: state.capacity,
+    hashFn: state.hashFn,
+    params: state.universal,
+  });
   return (
     <div className="ds-extra-card ds-extra-wide">
       <h3>Compare the strategies</h3>
@@ -208,10 +215,12 @@ function ComplexityCard() {
 export default function HashTableExtras({ state }) {
   const entries = entriesOf(state);
   const load = state.count / state.capacity;
-  const suggestion = findCollision(state.hashFn, state.capacity, [
-    ...CANDIDATE_KEYS,
-    ...entries.map((entry) => entry.key),
-  ]);
+  const suggestion = findCollision(
+    state.hashFn,
+    state.capacity,
+    [...CANDIDATE_KEYS, ...entries.map((entry) => entry.key)],
+    state.universal,
+  );
 
   return (
     <section className="ds-extras" aria-labelledby="ds-extras-title">
@@ -222,6 +231,15 @@ export default function HashTableExtras({ state }) {
         <span>load factor {state.count}/{state.capacity} = <strong>{load.toFixed(2)}</strong></span>
         <span>{state.tombstones} {state.tombstones === 1 ? "tombstone" : "tombstones"}</span>
       </div>
+      {state.hashFn === "universal" ? (
+        <p className="ds-extra-hint">
+          Universal parameters: seed <strong>{state.universal.seed}</strong>, a ={" "}
+          <strong>{state.universal.a}</strong>, b = <strong>{state.universal.b}</strong>, p ={" "}
+          <strong>{state.universal.p}</strong> (prime, above the capacity cap). The family bounds the
+          chance of a collision when parameters are chosen from it; a fixed seed still collides for
+          some key pairs, and changing the seed does not have to move every key.
+        </p>
+      ) : null}
       <div className="ds-extra-grid">
         <PredictBucket state={state} suggestion={suggestion} />
         <StrategyComparison state={state} entries={entries} />

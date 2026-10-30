@@ -24,7 +24,39 @@ export const HASH_FUNCTIONS = [
   { id: 'multiplication', label: 'Multiplication: golden-ratio fraction' },
   { id: 'polynomial', label: 'Polynomial: base 31' },
   { id: 'first-char', label: 'First character only (deliberately poor)' },
+  { id: 'universal', label: 'Universal: ((a × k + b) mod p) mod m' },
 ];
+
+/** Universal hashing's fixed prime modulus. It is above MAX_CAPACITY, so the
+ *  inner `mod p` is never the same job as the table's `mod m`, and it does not
+ *  have to change when the table grows. */
+export const UNIVERSAL_MODULUS = 101;
+export const UNIVERSAL_SEED = 17;
+
+/** The family's parameters, derived from a seed with integer arithmetic only,
+ *  so the same seed always shows the same a, b and p. `a` is never 0 (that
+ *  would collapse every key to b) and both are inside 0..p-1. */
+export function universalParams(seed, modulus = UNIVERSAL_MODULUS) {
+  const p = Math.trunc(modulus);
+  const normalized = ((Math.trunc(Number(seed)) % p) + p) % p;
+  return {
+    seed: normalized,
+    a: 1 + ((normalized * 37 + 11) % (p - 1)),
+    b: (normalized * 53 + 7) % p,
+    p,
+  };
+}
+
+/** Why these parameters cannot be used, or null. */
+export function universalProblem(params) {
+  if (!params) return 'Universal hashing needs parameters.';
+  const { a, b, p } = params;
+  if (!isPrime(p)) return `The modulus ${p} must be prime.`;
+  if (p <= MAX_CAPACITY) return `The modulus must be greater than the largest capacity (${MAX_CAPACITY}).`;
+  if (!Number.isInteger(a) || a < 1 || a >= p) return `a must be a whole number from 1 to ${p - 1}.`;
+  if (!Number.isInteger(b) || b < 0 || b >= p) return `b must be a whole number from 0 to ${p - 1}.`;
+  return null;
+}
 
 export const HASH_STRATEGIES = [
   { id: 'chaining', label: 'Separate chaining' },
@@ -182,6 +214,7 @@ export const HASH_START = {
   strategy: 'chaining',
   hashFn: 'division',
   threshold: 0.75,
+  universal: universalParams(UNIVERSAL_SEED),
   table: emptyTable(7, 'chaining'),
   count: 0,
   tombstones: 0,
@@ -193,11 +226,14 @@ const codeSum = (text) =>
 
 /** The raw hash, before the table's capacity is involved.
  *
- *  - division / multiplication: an integer-looking key uses its integer value;
- *    anything else uses the sum of its character codes;
+ *  - division / multiplication / universal: an integer-looking key uses its
+ *    integer value; anything else uses the sum of its character codes;
  *  - polynomial: base-31 rolling hash, kept as an unsigned 32-bit integer;
  *  - first-char: the first character's code, which is deliberately bad so the
- *    lab can show clustering and collisions. */
+ *    lab can show clustering and collisions.
+ *
+ *  Universal hashing's raw hash is that integer encoding (`k`); its parameters
+ *  turn `k` into an index, so they belong to `bucketIndex`. */
 export function rawHash(hashFn, key) {
   const text = String(key);
   if (hashFn === 'polynomial') {
@@ -210,15 +246,26 @@ export function rawHash(hashFn, key) {
   return Number.isSafeInteger(numeric) ? numeric : codeSum(text);
 }
 
+/** The universal family's two moduli, kept in one place so the index and the
+ *  explanation cannot disagree: reduce `k` mod p, apply a·k + b, mod p, then
+ *  reduce into the table with mod m. */
+const universalIndex = (raw, capacity, params) => {
+  const { a, b, p } = params ?? universalParams(UNIVERSAL_SEED);
+  const reduced = ((raw % p) + p) % p;
+  return ((a * reduced + b) % p) % capacity;
+};
+
 /** Normalise a raw hash into a valid bucket index. This is the only place the
  *  model turns a hash into an index, so a displayed calculation can never
- *  disagree with the state being changed. */
-export function bucketIndex(hashFn, key, capacity) {
+ *  disagree with the state being changed. `params` is the state's universal
+ *  parameter block; without it the documented default seed is used. */
+export function bucketIndex(hashFn, key, capacity, params) {
   const raw = rawHash(hashFn, key);
   if (hashFn === 'multiplication') {
     const scaled = raw * GOLDEN_FRACTION;
     return Math.floor(capacity * (scaled - Math.floor(scaled)));
   }
+  if (hashFn === 'universal') return universalIndex(raw, capacity, params);
   return ((raw % capacity) + capacity) % capacity;
 }
 
@@ -293,13 +340,62 @@ const integerKey = (text) => {
  * accumulation to the returned raw hash for every function, so a step can never
  * quietly disagree with the index the table actually used.
  */
-export function hashBreakdown(hashFn, key, capacity) {
+export function hashBreakdown(hashFn, key, capacity, params) {
   const text = String(key);
   const raw = rawHash(hashFn, key);
-  const index = bucketIndex(hashFn, key, capacity);
+  const index = bucketIndex(hashFn, key, capacity, params);
   const steps = [];
   const numeric = integerKey(text);
   let formula;
+
+  if (hashFn === 'universal') {
+    const { a, b, p, seed } = params ?? universalParams(UNIVERSAL_SEED);
+    const reduced = ((raw % p) + p) % p;
+    const sum = a * reduced + b;
+    const inner = ((sum % p) + p) % p;
+    formula = '(k or Σ char codes) mod p → (a × (k mod p) + b) mod p → mod m';
+    steps.push(inputStep(text));
+    if (numeric !== null) {
+      steps.push({
+        term: 'k',
+        title: 'Integer key',
+        expression: `"${text}" → ${numeric}`,
+        result: String(numeric),
+        note: 'An integer-looking key hashes as its integer value.',
+      });
+    } else {
+      characterSteps(text, steps);
+    }
+    steps.push({
+      term: 'k mod p',
+      title: 'Reduce the key modulo p',
+      expression: `${raw} mod ${p} = ${reduced}`,
+      result: String(reduced),
+      note: `p = ${p} is prime, so the key first lands in 0..${p - 1}.`,
+    });
+    steps.push({
+      term: 'a × (k mod p) + b',
+      title: 'Apply the family',
+      expression: `${a} × ${reduced} + ${b} = ${sum}`,
+      result: String(sum),
+      note: `Seed ${seed} chose a = ${a}, b = ${b}, p = ${p}.`,
+    });
+    steps.push({
+      term: 'mod p',
+      title: 'Inner modulus',
+      expression: `${sum} mod ${p} = ${inner}`,
+      result: String(inner),
+      note: 'This is the step that spreads keys across the family; collisions are still possible.',
+    });
+    steps.push({
+      term: 'mod m',
+      title: 'Bucket index',
+      expression: `${inner} mod ${capacity} = ${index}`,
+      result: String(index),
+      note: `The outer modulus is the table capacity, so the result is inside 0..${capacity - 1}.`,
+    });
+    return { fn: hashFn, key: text, capacity, raw, index, formula, steps, params: { seed, a, b, p } };
+  }
 
   if (hashFn === 'polynomial') {
     formula = 'h₀ = 0; hᵢ = (hᵢ₋₁ × 31 + code(cᵢ)) mod 2³²; index = raw mod m';
@@ -428,6 +524,12 @@ const percent = (value) => `${(value * 100).toFixed(0)}%`;
 
 const hashLine = (state, key, base) => {
   const raw = rawHash(state.hashFn, key);
+  if (state.hashFn === 'universal') {
+    const { a, b, p, seed } = state.universal;
+    const reduced = ((raw % p) + p) % p;
+    const inner = (a * reduced + b) % p;
+    return `Hash universal for ${key} (seed ${seed}, a ${a}, b ${b}, p ${p}): ${raw} mod ${p} = ${reduced}; (${a} × ${reduced} + ${b}) mod ${p} = ${inner}; ${inner} mod ${state.capacity} = ${base}.`;
+  }
   if (state.hashFn === 'multiplication') {
     return `Hash multiplication for ${key}: raw hash ${raw}; take the fractional part of ${raw} × 0.618… and scale it by ${state.capacity} to get bucket ${base}.`;
   }
@@ -442,6 +544,10 @@ const hashLine = (state, key, base) => {
 
 const hashShort = (state, key, base) => {
   const raw = rawHash(state.hashFn, key);
+  if (state.hashFn === 'universal') {
+    const { a, b, p } = state.universal;
+    return `k ${raw}, (${a} × ${raw} + ${b}) mod ${p} then mod ${state.capacity} = bucket ${base}`;
+  }
   return state.hashFn === 'multiplication'
     ? `raw ${raw} scales to bucket ${base}`
     : `raw ${raw} mod ${state.capacity} = ${base}`;
@@ -462,7 +568,7 @@ const hashDetail = (state, key, base) =>
     key,
     index: base,
     raw: rawHash(state.hashFn, key),
-    breakdown: hashBreakdown(state.hashFn, key, state.capacity),
+    breakdown: hashBreakdown(state.hashFn, key, state.capacity, state.universal),
   });
 
 const probeWord = (count) => (count === 1 ? '1 probe' : `${count} probes`);
@@ -502,7 +608,7 @@ const capacityError = (input, state, capacity) => {
 /** Place or update one entry. `sink` is an array of frames, or null when the
  *  caller only wants the counters (the strategy comparison does that). */
 function insertCore(state, key, value, sink) {
-  const base = bucketIndex(state.hashFn, key, state.capacity);
+  const base = bucketIndex(state.hashFn, key, state.capacity, state.universal);
   const detail = (kind, extra) => detailOf(state, kind, { key, index: base, ...extra });
 
   if (state.strategy === 'chaining') {
@@ -673,7 +779,7 @@ function insertCore(state, key, value, sink) {
 /* --- Search, contains and deletion ---------------------------------------- */
 
 function lookupCore(state, key, sink, forContains = false) {
-  const base = bucketIndex(state.hashFn, key, state.capacity);
+  const base = bucketIndex(state.hashFn, key, state.capacity, state.universal);
   const detail = (kind, extra) => detailOf(state, kind, { key, index: base, ...extra });
   let probes = 0;
 
@@ -879,7 +985,7 @@ function rebuild(state, sink, next, reason) {
 
   let moved = 0;
   for (const entry of entries) {
-    const base = bucketIndex(state.hashFn, entry.key, state.capacity);
+    const base = bucketIndex(state.hashFn, entry.key, state.capacity, state.universal);
     const result = insertCore(state, entry.key, entry.value, null);
     moved += 1;
     sink.push(
@@ -1027,19 +1133,41 @@ export function hashTableFrames(state, op, input = {}) {
       return { error: 'Open addressing needs a load-factor threshold of 0.95 or below.' };
     }
 
+    // Universal parameters belong to the universal hash function. A seed that
+    // differs while another function is selected is refused rather than
+    // silently ignored, because it would otherwise look like it took effect.
+    let universal = state.universal;
+    const seedInput = String(input.seed ?? '').trim();
+    if (hashFn === 'universal') {
+      const seed = Number(seedInput);
+      if (!seedInput || !Number.isInteger(seed) || seed < 0 || seed >= UNIVERSAL_MODULUS) {
+        return { error: `The universal seed must be a whole number from 0 to ${UNIVERSAL_MODULUS - 1}.` };
+      }
+      universal = universalParams(seed);
+      const problem = universalProblem(universal);
+      if (problem) return { error: problem };
+    } else if (seedInput && Number(seedInput) !== state.universal.seed) {
+      return { error: 'The universal seed only applies to universal hashing; choose that hash function first.' };
+    }
+
     let capacity = state.capacity;
     if (strategy === 'double' && !isPrime(capacity)) capacity = nextPrime(capacity);
     if (strategy !== 'chaining' && capacity <= state.count) {
       while (capacity <= state.count && capacity < MAX_CAPACITY) capacity = nextCapacity(strategy, capacity);
     }
 
+    const paramsChanged =
+      universal.seed !== state.universal.seed ||
+      universal.a !== state.universal.a ||
+      universal.b !== state.universal.b;
     const changed = strategy !== state.strategy || hashFn !== state.hashFn || capacity !== state.capacity;
-    if (!changed && threshold === state.threshold) {
+    if (!changed && !paramsChanged && threshold === state.threshold) {
       return { error: 'That is already the table configuration.' };
     }
 
     state.threshold = threshold;
-    if (!changed) {
+    state.universal = universal;
+    if (!changed && !paramsChanged) {
       frames.push(
         frame(
           state,
@@ -1055,7 +1183,9 @@ export function hashTableFrames(state, op, input = {}) {
       state,
       frames,
       { capacity, strategy, hashFn },
-      `Switch to ${strategyLabel(strategy)} using ${hashFunctionLabel(hashFn)} at capacity ${capacity}. Every key is rehashed because the hash or the capacity changed.`,
+      paramsChanged && !changed
+        ? `Switch universal parameters to seed ${universal.seed} (a = ${universal.a}, b = ${universal.b}, p = ${universal.p}). Every key is rehashed because its bucket can change.`
+        : `Switch to ${strategyLabel(strategy)} using ${hashFunctionLabel(hashFn)} at capacity ${capacity}. Every key is rehashed because the hash or the capacity changed.`,
     );
     return { state, frames };
   }
@@ -1095,7 +1225,12 @@ const DEFAULT_KEYS = ['ant', 'bee', 'cat', 'dog', 'eel', 'fox', 'gnu', 'hen'];
  *  capacity, with resizing off. These are counts from the real operation
  *  model, not estimates: `probes` is the number of entries or slots inspected
  *  and `collisions` is how many of those inspections found a different key. */
-export function compareStrategies({ keys = DEFAULT_KEYS, capacity = 11, hashFn = 'division' } = {}) {
+export function compareStrategies({
+  keys = DEFAULT_KEYS,
+  capacity = 11,
+  hashFn = 'division',
+  params = universalParams(UNIVERSAL_SEED),
+} = {}) {
   const pairs = keys.map((entry) =>
     typeof entry === 'string' ? { key: entry, value: '1' } : { key: String(entry.key), value: String(entry.value ?? '1') },
   );
@@ -1105,6 +1240,7 @@ export function compareStrategies({ keys = DEFAULT_KEYS, capacity = 11, hashFn =
       strategy: strategy.id,
       hashFn,
       threshold: 1,
+      universal: params,
       table: emptyTable(capacity, strategy.id),
       count: 0,
       tombstones: 0,
@@ -1139,10 +1275,10 @@ export function compareStrategies({ keys = DEFAULT_KEYS, capacity = 11, hashFn =
 
 /** Two keys that land in the same bucket under the current configuration,
  *  found deterministically (no randomness), for the collision detective. */
-export function findCollision(hashFn, capacity, keys = []) {
+export function findCollision(hashFn, capacity, keys = [], params) {
   const seen = new Map();
   for (const key of keys) {
-    const index = bucketIndex(hashFn, key, capacity);
+    const index = bucketIndex(hashFn, key, capacity, params);
     if (seen.has(index)) return { a: seen.get(index), b: key, index };
     seen.set(index, key);
   }

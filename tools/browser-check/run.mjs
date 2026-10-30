@@ -1415,6 +1415,7 @@ const readLab = (browser) =>
       hashCollisions: all(".ds-slot.is-collision, .ds-chain-entry.is-collision"),
       buckets: all(".ds-bucket"),
       journey: text(".ds-journey"),
+      hashNote: text(".ds-hash .ds-note"),
       detail: text(".ds-detail"),
       formula: text(".ds-formula summary"),
       formulaStep: text(".ds-formula-current"),
@@ -1777,6 +1778,99 @@ async function productPages(browser) {
     (await readLab(browser)).formulaSum?.includes("Raw hash 530"),
     "reset returns the panel to the frame's own key",
     String((await readLab(browser)).formulaSum),
+  );
+
+  // Universal hashing: two moduli, reproducible parameters, and an explicit
+  // rehash when the seed changes.
+  await openRoute(browser, "/visualizer/data-structures/hash-table");
+  await browser.waitFor('document.querySelector(".ds-buckets")', 10000, "a fresh hash table lab");
+  const pick = (selector, value) =>
+    browser.evaluate(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return false;
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set;
+      setter.call(el, ${JSON.stringify(value)});
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      return el.value;
+    })()`);
+  await browser.click(".ds-advanced summary");
+  await sleep(100);
+  await pick('select[aria-label="Apply settings Hash function"]', "universal");
+  await browser.clickText("Apply settings");
+  await sleep(150);
+  const universalRun = await readLab(browser);
+  await browser.setValue('input[aria-label="Lab step"]', universalRun.stepMax);
+  await sleep(120);
+  const universal = await readLab(browser);
+  check(
+    universal.hashNote?.includes("p 101") &&
+      universal.hashNote?.includes("seed 17") &&
+      /a \d+/.test(universal.hashNote) &&
+      /b \d+/.test(universal.hashNote),
+    "universal hashing shows its seed and parameters",
+    String(universal.hashNote),
+  );
+  await browser.click(".ds-formula summary");
+  await sleep(100);
+  const universalFormula = await readLab(browser);
+  check(
+    universalFormula.formula?.includes("Universal") && universalFormula.formulaSteps >= 6,
+    "the universal breakdown has a step per arithmetic stage",
+    `${universalFormula.formula} | ${universalFormula.formulaSteps} steps`,
+  );
+  const lastStep = universalFormula.formulaSteps;
+  await browser.click(`[aria-label="Calculation step ${lastStep}"]`);
+  await sleep(80);
+  const outer = await readLab(browser);
+  await browser.click(`[aria-label="Calculation step ${lastStep - 1}"]`);
+  await sleep(80);
+  const inner = await readLab(browser);
+  check(
+    outer.formulaStep?.includes("mod 7 =") && inner.formulaStep?.includes("mod 101 ="),
+    "the panel shows the inner mod p and the outer mod m separately",
+    `${inner.formulaStep} | ${outer.formulaStep}`,
+  );
+
+  // The parameters are state: they survive an ordinary insert.
+  await browser.clickText("Insert / update");
+  await sleep(150);
+  await browser.setValue('input[aria-label="Lab step"]', (await readLab(browser)).stepMax);
+  await sleep(120);
+  const universalStored = await readLab(browser);
+  check(
+    universalStored.hashNote?.includes("seed 17") &&
+      universalStored.slots.some((slot) => slot === "apple=4"),
+    "universal parameters survive an insert",
+    `${universalStored.hashNote} | ${universalStored.slots.join(",")}`,
+  );
+
+  // A seed change is a parameter change: it must rehash, not silently relabel.
+  await browser.setValue('input[aria-label="Apply settings Universal seed"]', 42);
+  await browser.clickText("Apply settings");
+  await sleep(150);
+  const reseeded = await readLab(browser);
+  check(
+    reseeded.text?.includes("seed 42") && reseeded.stepMax > 0,
+    "changing the seed records an explicit rehash",
+    `${reseeded.text} | max ${reseeded.stepMax}`,
+  );
+  await browser.setValue('input[aria-label="Lab step"]', reseeded.stepMax);
+  await sleep(120);
+  const reseededEnd = await readLab(browser);
+  check(
+    reseededEnd.hashNote?.includes("seed 42") &&
+      reseededEnd.slots.some((slot) => slot === "apple=4"),
+    "a seed change rehashes every stored key",
+    `${reseededEnd.hashNote} | ${reseededEnd.slots.join(",")}`,
+  );
+  await pick('select[aria-label="Apply settings Hash function"]', "division");
+  await browser.setValue('input[aria-label="Apply settings Universal seed"]', 43);
+  await browser.clickText("Apply settings");
+  await sleep(120);
+  check(
+    (await readLab(browser)).error?.includes("only applies to universal hashing"),
+    "a seed is refused for a hash function that has no parameters",
+    String((await readLab(browser)).error),
   );
 
   // The same colliding keys resolve differently under each strategy.
