@@ -9,7 +9,7 @@
  * spoken summary of the same state instead.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { hashBreakdown, hashFunctionLabel, probeDistance, strategyLabel } from './hashTable.js';
 import { layoutGraph } from './graphLayout.js';
 
