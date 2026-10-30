@@ -165,7 +165,7 @@ function Lab({ structure }) {
   const frame = run?.frames[run.index] ?? null;
   const viewState = frame?.state ?? state;
   const marks = useMemo(
-    () => frame?.marks ?? { active: [], compare: [], done: [], found: [], collision: [], inserted: [], deleted: [], tombstone: [] },
+    () => frame?.marks ?? { active: [], compare: [], done: [], found: [], collision: [], inserted: [], deleted: [], tombstone: [], swap: [] },
     [frame],
   );
 
@@ -186,9 +186,9 @@ function Lab({ structure }) {
     }));
   }
 
-  function apply(operation) {
+  function apply(operation, override) {
     setPlaying(false);
-    const result = applyOperation(structure.type, state, operation.id, inputs[operation.id]);
+    const result = applyOperation(structure.type, state, operation.id, override ?? inputs[operation.id]);
     if (result.error) {
       setError(result.error);
       return;
@@ -218,6 +218,11 @@ function Lab({ structure }) {
     setRun(null);
     setState(initialState(structure.type));
     setInputs(startingInputs(structure));
+  }
+
+  function replay(op, input) {
+    const operation = structure.operations.find((entry) => entry.id === op);
+    if (operation) apply(operation, input);
   }
 
   function seek(index) {
@@ -323,7 +328,7 @@ function Lab({ structure }) {
         </section>
       </div>
 
-      {structure.type === 'hash-table' ? <HashTableExtras state={state} /> : null}
+      {structure.type === 'hash-table' ? <HashTableExtras state={state} onReplay={replay} /> : null}
     </div>
   );
 }

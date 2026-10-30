@@ -13,6 +13,8 @@ import {
   compareStrategies,
   findCollision,
   hashFunctionLabel,
+  previewInsert,
+  previewResize,
   rawHash,
   strategyLabel,
 } from './hashTable.js';
@@ -123,6 +125,189 @@ function PredictBucket({ state, suggestion }) {
   );
 }
 
+function PredictNextSlot({ state, onReplay }) {
+  const [key, setKey] = useState("apple");
+  const [answer, setAnswer] = useState("");
+  const [checked, setChecked] = useState(null);
+
+  const preview = previewInsert(state, key, "1");
+  const ready = preview && !preview.error;
+  const fresh =
+    checked &&
+    checked.key === key &&
+    checked.capacity === state.capacity &&
+    checked.strategy === state.strategy &&
+    checked.hashFn === state.hashFn;
+
+  function check(event) {
+    event.preventDefault();
+    if (!ready) return;
+    const guess = Number(answer);
+    setChecked({
+      key,
+      capacity: state.capacity,
+      strategy: state.strategy,
+      hashFn: state.hashFn,
+      guess,
+      correct: Number.isInteger(guess) && guess === preview.slot,
+      preview,
+    });
+  }
+
+  const prompt = !ready
+    ? "Type a key to preview its placement."
+    : state.strategy === "chaining"
+      ? `With separate chaining the key is appended to its home bucket ${preview.home}. Which bucket holds it?`
+      : state.strategy === "robin-hood"
+        ? `The first probe is bucket ${preview.home}. Robin Hood may swap with a resident on the way, so predict the final slot, not the next probe (${preview.nextProbe}).`
+        : `The home bucket is ${preview.home}. Which slot finally holds the key after ${strategyLabel(state.strategy).toLowerCase()}?`;
+
+  return (
+    <div className="ds-extra-card">
+      <h3>Predict the next slot</h3>
+      <p className="ds-extra-copy">{prompt}</p>
+      <form className="ds-predict" onSubmit={check}>
+        <label className="ds-field">
+          <span>Key</span>
+          <input
+            type="text"
+            value={key}
+            onChange={(event) => {
+              setKey(event.target.value);
+              setChecked(null);
+            }}
+            aria-label="Predict next slot key"
+          />
+        </label>
+        <label className="ds-field">
+          <span>{state.strategy === "chaining" ? "Bucket" : "Slot"}</span>
+          <input
+            type="number"
+            min="0"
+            max={state.capacity - 1}
+            value={answer}
+            onChange={(event) => {
+              setAnswer(event.target.value);
+              setChecked(null);
+            }}
+            aria-label="Predicted slot"
+          />
+        </label>
+        <button type="submit" className="ds-btn" disabled={!ready}>
+          Check slot
+        </button>
+      </form>
+      {fresh ? (
+        <>
+          <p className={`ds-feedback${checked.correct ? " is-correct" : " is-wrong"}`} role="status">
+            {checked.correct
+              ? `Correct: ${checked.key} lands in slot ${checked.preview.slot}.`
+              : `Not quite. ${checked.key} lands in slot ${checked.preview.slot}, not ${checked.guess}.`}{" "}
+            {checked.preview.updated
+              ? `${checked.key} is already stored, so this is an update to its value.`
+              : `It inspected ${checked.preview.probes} ${checked.preview.probes === 1 ? "slot" : "slots"}.`}{" "}
+            {checked.preview.swaps
+              ? `Robin Hood displaced ${checked.preview.swaps} ${checked.preview.swaps === 1 ? "resident" : "residents"} on the way.`
+              : ""}
+          </p>
+          {onReplay ? (
+            <button
+              type="button"
+              className="ds-link-button"
+              onClick={() => onReplay("insert", { key: checked.key, value: "1" })}
+            >
+              Replay placement
+            </button>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function PredictResize({ state, onReplay }) {
+  const [key, setKey] = useState("apple");
+  const [checked, setChecked] = useState(null);
+  const preview = previewResize(state, key);
+  const ready = preview && !preview.error;
+  const threshold = `${(state.threshold * 100).toFixed(0)}%`;
+  const fresh =
+    checked &&
+    checked.key === key &&
+    checked.capacity === state.capacity &&
+    checked.strategy === state.strategy &&
+    checked.hashFn === state.hashFn;
+
+  function answer(guess) {
+    if (!ready) return;
+    setChecked({
+      key,
+      capacity: state.capacity,
+      strategy: state.strategy,
+      hashFn: state.hashFn,
+      guess,
+      correct: guess === preview.grows,
+      preview,
+    });
+  }
+
+  return (
+    <div className="ds-extra-card">
+      <h3>Will it resize?</h3>
+      <p className="ds-extra-copy">
+        The table holds {state.count} {state.count === 1 ? "key" : "keys"} in {state.capacity}{" "}
+        {state.capacity === 1 ? "slot" : "slots"} (load {(state.count / state.capacity).toFixed(2)}),
+        and the threshold is {threshold}. If you insert a new key, will the table grow?
+      </p>
+      <p className="ds-extra-hint">
+        The growth check runs after a <em>new</em> key is placed. Updating a key that is already stored
+        does not change the count.
+      </p>
+      <div className="ds-predict">
+        <label className="ds-field">
+          <span>Key</span>
+          <input
+            type="text"
+            value={key}
+            onChange={(event) => {
+              setKey(event.target.value);
+              setChecked(null);
+            }}
+            aria-label="Resize prediction key"
+          />
+        </label>
+        <button type="button" className="ds-btn" onClick={() => answer(true)} disabled={!ready}>
+          Yes, it grows
+        </button>
+        <button type="button" className="ds-btn" onClick={() => answer(false)} disabled={!ready}>
+          No, it stays
+        </button>
+      </div>
+      {fresh ? (
+        <>
+          <p className={`ds-feedback${checked.correct ? " is-correct" : " is-wrong"}`} role="status">
+            {checked.correct ? "Correct. " : "Not quite. "}
+            {checked.preview.updated
+              ? `${checked.key} is already stored, so the insert updates its value: the count stays ${checked.preview.countBefore} and the growth check does not run.`
+              : checked.preview.placed
+                ? `After the insert the load is ${checked.preview.countAfter}/${checked.preview.from} = ${checked.preview.loadAfter.toFixed(2)}, ${checked.preview.loadAfter > checked.preview.threshold ? "above" : "at or below"} the ${threshold} threshold, so the table ${checked.preview.grows ? `grows from ${checked.preview.from} to ${checked.preview.to}` : `stays at ${checked.preview.from}`}.`
+                : "The table cannot place another key, so it cannot grow."}
+          </p>
+          {onReplay ? (
+            <button
+              type="button"
+              className="ds-link-button"
+              onClick={() => onReplay("insert", { key: checked.key, value: "1" })}
+            >
+              Replay resize
+            </button>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function StrategyComparison({ state, entries }) {
   const keys = entries.length >= 3 ? entries.map((entry) => entry.key) : undefined;
   const rows = compareStrategies({
@@ -212,7 +397,7 @@ function ComplexityCard() {
   );
 }
 
-export default function HashTableExtras({ state }) {
+export default function HashTableExtras({ state, onReplay }) {
   const entries = entriesOf(state);
   const load = state.count / state.capacity;
   const suggestion = findCollision(
@@ -242,6 +427,8 @@ export default function HashTableExtras({ state }) {
       ) : null}
       <div className="ds-extra-grid">
         <PredictBucket state={state} suggestion={suggestion} />
+        <PredictNextSlot state={state} onReplay={onReplay} />
+        <PredictResize state={state} onReplay={onReplay} />
         <StrategyComparison state={state} entries={entries} />
         <ComplexityCard />
       </div>
