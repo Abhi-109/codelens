@@ -80,3 +80,8 @@ and reversible migration steps. Neither is implemented or implied by Phase 11.
 | 10. Data Structures Lab expansion | 1/1 | Complete | 2026-10-29 |
 | 11. Hash table learning enhancements + graph repair | 0/1 | In progress | — |
 | 12. Cuckoo hashing and incremental rehashing | 0/0 | Deferred | — |
+
+### Phase 7C: Live AI validation and deployment hardening
+**Goal**: Validate the optional AI planner against a real provider, harden production deployment, and document operations.
+**Status**: In progress (live validation blocked on credentials).
+

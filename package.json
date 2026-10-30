@@ -14,6 +14,7 @@
     "fixtures:preview": "node scripts/preview-fixture.mjs",
     "check:explain": "node scripts/explain-check.mjs",
     "check:planner": "node scripts/planner-eval.mjs",
+    "check:planner:live": "node scripts/planner-live-check.mjs",
     "check:browser": "node tools/browser-check/run.mjs"
   },
   "dependencies": {

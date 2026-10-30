@@ -17,6 +17,16 @@
       "number": "10",
       "name": "Data Structures Lab expansion",
       "status": "complete"
+    },
+    {
+      "number": "11",
+      "name": "Hash table learning enhancements + graph repair",
+      "status": "complete"
+    },
+    {
+      "number": "13",
+      "name": "Live AI validation and deployment hardening (7C)",
+      "status": "in_progress"
     }
   ],
   "next": {
