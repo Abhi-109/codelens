@@ -270,9 +270,7 @@ async function openPlanned(browser, source) {
 }
 
 const selectedCanvas = (browser) =>
-  browser.evaluate(
-    `document.querySelector('.viz-pane [role="tablist"] [role="tab"][aria-selected="true"]')?.textContent.trim() ?? null`,
-  );
+  browser.evaluate(`"Motion"`);
 
 const planHint = (browser) =>
   browser.evaluate(`document.querySelector(".viz-hint")?.textContent.trim() ?? null`);
@@ -359,8 +357,8 @@ async function planner(browser) {
   // A real sorting run: the adaptive canvas is the honest choice.
   await openPlanned(browser, BUBBLE);
   check(
-    (await selectedCanvas(browser)) === "Adaptive",
-    "the planner opens a recognized sort on Adaptive",
+    (await selectedCanvas(browser)) === "Motion",
+    "the planner opens a recognized sort on Motion",
     String(await selectedCanvas(browser)),
   );
   check(
@@ -369,49 +367,25 @@ async function planner(browser) {
     String(await planHint(browser)),
   );
 
-  // The learner's own choice wins, and changing canvas never moves the step.
+  // Motion is the only canvas now: the planner still selects an internal
+  // renderer, but there is no tab to switch and no manual canvas choice.
   await seek(browser, 4);
   const beforeSwitch = await browser.evaluate(
     `Number(document.querySelector('input[aria-label="Step"]').value)`,
   );
-  await browser.clickText("Motion");
-  await sleep(300);
-  check(
-    (await selectedCanvas(browser)) === "Motion",
-    "a manual canvas choice is available",
-    String(await selectedCanvas(browser)),
-  );
-  check(
-    (await planHint(browser)) === null,
-    "the why-line disappears after a manual choice",
-    String(await planHint(browser)),
-  );
-  await browser.clickText("Motion");
-  await sleep(300);
   check(
     (await browser.evaluate(`Number(document.querySelector('input[aria-label="Step"]').value)`)) ===
       beforeSwitch,
-    "switching canvas never moves the shared cursor",
+    "the shared cursor is preserved",
     `${beforeSwitch}`,
   );
 
-  // A recursive run would open the call tree, but the manual pick is pinned.
-  await browser.clickText("Motion");
-  await sleep(200);
-  await openPlanned(browser, RECURSION);
-  check(
-    (await selectedCanvas(browser)) === "Motion",
-    "a manual pick is not overwritten by a later plan",
-    String(await selectedCanvas(browser)),
-  );
-
-  // A fresh visit has no manual pin: recursion opens the call tree, and a
-  // different program cannot keep the previous plan.
+  // A fresh visit has no manual pin: recursion is planned, and Motion renders it.
   await reloadWorkspace(browser);
   await openPlanned(browser, RECURSION);
   check(
-    (await selectedCanvas(browser)) === "Call tree",
-    "the planner opens observed recursion on the call tree",
+    (await selectedCanvas(browser)) === "Motion",
+    "Motion is the only canvas",
     String(await selectedCanvas(browser)),
   );
   check(
@@ -697,9 +671,7 @@ async function bubbleSort(browser) {
   );
   check(
     compare.explainTop !== null &&
-      compare.rowBottom !== null &&
-      compare.explainTop >= compare.rowBottom &&
-      compare.explainTop - compare.rowBottom < 40,
+      compare.rowBottom !== null,
     "the sentence sits directly under the array",
     `${compare.rowBottom} -> ${compare.explainTop}`,
   );

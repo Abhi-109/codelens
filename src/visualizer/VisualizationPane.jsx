@@ -28,9 +28,10 @@ import { VIZ_BLURBS, VIZ_LABELS, VIZ_MODES } from "./vizMode.js";
  */
 export default function VisualizationPane({ viz, onVizChange, tools = null, hint = null, children }) {
   const refs = useRef([]);
-  // With one canvas there is no choice to offer, so the strip stays out of the
-  // way rather than showing a single button that does nothing.
-  const multi = VIZ_MODES.length > 1;
+  // Unified Motion experience: the canvas chooser is no longer user-facing.
+  // Motion is the only visible visualization; the planner still selects the
+  // appropriate internal canvas, but the learner never switches tabs.
+  const multi = false;
 
   const onKeyDown = (event) => {
     const from = VIZ_MODES.indexOf(viz);

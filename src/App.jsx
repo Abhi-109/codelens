@@ -351,14 +351,12 @@ function Workspace() {
       motionFrom.current.trace === trace ? motionFrom.current.index : null;
     motionFrom.current = { trace, index };
     setMotionPlan(
-      viz === "motion"
-        ? planMotion(trace, index, {
+      planMotion(trace, index, {
             source: shownSource,
             previousIndex,
             reducedMotion,
             speed,
-          })
-        : null,
+          }),
     );
   }, [viz, trace, index, shownSource, reducedMotion, speed]);
   const graph = useMemo(() => buildExecutionGraph(trace, shownSource), [trace, shownSource]);
@@ -955,74 +953,7 @@ function Workspace() {
               onJump={jumpTo}
               compact
             />
-            {viz === "scene" ? (
-              <AdaptiveView
-                adaptive={adaptive}
-                trace={trace}
-                result={result}
-                onJumpLine={jumpToLine}
-                onJumpCall={jumpToCall}
-                onSelectFrame={selectFrame}
-              />
-            ) : viz === "flow" ? (
-              <ControlFlowChart
-                flow={flowGraph}
-                flowTree={flow}
-                trace={trace}
-                source={source}
-                index={index}
-                onJump={jumpTo}
-                note={
-                  flowGraph?.error
-                    ? "There is nothing to draw: the code has a syntax error, so it never ran."
-                    : null
-                }
-              />
-            ) : viz === "combined" ? (
-              <CombinedView
-                trace={trace}
-                source={source}
-                index={index}
-                currentFrameId={view.frameId ?? null}
-                onJumpCall={jumpToCall}
-                onShowFlow={() => setViz("flow")}
-                ctx={inspectorCtx}
-                note={
-                  flow?.error
-                    ? "There is nothing to draw: the code has a syntax error, so it never ran."
-                    : null
-                }
-              />
-            ) : viz === "motion" ? (
-              <MotionStage plan={motionPlan} trace={trace} result={result} />
-            ) : viz === "timeline" ? (
-              <TimelinePane
-                trace={trace}
-                source={source}
-                index={index}
-                onJump={jumpTo}
-                compareState={comparison}
-                onOpenCompare={startComparison}
-                onCloseCompare={stopComparison}
-                onChangeEndpoint={changeEndpoint}
-                onSwapEndpoints={swapEndpoints}
-                onUseCurrent={useCurrentAsEndpoint}
-              />
-            ) : (
-              <CallTree
-                trace={trace}
-                source={source}
-                index={index}
-                currentFrameId={view.frameId ?? null}
-                onJumpCall={jumpToCall}
-                onShowFlow={() => setViz("flow")}
-                note={
-                  flow?.error
-                    ? "There is nothing to draw: the code has a syntax error, so it never ran."
-                    : null
-                }
-              />
-            )}
+            <MotionStage plan={motionPlan} trace={trace} result={result} />
           </VisualizationPane>
 
           {/* Playback belongs to the animation, so it sits under the stage
