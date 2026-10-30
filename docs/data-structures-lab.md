@@ -72,6 +72,22 @@ calculation can never disagree with the state that is changed. Division,
 polynomial and first-character use a true modulo; multiplication uses the
 golden-ratio fractional part.
 
+### The formula breakdown
+
+`hashBreakdown(hashFn, key, capacity)` returns the intermediate arithmetic as
+data — the input, each character's code and running sum or accumulation, the
+multiplication constant and fraction, the division remainder and quotient, the
+final index — plus the formula string and the term each step is working on.
+Every hash frame carries the same object in `detail.breakdown`.
+
+The panel under the buckets renders that object; it never evaluates a formula
+of its own. Stepping marks the matching formula term, the key field calls the
+same engine function, and Reset returns to the key the current step used. A test
+pins each breakdown's last accumulation to `rawHash()` and its index to
+`bucketIndex()` for every hash function, several capacities and integer,
+negative and string keys.
+
+
 `hashStep()` is used only by double hashing:
 `1 + (|raw| mod (capacity − 1))`. The `1 +` guarantees a non-zero step.
 

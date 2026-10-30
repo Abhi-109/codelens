@@ -50,6 +50,27 @@ Plans:
 Plans:
 - [x] 10-01: Shared frames, six extended structures, the hash engine, drawings, lessons, tests and docs
 
+### Phase 11: Hash table learning enhancements + graph repair
+**Goal**: The lab explains how each hash is actually computed, offers universal and Robin Hood hashing as real implementations, validates two predictions against the engine, and draws a graph whose layout is topological rather than a single circle.
+**Depends on**: Phase 10 (the hash engine, frame contract and graph model)
+**Success Criteria** (what must be TRUE):
+  1. The calculation panel renders engine-produced steps only; every accumulation matches `rawHash()` and every index matches `bucketIndex()`.
+  2. Universal hashing is a fifth hash function with reproducible parameters that survive rehashing; Robin Hood is a fifth strategy with displacement swaps, correct lookup and backward-shift deletion.
+  3. Both prediction challenges return the engine's own answer, including duplicate updates and the threshold boundary.
+  4. Graph layout is deterministic, topology-aware, non-overlapping, fits its viewport at 390 px, and never changes BFS/DFS order; traversal shows the active edge, queue/stack and order.
+  5. Geometry tests and browser checks pass alongside `test:tracer`, `test:js`, `lint` and `build`.
+**Plans**: 1 plan
+
+Plans:
+- [ ] 11-01: Five workstreams (A–E), one commit each
+
+### Phase 12: Cuckoo hashing and incremental rehashing (deferred)
+**Goal**: Two genuinely structural variants, each with its own state shape and reversible playback.
+**Status**: Deferred, not started. Cuckoo hashing needs multiple candidate
+locations, an eviction chain with cycle detection and a rebuild; incremental
+rehashing needs old/new tables, a migration cursor, operations during migration
+and reversible migration steps. Neither is implemented or implied by Phase 11.
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -57,3 +78,5 @@ Plans:
 | 7. Automatic visualization planner (7A) | 1/1 | Complete | 2026-10-26 |
 | 9. Secure AI planner activation (7B) | 1/1 | Complete | 2026-10-26 |
 | 10. Data Structures Lab expansion | 1/1 | Complete | 2026-10-29 |
+| 11. Hash table learning enhancements + graph repair | 0/1 | In progress | — |
+| 12. Cuckoo hashing and incremental rehashing | 0/0 | Deferred | — |

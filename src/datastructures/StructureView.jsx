@@ -9,7 +9,8 @@
  * spoken summary of the same state instead.
  */
 
-import { strategyLabel } from './hashTable.js';
+import { useState } from 'react';
+import { hashBreakdown, hashFunctionLabel, strategyLabel } from './hashTable.js';
 
 const MARK_CLASSES = [
   'active',
@@ -318,6 +319,137 @@ function HashJourney({ detail }) {
   );
 }
 
+/** Highlight the formula fragment the current calculation step is working on.
+ *  `term` is a literal substring of the engine's formula string. */
+function FormulaLine({ formula, term }) {
+  const at = term ? formula.indexOf(term) : -1;
+  if (at < 0) return <code>{formula}</code>;
+  return (
+    <code>
+      {formula.slice(0, at)}
+      <mark className="ds-term">{term}</mark>
+      {formula.slice(at + term.length)}
+    </code>
+  );
+}
+
+/** The calculation panel. Every number it shows came from `hashBreakdown` in
+ *  the engine, either attached to this frame or recomputed by the same
+ *  function for a key the learner typed; nothing here parses or evaluates a
+ *  formula of its own. */
+function HashFormula({ state, detail }) {
+  const [draft, setDraft] = useState(null);
+  const [step, setStep] = useState(0);
+  const frameKey = detail?.breakdown?.key ?? detail?.key ?? null;
+  const key = draft ?? frameKey ?? 'apple';
+  const trimmed = String(key).trim();
+  const fromFrame = detail?.breakdown;
+  const breakdown =
+    fromFrame &&
+    fromFrame.key === trimmed &&
+    fromFrame.capacity === state.capacity &&
+    fromFrame.fn === state.hashFn
+      ? fromFrame
+      : trimmed
+        ? hashBreakdown(state.hashFn, trimmed, state.capacity)
+        : null;
+  const active = breakdown ? Math.min(step, breakdown.steps.length - 1) : 0;
+  const current = breakdown?.steps[active] ?? null;
+
+  return (
+    <details className="ds-formula">
+      <summary>Formula breakdown · {hashFunctionLabel(state.hashFn)}</summary>
+      <div className="ds-formula-body">
+        {breakdown ? (
+          <>
+            <p className="ds-formula-line">
+              <FormulaLine formula={breakdown.formula} term={current?.term} />
+            </p>
+            <div className="ds-formula-nav">
+              <button
+                type="button"
+                className="ds-formula-btn"
+                onClick={() => setStep(Math.max(0, active - 1))}
+                disabled={active === 0}
+                aria-label="Previous calculation step"
+              >
+                Back
+              </button>
+              <span className="ds-formula-count">
+                step {active + 1} / {breakdown.steps.length}
+              </span>
+              <button
+                type="button"
+                className="ds-formula-btn"
+                onClick={() => setStep(Math.min(breakdown.steps.length - 1, active + 1))}
+                disabled={active >= breakdown.steps.length - 1}
+                aria-label="Next calculation step"
+              >
+                Next
+              </button>
+            </div>
+            <ol className="ds-formula-steps">
+              {breakdown.steps.map((entry, index) => (
+                <li key={`${entry.title}-${index}`}>
+                  <button
+                    type="button"
+                    className={`ds-formula-step${index === active ? ' is-on' : ''}`}
+                    onClick={() => setStep(index)}
+                    aria-label={`Calculation step ${index + 1}`}
+                    aria-current={index === active ? 'step' : undefined}
+                  >
+                    {index + 1}
+                  </button>
+                </li>
+              ))}
+            </ol>
+            {current ? (
+              <div className="ds-formula-current" aria-live="polite">
+                <span className="ds-formula-title">{current.title}</span>
+                <code className="ds-formula-expression">{current.expression}</code>
+                {current.result ? <span className="ds-formula-result">= {current.result}</span> : null}
+                <span className="ds-formula-note">{current.note}</span>
+              </div>
+            ) : null}
+            <p className="ds-formula-sum">
+              Raw hash <strong>{breakdown.raw}</strong> is not an index.
+              {breakdown.raw === breakdown.index ? ' Here it happens to equal' : ' Normalised to'} bucket{' '}
+              <strong>{breakdown.index}</strong> of {breakdown.capacity}.
+            </p>
+          </>
+        ) : (
+          <p className="ds-formula-note">Type a key to inspect its calculation.</p>
+        )}
+        <div className="ds-formula-try">
+          <label className="ds-field">
+            <span>Inspect key</span>
+            <input
+              type="text"
+              value={key}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                setStep(0);
+              }}
+              aria-label="Inspect key"
+            />
+          </label>
+          <button
+            type="button"
+            className="ds-formula-btn"
+            onClick={() => {
+              setDraft(null);
+              setStep(0);
+            }}
+            aria-label="Reset calculation"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 function OldTable({ previous }) {
   if (!previous) return null;
   const entries =
@@ -379,6 +511,7 @@ function HashView({ state, marks, detail }) {
         {state.capacity} · load {load.toFixed(2)} · {state.tombstones}{' '}
         {state.tombstones === 1 ? 'tombstone' : 'tombstones'}
       </p>
+      <HashFormula state={state} detail={detail} />
     </div>
   );
 }

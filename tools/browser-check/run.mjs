@@ -1416,6 +1416,11 @@ const readLab = (browser) =>
       buckets: all(".ds-bucket"),
       journey: text(".ds-journey"),
       detail: text(".ds-detail"),
+      formula: text(".ds-formula summary"),
+      formulaStep: text(".ds-formula-current"),
+      formulaSum: text(".ds-formula-sum"),
+      formulaTerm: text(".ds-formula-line .ds-term"),
+      formulaSteps: document.querySelectorAll(".ds-formula-step").length,
       oldTable: text(".ds-old-table"),
       feedback: text(".ds-feedback"),
       tableRows: all(".ds-table tbody tr"),
@@ -1726,6 +1731,54 @@ async function productPages(browser) {
     String((await readLab(browser)).feedback),
   );
 
+  // The formula panel steps through the engine's own arithmetic.
+  await browser.click(".ds-formula summary");
+  await sleep(100);
+  const formula = await readLab(browser);
+  check(
+    formula.formula?.includes("Formula breakdown") &&
+      formula.formula?.includes("Division") &&
+      formula.formulaSteps >= 3,
+    "the formula panel lists every calculation step",
+    `${formula.formula} | ${formula.formulaSteps} steps`,
+  );
+  check(
+    formula.formulaSum?.includes("Raw hash 530") && formula.formulaSum?.includes("bucket 5"),
+    "the panel separates the raw hash from the bucket index",
+    String(formula.formulaSum),
+  );
+  const firstStep = formula.formulaStep;
+  await browser.click('[aria-label="Next calculation step"]');
+  await sleep(80);
+  const nextStep = await readLab(browser);
+  check(
+    nextStep.formulaStep !== firstStep && nextStep.formulaTerm?.length > 0,
+    "stepping marks the formula term the step works on",
+    `${firstStep} -> ${nextStep.formulaStep} | ${nextStep.formulaTerm}`,
+  );
+  await browser.click('[aria-label="Previous calculation step"]');
+  await sleep(80);
+  check(
+    (await readLab(browser)).formulaStep === firstStep,
+    "going back returns to the earlier calculation",
+    String((await readLab(browser)).formulaStep),
+  );
+  await browser.setValue('input[aria-label="Inspect key"]', "ab");
+  await sleep(100);
+  const inspected = await readLab(browser);
+  check(
+    inspected.formulaSum?.includes("Raw hash 195") && inspected.formulaSum?.includes("bucket 6"),
+    "typing a key recalculates with the engine's hash",
+    String(inspected.formulaSum),
+  );
+  await browser.click('[aria-label="Reset calculation"]');
+  await sleep(80);
+  check(
+    (await readLab(browser)).formulaSum?.includes("Raw hash 530"),
+    "reset returns the panel to the frame's own key",
+    String((await readLab(browser)).formulaSum),
+  );
+
   // The same colliding keys resolve differently under each strategy.
   const strategyBuckets = async (preset, bucket, expected) => {
     await openRoute(browser, "/visualizer/data-structures");
@@ -1934,6 +1987,16 @@ async function productPages(browser) {
     mobileStep.transition === "0s" || parseFloat(mobileStep.transition) < 0.001,
     "reduced motion removes the lab transition",
     String(mobileStep.transition),
+  );
+  await openRoute(browser, "/visualizer/data-structures/hash-table");
+  await browser.waitFor('document.querySelector(".ds-formula")', 10000, "the narrow hash lab");
+  await browser.click(".ds-formula summary");
+  await sleep(100);
+  const mobileFormula = await readLab(browser);
+  check(
+    mobileFormula.formulaSteps > 2 && !mobileFormula.overflow,
+    "the calculation panel fits a 390px screen",
+    `${mobileFormula.formulaSteps} steps | overflow ${mobileFormula.overflow}`,
   );
   await browser.screenshot("ds-mobile-reduced");
   await browser.send("Emulation.clearDeviceMetricsOverride");

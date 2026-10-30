@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { applyOperation, initialState } from "./model.js";
 import {
   CANDIDATE_KEYS,
+  GOLDEN_FRACTION,
   HASH_PRESETS,
   HASH_START,
   HASH_STRATEGIES,
@@ -17,6 +18,7 @@ import {
   bucketIndex,
   compareStrategies,
   findCollision,
+  hashBreakdown,
   hashStep,
   nextCapacity,
   rawHash,
@@ -398,9 +400,76 @@ test("the hash step carries the numbers the journey draws", () => {
   assert.equal(hash.detail.key, "apple");
   assert.equal(hash.detail.raw, rawHash("division", "apple"));
   assert.equal(hash.detail.index, bucketIndex("division", "apple", 7));
+  assert.deepEqual(hash.detail.breakdown, hashBreakdown("division", "apple", 7));
 });
 
-test("a dataset may name the strategy it needs to be visible", () => {  const loaded = ok(fresh(), "load", { preset: "deletions" });
+test("the formula breakdown reproduces the engine's raw hash and index", () => {
+  const keys = ["apple", "ab", "42", "-3", "a much longer key", "zzz"];
+  for (const fn of ["division", "multiplication", "polynomial", "first-char"]) {
+    for (const capacity of [5, 7, 13]) {
+      for (const key of keys) {
+        const detail = hashBreakdown(fn, key, capacity);
+        assert.equal(detail.raw, rawHash(fn, key), `${fn}/${key} raw`);
+        assert.equal(detail.index, bucketIndex(fn, key, capacity), `${fn}/${key} index`);
+        assert.ok(detail.index >= 0 && detail.index < capacity, `${fn}/${key} index is in range`);
+        assert.ok(detail.steps.length >= 2, `${fn}/${key} has steps to step through`);
+        for (const step of detail.steps) {
+          assert.ok(step.title, `${fn}/${key} step has a title`);
+          assert.ok(step.expression, `${fn}/${key} step has an expression`);
+          assert.ok(
+            detail.formula.includes(step.term),
+            `${fn}/${key}: the highlighted term ${step.term} really is in the formula`,
+          );
+        }
+        assert.deepEqual(hashBreakdown(fn, key, capacity), detail, `${fn}/${key} is deterministic`);
+      }
+    }
+  }
+});
+
+test("each breakdown's running values end on the raw hash it reports", () => {
+  const poly = hashBreakdown("polynomial", "apple", 7);
+  const accumulations = poly.steps.filter((step) => step.term === "hᵢ₋₁ × 31");
+  assert.ok(accumulations.length === 5);
+  assert.equal(Number(accumulations.at(-1).result), poly.raw);
+
+  const additive = hashBreakdown("division", "apple", 7);
+  const sums = additive.steps.filter((step) => step.term === "Σ char codes" && step.result);
+  assert.equal(Number(sums.at(-1).result), additive.raw);
+
+  const numeric = hashBreakdown("division", "42", 7);
+  assert.equal(numeric.raw, 42);
+  assert.ok(!numeric.steps.some((step) => step.term === "Σ char codes"), "an integer key is not spelled out");
+  assert.match(numeric.steps.at(-1).expression, /42 mod 7 = 0/);
+});
+
+test("the breakdown follows the capacity, and multiplication uses the real constant", () => {
+  const atSeven = hashBreakdown("division", "apple", 7);
+  const atThirteen = hashBreakdown("division", "apple", 13);
+  assert.equal(atSeven.raw, atThirteen.raw, "the raw hash does not depend on the capacity");
+  assert.notEqual(atSeven.index, atThirteen.index, "the bucket index does");
+  assert.match(atSeven.steps.at(-1).expression, /mod 7/);
+  assert.match(atThirteen.steps.at(-1).expression, /mod 13/);
+
+  const multiplying = hashBreakdown("multiplication", "12345", 7);
+  assert.equal(multiplying.index, bucketIndex("multiplication", "12345", 7));
+  assert.ok(
+    multiplying.steps.some((step) => step.expression.includes(String(GOLDEN_FRACTION))),
+    "the panel shows the constant the engine multiplies by",
+  );
+  assert.ok(
+    multiplying.steps.some((step) => step.term === "frac"),
+    "the fractional part is its own step",
+  );
+  assert.ok(!multiplying.steps.at(-1).expression.includes("mod"), "multiplication is not a remainder");
+
+  const negative = hashBreakdown("division", "-3", 7);
+  assert.equal(negative.index, 4);
+  assert.match(negative.steps.at(-1).expression, /\+ 7\) mod 7 = 4/);
+});
+
+test("a dataset may name the strategy it needs to be visible", () => {
+  const loaded = ok(fresh(), "load", { preset: "deletions" });
   assert.equal(loaded.state.strategy, "linear", "deletions load as open addressing");
   assert.equal(loaded.state.tombstones, 2, "both deletions leave a tombstone");
   assert.ok(loaded.state.table.some((slot) => slot?.tombstone));

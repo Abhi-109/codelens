@@ -148,6 +148,10 @@ export const hashFunctionLabel = (id) =>
 export const strategyLabel = (id) =>
   HASH_STRATEGIES.find((entry) => entry.id === id)?.label ?? id;
 
+/** The multiplier multiplication hashing really uses. Exported so the
+ *  breakdown and the index cannot drift apart. */
+export const GOLDEN_FRACTION = 0.6180339887498949;
+
 const isPrime = (value) => {
   if (!Number.isInteger(value) || value < 2) return false;
   for (let n = 2; n * n <= value; n += 1) if (value % n === 0) return false;
@@ -212,7 +216,7 @@ export function rawHash(hashFn, key) {
 export function bucketIndex(hashFn, key, capacity) {
   const raw = rawHash(hashFn, key);
   if (hashFn === 'multiplication') {
-    const scaled = raw * 0.6180339887498949;
+    const scaled = raw * GOLDEN_FRACTION;
     return Math.floor(capacity * (scaled - Math.floor(scaled)));
   }
   return ((raw % capacity) + capacity) % capacity;
@@ -223,6 +227,190 @@ export function bucketIndex(hashFn, key, capacity) {
 export function hashStep(hashFn, key, capacity) {
   return 1 + (Math.abs(rawHash(hashFn, key)) % (capacity - 1));
 }
+
+/* --- The calculation, as data --------------------------------------------- */
+
+/* The panel that explains a hash renders these steps; it never evaluates a
+ * formula of its own. Each step's `term` is a literal substring of `formula`,
+ * so the UI can mark the part of the formula the step is working on. */
+
+const moduloStep = (raw, capacity, index) => {
+  const quotient = Math.floor(raw / capacity);
+  return {
+    term: 'mod m',
+    title: 'Bucket index',
+    expression:
+      raw < 0
+        ? `((${raw} mod ${capacity}) + ${capacity}) mod ${capacity} = ${index}`
+        : `${raw} mod ${capacity} = ${index}`,
+    result: String(index),
+    note:
+      raw < 0
+        ? `The remainder is kept in 0..${capacity - 1}, so a negative key still lands in the table.`
+        : `${raw} = ${quotient} × ${capacity} + ${index}`,
+  };
+};
+
+const inputStep = (text) => ({
+  term: 'k',
+  title: 'Input',
+  expression: `k = "${text}"`,
+  result: text,
+  note: 'Keys are compared as exact strings, so the hash first needs a number.',
+});
+
+/** The character-code walk that division and multiplication both use for a
+ *  non-integer key. Returns the running sum, which must equal `rawHash`. */
+const characterSteps = (text, steps) => {
+  let sum = 0;
+  for (const character of text) {
+    const code = character.codePointAt(0) ?? 0;
+    const before = sum;
+    sum += code;
+    steps.push({
+      term: 'Σ char codes',
+      title: `Character "${character}"`,
+      expression: `${before} + ${code} = ${sum}`,
+      result: String(sum),
+      note: `code point ${code}`,
+    });
+  }
+  return sum;
+};
+
+/** The integer encoding a key has for the arithmetic hashes, or null when it
+ *  is a string that gets summed. */
+const integerKey = (text) => {
+  const numeric = /^-?\d+$/.test(text) ? Number(text) : NaN;
+  return Number.isSafeInteger(numeric) ? numeric : null;
+};
+
+/**
+ * Every intermediate number behind one bucket index, for the explanation panel.
+ *
+ * The first and last values come from `rawHash` and `bucketIndex`; the steps in
+ * between are the arithmetic those two perform. `hashTable.test.mjs` pins the
+ * accumulation to the returned raw hash for every function, so a step can never
+ * quietly disagree with the index the table actually used.
+ */
+export function hashBreakdown(hashFn, key, capacity) {
+  const text = String(key);
+  const raw = rawHash(hashFn, key);
+  const index = bucketIndex(hashFn, key, capacity);
+  const steps = [];
+  const numeric = integerKey(text);
+  let formula;
+
+  if (hashFn === 'polynomial') {
+    formula = 'h₀ = 0; hᵢ = (hᵢ₋₁ × 31 + code(cᵢ)) mod 2³²; index = raw mod m';
+    steps.push({ term: 'h₀', title: 'Start', expression: 'h = 0', result: '0', note: 'The accumulator starts empty.' });
+    let hash = 0;
+    for (const character of text) {
+      const code = character.codePointAt(0) ?? 0;
+      const before = hash;
+      const unwrapped = before * 31 + code;
+      hash = unwrapped >>> 0;
+      steps.push({
+        term: 'hᵢ₋₁ × 31',
+        title: `Character "${character}"`,
+        expression: `h = ${before} × 31 + ${code} = ${hash}`,
+        result: String(hash),
+        note:
+          unwrapped > 0xffffffff
+            ? 'Wrapped to an unsigned 32-bit integer, exactly as the engine does.'
+            : `code point ${code}`,
+      });
+    }
+    steps.push(moduloStep(raw, capacity, index));
+    return { fn: hashFn, key: text, capacity, raw, index, formula, steps };
+  }
+
+  if (hashFn === 'first-char') {
+    const first = [...text][0];
+    formula = 'index = code(k[0]) mod m';
+    steps.push(
+      first
+        ? {
+            term: 'k[0]',
+            title: 'First character only',
+            expression: `code("${first}") = ${raw}`,
+            result: String(raw),
+            note:
+              text.length > 1
+                ? `The other ${text.length - 1} characters are ignored on purpose: that is what makes this function collide.`
+                : 'There is only one character, so nothing is ignored.',
+          }
+        : { term: 'k[0]', title: 'Empty key', expression: 'raw = 0', result: '0', note: 'An empty key has no first character.' },
+    );
+    steps.push(moduloStep(raw, capacity, index));
+    return { fn: hashFn, key: text, capacity, raw, index, formula, steps };
+  }
+
+  if (hashFn === 'multiplication') {
+    formula = `raw = k or Σ char codes; scaled = raw × ${GOLDEN_FRACTION}; index = floor(m × frac(scaled))`;
+    steps.push(inputStep(text));
+    if (numeric !== null) {
+      steps.push({
+        term: 'k',
+        title: 'Integer key',
+        expression: `"${text}" → ${numeric}`,
+        result: String(numeric),
+        note: 'An integer-looking key hashes as its integer value.',
+      });
+    } else {
+      characterSteps(text, steps);
+    }
+    const scaled = raw * GOLDEN_FRACTION;
+    const whole = Math.floor(scaled);
+    const fraction = scaled - whole;
+    steps.push({
+      term: GOLDEN_FRACTION,
+      title: 'Multiply by the constant',
+      expression: `${raw} × ${GOLDEN_FRACTION} = ${scaled}`,
+      result: String(scaled),
+      note: `The constant is the fractional part of the golden ratio; the table really uses ${GOLDEN_FRACTION}.`,
+    });
+    steps.push({
+      term: 'frac',
+      title: 'Keep the fractional part',
+      expression: `${scaled} − ${whole} = ${fraction}`,
+      result: String(fraction),
+      note: `The whole part ${whole} is discarded.`,
+    });
+    steps.push({
+      term: 'm × frac',
+      title: 'Scale by the capacity',
+      expression: `floor(${capacity} × ${fraction}) = ${index}`,
+      result: String(index),
+      note: 'This function scales the fraction instead of taking a remainder.',
+    });
+    return { fn: hashFn, key: text, capacity, raw, index, formula, steps };
+  }
+
+  formula = 'index = raw mod m, where raw = k or Σ char codes';
+  steps.push(inputStep(text));
+  if (numeric !== null) {
+    steps.push({
+      term: 'k',
+      title: 'Integer key',
+      expression: `"${text}" → ${numeric}`,
+      result: String(numeric),
+      note: 'An integer-looking key hashes as its integer value.',
+    });
+  } else {
+    steps.push({
+      term: 'Σ char codes',
+      title: 'Encode the string',
+      expression: `Σ char codes("${text}")`,
+      result: '',
+      note: `Each of the ${[...text].length} characters contributes its code point.`,
+    });
+    characterSteps(text, steps);
+  }
+  steps.push(moduloStep(raw, capacity, index));
+  return { fn: hashFn, key: text, capacity, raw, index, formula, steps };
+}
+
 
 const probeIndex = (strategy, base, step, i, capacity) => {
   if (strategy === 'linear') return (base + i) % capacity;
@@ -266,6 +454,16 @@ const detailOf = (state, kind, extra = {}) => ({
   load: loadOf(state),
   ...extra,
 });
+
+/** The hash step's detail: its raw number, its bucket, and the engine's own
+ *  step-by-step breakdown. The panel below the buckets renders this object. */
+const hashDetail = (state, key, base) =>
+  detailOf(state, 'hash', {
+    key,
+    index: base,
+    raw: rawHash(state.hashFn, key),
+    breakdown: hashBreakdown(state.hashFn, key, state.capacity),
+  });
 
 const probeWord = (count) => (count === 1 ? '1 probe' : `${count} probes`);
 
@@ -311,7 +509,7 @@ function insertCore(state, key, value, sink) {
     const bucket = state.table[base];
     if (sink) {
       sink.push(
-        frame(state, hashLine(state, key, base), { active: [`b${base}`] }, detail('hash', { raw: rawHash(state.hashFn, key) })),
+        frame(state, hashLine(state, key, base), { active: [`b${base}`] }, hashDetail(state, key, base)),
       );
     }
     let probes = 1;
@@ -366,7 +564,7 @@ function insertCore(state, key, value, sink) {
   let probes = 0;
   let collisions = 0;
   if (sink) {
-    sink.push(frame(state, hashLine(state, key, base), { active: [`b${base}`] }, detail('hash', { raw: rawHash(state.hashFn, key) })));
+    sink.push(frame(state, hashLine(state, key, base), { active: [`b${base}`] }, hashDetail(state, key, base)));
   }
 
   for (let i = 0; i < state.capacity; i += 1) {
@@ -484,7 +682,7 @@ function lookupCore(state, key, sink, forContains = false) {
     : `${key} is not in the table.`;
 
   if (state.strategy === 'chaining') {
-    if (sink) sink.push(frame(state, hashLine(state, key, base), { active: [`b${base}`] }, detail('hash', { raw: rawHash(state.hashFn, key) })));
+    if (sink) sink.push(frame(state, hashLine(state, key, base), { active: [`b${base}`] }, hashDetail(state, key, base)));
     const bucket = state.table[base];
     for (const entry of bucket) {
       probes += 1;
@@ -522,7 +720,7 @@ function lookupCore(state, key, sink, forContains = false) {
 
   const step = state.strategy === 'double' ? hashStep(state.hashFn, key, state.capacity) : 0;
   const seen = new Set();
-  if (sink) sink.push(frame(state, hashLine(state, key, base), { active: [`b${base}`] }, detail('hash', { raw: rawHash(state.hashFn, key) })));
+  if (sink) sink.push(frame(state, hashLine(state, key, base), { active: [`b${base}`] }, hashDetail(state, key, base)));
 
   for (let i = 0; i < state.capacity; i += 1) {
     const at = probeIndex(state.strategy, base, step, i, state.capacity);

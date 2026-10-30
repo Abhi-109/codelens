@@ -623,6 +623,150 @@
   word-break: break-word;
 }
 
+/* --- The hash calculation panel ------------------------------------------- */
+
+.ds-formula {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+}
+
+.ds-formula summary {
+  padding: var(--space-2) var(--space-3);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.ds-formula-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.ds-formula-line {
+  margin: 0;
+  font: 11.5px/1.6 var(--mono);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.ds-term {
+  padding: 0 2px;
+  border-radius: 2px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ds-formula-nav,
+.ds-formula-try {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.ds-formula-btn {
+  min-height: 28px;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-h);
+  font: 600 11.5px var(--mono);
+  cursor: pointer;
+}
+
+.ds-formula-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ds-formula-count {
+  font: 11px var(--mono);
+  color: var(--text);
+}
+
+.ds-formula-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ds-formula-step {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: 10.5px var(--mono);
+  cursor: pointer;
+}
+
+.ds-formula-step.is-on {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ds-formula-current {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.ds-formula-title {
+  font: 600 11.5px var(--mono);
+  color: var(--text-h);
+}
+
+.ds-formula-expression {
+  font: 12px var(--mono);
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.ds-formula-result {
+  font: 600 12px var(--mono);
+  color: var(--accent);
+}
+
+.ds-formula-note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.ds-formula-sum {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.ds-formula-sum strong {
+  font-family: var(--mono);
+  color: var(--text-h);
+}
+
+.ds-formula-try .ds-field input {
+  width: 112px;
+}
+
+
 /* --- Circular queue and priority queue ------------------------------------ */
 
 .ds-queue-circular {
