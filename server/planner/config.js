@@ -35,5 +35,11 @@ export function readPlannerConfig(env = {}) {
     typeof env.PLANNER_MODEL === "string" && env.PLANNER_MODEL.trim()
       ? env.PLANNER_MODEL.trim()
       : DEFAULT_MODEL;
-  return { configured: apiKey.length > 0, url: configuredUrl, model, apiKey };
+  const provider =
+    typeof env.PLANNER_PROVIDER === "string" && env.PLANNER_PROVIDER.trim()
+      ? env.PLANNER_PROVIDER.trim().toLowerCase()
+      : configuredUrl.includes("generativelanguage.googleapis.com")
+        ? "gemini"
+        : "openai";
+  return { configured: apiKey.length > 0, url: configuredUrl, model, apiKey, provider };
 }

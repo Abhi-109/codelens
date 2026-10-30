@@ -10,6 +10,7 @@ import { readPlannerConfig, PLANNER_LIMITS } from "./config.js";
 import { PlannerError } from "./errors.js";
 import { buildPrompt } from "./prompt.js";
 import { createChatProvider } from "./provider.js";
+import { createGeminiProvider } from "./geminiProvider.js";
 import { createRateLimiter } from "./rateLimit.js";
 import { validatePlannerRequest } from "./request.js";
 
@@ -139,7 +140,8 @@ export async function handlePlannerRequest(input = {}) {
     return refuse(429, "rate_limited", "client", { "retry-after": String(limited.retryAfter) });
   }
 
-  const provider = createChatProvider({
+  const providerFactory = config.provider === "gemini" ? createGeminiProvider : createChatProvider;
+  const provider = providerFactory({
     url: config.url,
     apiKey: config.apiKey,
     model: config.model,
