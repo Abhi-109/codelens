@@ -10,7 +10,7 @@
   gap: var(--space-4);
   min-height: 0;
   overflow: auto;
-  padding: var(--space-5);
+  padding: var(--space-4) var(--space-5);
   /* The stage is the canvas. An inset hairline instead of a border keeps the
      ghost measurements in MotionStage.jsx accurate: those are taken from this
      element's border box and drawn from its padding box. */
@@ -103,37 +103,130 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: var(--space-2);
+  gap: 6px;
   flex: none;
   min-width: 0;
 }
 
-/* Calls are context, not the subject: one compact strip instead of bordered
- * cards that push the data down. Depth stays visible because every frame is
- * still its own keyed entry; recursion wraps onto another line, and a quiet
- * rule keeps two frames from reading as one run-on sentence. */
-.motion-frame {
+.motion-frames-label {
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
-  gap: 2px 8px;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 2px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.motion-frames-count {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.8;
+}
+
+/* A lone module frame above a collection is context: one compact line so the
+ * values it describes keep the canvas. */
+.motion-frames.is-compact {
+  gap: 0;
+}
+
+.motion-frames.is-compact .motion-frames-label {
+  display: none;
+}
+
+.motion-frames.is-compact .motion-frame {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-left: 0;
+  padding: 3px 8px 3px 10px;
+}
+
+.motion-frames.is-compact .motion-frame-rail {
+  top: 4px;
+  bottom: 4px;
+}
+
+.motion-frames.is-compact .motion-frame-body {
+  flex: 1 1 auto;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.motion-frames.is-compact .motion-frame-head {
+  flex: none;
+}
+
+.motion-frames.is-compact .motion-vars {
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.motion-frames.is-compact .motion-var {
+  flex: 0 1 auto;
+}
+
+/* One recorded invocation is a real frame: function, state, line and locals,
+ * with the active call leading the stack. The accent rail names the running
+ * call; a suspended parent stays legible but recedes. */
+.motion-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   min-width: 0;
   max-width: 100%;
-  padding: 1px 0;
-  border: 0;
-  background: transparent;
+  overflow: hidden;
+  margin-left: min(calc(var(--frame-depth, 0) * 6px), 36px);
+  padding: 7px 10px 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
 }
 
-.motion-frame + .motion-frame {
-  padding-left: var(--space-3);
-  border-left: 1px solid var(--border);
+.motion-frame-rail {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--border);
 }
 
-/* The cap note reads as metadata, not as another call. */
-.motion-frames-more {
-  flex-basis: 100%;
-  font-size: 11.5px;
+.motion-frame.is-active {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.motion-frame.is-active .motion-frame-rail {
+  background: var(--accent);
+}
+
+.motion-frame.is-waiting {
+  background: var(--code-bg);
+}
+
+.motion-frame.is-waiting .motion-fn {
   color: var(--text);
+  opacity: 0.82;
+}
+
+.motion-frame.is-returning {
+  border-color: var(--ok);
+  background: var(--code-bg);
+}
+
+.motion-frame.is-returning .motion-frame-rail {
+  background: var(--ok);
 }
 
 .motion-frame.is-highlighted .motion-fn {
@@ -144,20 +237,37 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 2px 6px;
+  gap: 2px 7px;
   min-width: 0;
 }
 
 .motion-fn {
   overflow: hidden;
-  font: 600 12px/1.4 var(--mono);
-  color: var(--text);
+  font: 600 12.5px/1.4 var(--mono);
+  color: var(--text-h);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.motion-frame.is-current .motion-fn {
-  color: var(--text-h);
+.motion-frame-state {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font: 600 9px/1.5 var(--mono);
+  letter-spacing: 0.05em;
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.motion-frame-state.is-active {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+.motion-frame-state.is-returning {
+  border-color: var(--ok);
+  color: var(--ok);
 }
 
 .motion-frame-line {
@@ -167,17 +277,46 @@
 }
 
 /* Depth and a returned value are recorded facts about the call, printed in
- * the strip rather than invented as a badge. */
+ * the frame rather than invented as a badge. */
 .motion-frame-depth {
   flex: none;
   font: 10.5px/1.4 var(--mono);
   color: var(--text);
+  opacity: 0.78;
 }
 
 .motion-frame-return {
-  flex: none;
-  font: 600 11.5px/1.4 var(--mono);
-  color: var(--text-h);
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  font: 600 11px/1.4 var(--mono);
+  color: var(--text);
+}
+
+.motion-frame.is-returning .motion-frame-return {
+  background: transparent;
+  color: var(--ok);
+}
+
+.motion-frame-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* The cap note reads as metadata, not as another call. */
+.motion-frames-more {
+  padding: 0 2px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text);
+  opacity: 0.85;
 }
 
 .motion-vars {
@@ -206,6 +345,14 @@
   color: var(--text);
 }
 
+/* A class instance repr can be hundreds of characters; a frame shows the
+ * start of it and keeps the full text in the tooltip. */
+.motion-var .motion-value {
+  display: inline-block;
+  max-width: 32ch;
+  vertical-align: bottom;
+}
+
 .motion-var.is-changed,
 .motion-slot.is-changed {
   border-color: var(--accent-border);
@@ -231,12 +378,28 @@
 /* A scalar-only program is still a program: point at where its values are
  * instead of leaving the canvas with a bare sentence. */
 .motion-data .motion-no-values {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   max-width: 46ch;
   margin: 0 auto;
-  padding: var(--space-6) 0;
-  font-size: 12.5px;
-  line-height: 1.6;
+  padding: var(--space-5) var(--space-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
   text-align: center;
+}
+
+.motion-empty-title {
+  font: 600 12px/1.4 var(--mono);
+  letter-spacing: 0.03em;
+  color: var(--text-h);
+}
+
+.motion-data .motion-no-values p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
 }
 
 /* Scalars are values too: compact tiles that wrap instead of a blank canvas.
@@ -272,6 +435,21 @@
   color: var(--text);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.motion-scalar-row {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.motion-scalar-was {
+  flex: none;
+  font: 11px/1.4 var(--mono);
+  color: var(--text);
+  opacity: 0.7;
+  text-decoration: line-through;
 }
 
 .motion-scalar-value {
@@ -418,9 +596,9 @@
  * centred in the canvas, and the sentence stays directly under the array. */
 .motion-data {
   display: flex;
-  flex: 1;
+  flex: 1 0 auto;
   flex-direction: column;
-  justify-content: center;
+  justify-content: safe center;
   gap: var(--space-3);
   min-height: 0;
 }
@@ -538,7 +716,7 @@
   justify-content: center;
   gap: 0;
   min-width: 88px;
-  min-height: 112px;
+  min-height: 96px;
   max-width: 220px;
   padding: 0;
   border: 1px solid var(--border);
@@ -549,7 +727,7 @@
 .motion-cell-value {
   display: block;
   min-width: 0;
-  padding: 18px 12px 10px;
+  padding: 14px 12px 8px;
   text-align: center;
 }
 
@@ -560,7 +738,7 @@
 }
 
 .motion-cell-index {
-  padding: 0 8px 10px;
+  padding: 0 8px 8px;
   overflow: hidden;
   font: 11.5px/1.4 var(--mono);
   color: var(--text);
@@ -718,6 +896,168 @@
   margin-top: -2px;
 }
 
+/* A recorded chain, tree or graph: one composition of node cards. Rows are
+ * depth levels, so positions stay stable between steps and a new node only
+ * joins its own row. */
+.motion-structure {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.motion-structure-title {
+  padding: 0 2px;
+  font: 600 10px/1.4 var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--text);
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.motion-list-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.motion-link-arrow {
+  flex: none;
+  font: 15px/1 var(--mono);
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.motion-link-arrow.is-cycle {
+  color: var(--violet);
+  opacity: 1;
+}
+
+.motion-levels {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.motion-level {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.is-tree .motion-level + .motion-level,
+.is-graph .motion-level + .motion-level {
+  position: relative;
+}
+
+/* A quiet rule between levels says "this row is deeper" without drawing
+ * invented edges; the recorded edge name stays on the node. */
+.is-tree .motion-level + .motion-level::before,
+.is-graph .motion-level + .motion-level::before {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 1px;
+  height: 4px;
+  background: var(--border-strong);
+  content: "";
+}
+
+.motion-node {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 72px;
+  max-width: min(100%, 190px);
+  padding: 6px 10px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  text-align: center;
+  transition:
+    border-color 140ms ease-out,
+    background-color 140ms ease-out,
+    box-shadow 140ms ease-out;
+}
+
+.motion-node.is-active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+
+.motion-node-role {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  max-width: 90%;
+  padding: 0 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--code-bg);
+  font: 9px/1.5 var(--mono);
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.motion-node-value {
+  font: 600 17px/1.35 var(--mono);
+}
+
+.motion-node-label {
+  max-width: 100%;
+  overflow: hidden;
+  font: 9.5px/1.35 var(--mono);
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.motion-node-attrs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 6px;
+  max-width: 100%;
+  font: 9.5px/1.4 var(--mono);
+  color: var(--text);
+}
+
+.motion-node-attr {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motion-node-links {
+  max-width: 100%;
+  overflow: hidden;
+  font: 9.5px/1.4 var(--mono);
+  color: var(--violet);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Ghosts are positioned over the target layout from the previous measurement,
    then faded out. They carry the removed node's recorded value only. */
 
@@ -785,8 +1125,42 @@
     max-width: 100%;
   }
 
+  /* Depth is already written on the frame; dropping the indent keeps a phone
+   * from turning the stack into a narrow column. */
+  .motion-frame {
+    margin-left: 0;
+  }
+
   .motion-output-text {
     max-height: 7rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .motion-slot.motion-cell {
+    min-width: 68px;
+    min-height: 94px;
+  }
+
+  .motion-cell-value {
+    padding: 14px 8px 8px;
+  }
+
+  .motion-cell-value .motion-value {
+    font-size: 17px;
+  }
+
+  .motion-level {
+    gap: 6px;
+  }
+
+  .motion-node {
+    min-width: 62px;
+    padding: 5px 8px 6px;
+  }
+
+  .motion-node-value {
+    font-size: 15px;
   }
 }
 
@@ -797,7 +1171,8 @@
   .motion-slot.motion-cell,
   .motion-cell-index,
   .motion-var,
-  .motion-scalar {
+  .motion-scalar,
+  .motion-node {
     transition: none;
   }
 
