@@ -263,10 +263,10 @@ function slotView(slot, flags) {
   };
 }
 
-/* A runaway recursion records about a thousand frames. The call strip is
+/* A runaway recursion records about a thousand frames. The call stack is
  * context, not the subject, so it keeps the most recent calls and says how
- * many it left out; the Stack tab still lists every recorded frame. */
-export const MAX_VISIBLE_FRAMES = 24;
+ * many it left out; the Inspector still lists every recorded frame. */
+export const MAX_VISIBLE_FRAMES = 8;
 
 /* A scalar-only program still has values worth seeing. The current call's
  * primitive variables become compact tiles; collections keep their object
@@ -274,7 +274,7 @@ export const MAX_VISIBLE_FRAMES = 24;
 export const MAX_VISIBLE_SCALARS = 12;
 const SCALAR_TYPES = new Set(["int", "float", "str", "bool", "none", "other"]);
 
-function scalarTiles(plan, flags) {
+function scalarTiles(plan, flags, previous) {
   const frames = plan?.nodes?.frames ?? [];
   const current = frames[frames.length - 1] ?? null;
   if (!current) return { scalars: [], scalarsHidden: 0 };
@@ -291,6 +291,8 @@ function scalarTiles(plan, flags) {
           : (variable.value?.class ?? variable.valueType),
       changed: flags.changed.has(variable.key),
       highlighted: flags.highlighted.has(variable.key),
+      // The previous snapshot is the only honest source for a before value.
+      was: flags.changed.has(variable.key) ? (previous.get(variable.key)?.text ?? null) : null,
     }));
   // This step's own variables come first, then the rest in recorded order.
   const ordered = [
@@ -303,7 +305,7 @@ function scalarTiles(plan, flags) {
   };
 }
 
-function frameView(frame, flags, returned) {
+function frameView(frame, flags, returned, currentLine) {
   // The module frame's implicit None is completion, not a returned value.
   const ownsReturn =
     returned !== null &&
@@ -313,6 +315,11 @@ function frameView(frame, flags, returned) {
       : returned.function === frame.function);
   return {
     ...frame,
+    // A call is entering, running, suspended while a child runs, or handing a
+    // value back. Only the last one gets the return fact; the rest are proven
+    // by the recorded stack alone.
+    state: ownsReturn ? "returning" : frame.current ? "active" : "waiting",
+    activeLine: frame.current && Number.isInteger(currentLine) ? currentLine : null,
     entering: flags.entering.has(frame.key),
     highlighted: flags.highlighted.has(frame.key),
     returned: ownsReturn ? returned : null,
@@ -327,6 +334,235 @@ function objectView(object, flags) {
     entering: flags.entering.has(object.key),
     highlighted: flags.highlighted.has(object.key),
     slots,
+  };
+}
+
+/* Objects that point at one another are a shape, not separate cards. A chain
+ * of single references is a linked list; one root with at most two children
+ * and no cycles is a tree; anything else that references itself is a graph.
+ * The classification reads only reference values the trace recorded; it never
+ * guesses a structure from a variable or function name. */
+const VALUE_NAMES = new Set(["value", "val", "data", "key", "item", "label", "name"]);
+
+function referenceSlots(object) {
+  return (object?.slots ?? []).filter(
+    (slot) => slot.kind === "attribute" && Boolean(slot.refId),
+  );
+}
+
+function nodeValueSlot(object) {
+  const plain = (object?.slots ?? []).filter(
+    (slot) => slot.kind === "attribute" && !slot.refId,
+  );
+  return (
+    plain.find((slot) => VALUE_NAMES.has(String(slot.name).toLowerCase())) ??
+    plain[0] ??
+    null
+  );
+}
+
+function hasCycle(ids, outgoing) {
+  const state = new Map();
+  const visit = (id) => {
+    const at = state.get(id);
+    if (at === 1) return true;
+    if (at === 2) return false;
+    state.set(id, 1);
+    for (const edge of outgoing.get(id) ?? []) {
+      if (visit(edge.to)) return true;
+    }
+    state.set(id, 2);
+    return false;
+  };
+  return ids.some((id) => visit(id));
+}
+
+function breadthFirst(rootId, outgoing) {
+  const levels = [];
+  const seen = new Set([rootId]);
+  let frontier = [rootId];
+  while (frontier.length > 0) {
+    levels.push(frontier);
+    const next = [];
+    for (const id of frontier) {
+      for (const edge of outgoing.get(id) ?? []) {
+        if (seen.has(edge.to)) continue;
+        seen.add(edge.to);
+        next.push(edge.to);
+      }
+    }
+    frontier = next;
+  }
+  return { levels, seen };
+}
+
+/**
+ * The node-link shape the recorded references prove, or null.
+ *
+ * Only opaque objects (class instances) become nodes: a list or dict is a
+ * value container, and its own card already shows it. Every edge is a real
+ * reference attribute. When no such shape is present, the generic cards are
+ * the honest rendering and nothing here replaces them.
+ *
+ * @param {Array} objects the `objectView` list from a plan
+ * @param {Object|null} plan the plan, for this step's active references
+ * @returns {Object|null}
+ */
+export function structureOf(objects, plan = null) {
+  const all = objects ?? [];
+  const candidates = all.filter((object) => object.type === "object");
+  const byId = new Map(candidates.map((object) => [object.objectId, object]));
+  const allById = new Map(all.map((object) => [object.objectId, object]));
+  if (candidates.length < 2) return null;
+
+  const outgoing = new Map(candidates.map((object) => [object.objectId, []]));
+  const incoming = new Map(candidates.map((object) => [object.objectId, []]));
+  const addEdge = (from, to, role) => {
+    const edge = { from, to, role };
+    outgoing.get(from).push(edge);
+    incoming.get(to).push(edge);
+  };
+  // A list that only exists to hold a node's neighbours is drawn as edges, so
+  // its own card would be redundant.
+  const auxiliaryIds = new Set();
+  for (const object of candidates) {
+    for (const slot of referenceSlots(object)) {
+      const target = allById.get(slot.refId);
+      if (!target) continue;
+      // A node's adjacency list is one more reference the trace recorded: the
+      // attribute points at a real list, and that list's cells point at nodes.
+      if (target.type === "list" || target.type === "tuple") {
+        for (const cell of target.slots ?? []) {
+          if (byId.has(cell.refId)) addEdge(object.objectId, cell.refId, slot.name);
+        }
+        auxiliaryIds.add(target.objectId);
+        continue;
+      }
+      if (!byId.has(slot.refId)) continue;
+      addEdge(object.objectId, slot.refId, slot.name);
+    }
+  }
+  const edgeCount = [...outgoing.values()].reduce((total, list) => total + list.length, 0);
+  if (edgeCount === 0) return null;
+
+  const activeRefs = new Set();
+  for (const operation of plan?.operations ?? []) {
+    const value = operation.action?.to;
+    if (value?.type === "ref" && value.id) activeRefs.add(value.id);
+  }
+
+  const nodes = new Map(
+    candidates.map((object) => {
+      const value = nodeValueSlot(object);
+      return [
+        object.objectId,
+        {
+          key: object.key,
+          objectId: object.objectId,
+          label: object.label,
+          value: value?.text ?? object.objectType,
+          valueType: value?.valueType ?? "other",
+          // The chosen value is already the headline; repeating it as an
+          // attribute would make the node read twice.
+          attrs: (object.slots ?? [])
+            .filter((slot) => !slot.refId && slot !== value)
+            .map((slot) => ({ name: slot.name, text: slot.text, valueType: slot.valueType })),
+          links: outgoing.get(object.objectId).map((edge) => {
+            const destination = byId.get(edge.to);
+            return nodeValueSlot(destination)?.text ?? destination.label;
+          }),
+          active:
+            activeRefs.has(object.objectId) ||
+            Boolean(object.entering) ||
+            Boolean(object.highlighted) ||
+            (object.slots ?? []).some((slot) => slot.changed || slot.highlighted),
+          changed: (object.slots ?? []).some((slot) => slot.changed),
+          entering: Boolean(object.entering),
+          role: null,
+          depth: 0,
+        },
+      ];
+    }),
+  );
+
+  const ids = candidates.map((object) => object.objectId);
+  const roots = ids.filter((id) => incoming.get(id).length === 0);
+  const maxOut = Math.max(...ids.map((id) => outgoing.get(id).length));
+  const maxIn = Math.max(...ids.map((id) => incoming.get(id).length));
+  const cycle = hasCycle(ids, outgoing);
+  const reachableFrom = (root) => breadthFirst(root, outgoing).seen.size === ids.length;
+  const disconnected = (root) =>
+    ids.filter((id) => !breadthFirst(root, outgoing).seen.has(id));
+
+  let kind = "graph";
+  let order = [];
+  let levels = [];
+  let cyclic = false;
+
+  if (maxOut <= 1) {
+    kind = "linked-list";
+    let head = roots[0] ?? ids[0];
+    const seen = new Set();
+    while (head && !seen.has(head)) {
+      seen.add(head);
+      order.push(nodes.get(head));
+      const next = outgoing.get(head)[0];
+      head = next?.to ?? null;
+    }
+    // A cycle back to the head is still a chain; a tail pointing anywhere else
+    // is not followed twice, because the recording does not prove an order for
+    // the nodes that remain.
+    cyclic = cycle && seen.size === ids.length;
+    for (const id of ids) {
+      if (!seen.has(id)) order.push(nodes.get(id));
+    }
+  } else if (maxOut <= 2 && maxIn <= 1 && roots.length === 1 && !cycle && reachableFrom(roots[0])) {
+    kind = "tree";
+    const walk = (id, depth, role) => {
+      const node = nodes.get(id);
+      node.depth = depth;
+      node.role = role;
+      if (!levels[depth]) levels[depth] = [];
+      levels[depth].push(node);
+      const children = outgoing.get(id);
+      // Attribute order is the recorded order: left before right.
+      children.forEach((edge, index) => walk(edge.to, depth + 1, edge.role ?? `child ${index + 1}`));
+    };
+    walk(roots[0], 0, "root");
+  } else {
+    kind = "graph";
+    const seen = new Set();
+    for (const root of [...roots, ...ids]) {
+      if (seen.has(root)) continue;
+      const walk = breadthFirst(root, outgoing);
+      for (const id of walk.seen) seen.add(id);
+      walk.levels.forEach((level, depth) => {
+        if (!levels[depth]) levels[depth] = [];
+        for (const id of level) {
+          if (levels.some((row) => row.some((node) => node.objectId === id))) continue;
+          const node = nodes.get(id);
+          node.depth = depth;
+          node.role = depth === 0 ? "root" : null;
+          levels[depth].push(node);
+        }
+      });
+    }
+  }
+
+  const hidden = disconnected(roots[0] ?? ids[0]).length;
+  return {
+    kind,
+    title: kind === "linked-list" ? "Linked list" : kind === "tree" ? "Tree" : "Graph",
+    objectIds: ids,
+    auxiliaryIds: [...auxiliaryIds],
+    nodes: [...nodes.values()],
+    order,
+    levels,
+    cyclic,
+    note:
+      hidden > 0
+        ? `${hidden} node${hidden === 1 ? "" : "s"} not reachable from the displayed head`
+        : null,
   };
 }
 
@@ -531,8 +767,9 @@ export function motionView(plan, stage = null) {
   const flags = flagsFor(plan);
   const feedback = operationFeedback(plan);
   const returned = returnOf(plan);
-  const scalars = scalarTiles(plan, flags);
+  const scalars = scalarTiles(plan, flags, previous);
   const result = stageResult(stage?.trace, plan.index, stage?.result ?? null);
+  const objects = plan.nodes.objects.map((object) => objectView(object, flags));
 
   // A seek, reset, hold or reduced-motion presentation renders the exact
   // target directly. Only a real adjacent animation may show a removed node.
@@ -560,14 +797,28 @@ export function motionView(plan, stage = null) {
     feedback,
     comparison: comparisonOf(plan),
     explanation: feedback?.explanation ?? null,
-    frames: shown.map((frame) => frameView(frame, flags, returned)),
+    // The first position has no mutation to show, but it is still the moment
+    // the program began. Say that instead of leaving the canvas blank.
+    intro:
+      plan.index === 0
+        ? {
+            title: "Execution starts",
+            detail: plan.lineText
+              ? `The program begins at: ${plan.lineText}`
+              : "The recording begins here. The first recorded change appears on the next step.",
+          }
+        : null,
+    frames: shown.map((frame) => frameView(frame, flags, returned, plan.line)),
     framesHidden: frames.length - shown.length,
     scalars: scalars.scalars,
     scalarsHidden: scalars.scalarsHidden,
     lastReturn: result.lastReturn,
     output: result.output,
     ending: result.ending,
-    objects: plan.nodes.objects.map((object) => objectView(object, flags)),
+    objects,
+    // A recorded shape (chain, tree, graph) is drawn as one composition; its
+    // objects are not repeated as separate cards.
+    structure: structureOf(objects, plan),
     ghosts,
     moves: flags.moves,
     entering: [...flags.entering],

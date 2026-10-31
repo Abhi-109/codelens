@@ -18,6 +18,7 @@ import {
   MAX_VISIBLE_SCALARS,
   motionView,
   returnOf,
+  structureOf,
 } from "./view.js";
 
 const read = (path) =>
@@ -1355,4 +1356,166 @@ test("a scalar-only program keeps its values in the call strip", () => {
     .find((variable) => variable.name === "n");
   assert.ok(scalar, "the scalar argument is on screen in a frame");
   assert.equal(scalar.valueType, "int");
+});
+
+test("a call is active, suspended, or handing a value back", () => {
+  const running = findPlan(
+    "recursion",
+    (plan) => plan.nodes.frames.length >= 3 && !plan.returned,
+  );
+  const stack = motionView(running.plan).frames;
+  assert.equal(stack.at(-1).state, "active", "the top call is the one running");
+  assert.ok(
+    stack.slice(0, -1).every((frame) => frame.state === "waiting"),
+    "the parents are suspended on their children",
+  );
+
+  const returning = findPlan(
+    "recursion",
+    (plan) => plan.returned?.function === "fact" && plan.nodes.frames.length >= 2,
+  );
+  const view = motionView(returning.plan);
+  const back = view.frames.filter((frame) => frame.state === "returning");
+  assert.equal(back.length, 1, "exactly the recorded call is returning");
+  assert.ok(back[0].returned, "the returning frame carries the recorded value");
+});
+
+test("the first position introduces the run instead of an empty canvas", () => {
+  const p = program("recursion");
+  const view = motionView(planAt(p, 0));
+  assert.equal(view.intro.title, "Execution starts");
+  assert.match(view.intro.detail, /begins/i);
+});
+
+test("a changed scalar keeps the previous value as a transition", () => {
+  const at = findPlan("scalars-only", (plan) =>
+    motionView(plan).scalars.some((tile) => tile.changed && tile.was !== null),
+  );
+  const view = motionView(at.plan);
+  const changed = view.scalars.find((tile) => tile.changed && tile.was !== null);
+  assert.ok(changed, "the changed scalar carries its recorded previous text");
+  assert.notEqual(changed.was, changed.text, "the transition has two real ends");
+});
+
+function shapeObject(objectId, label, attributes) {
+  return {
+    key: `object:${objectId}`,
+    objectId,
+    type: "object",
+    objectType: "Node",
+    label,
+    slots: attributes.map(([name, text, refId = null]) => ({
+      key: `attribute:${objectId}:${name}`,
+      kind: "attribute",
+      name,
+      label: name,
+      text,
+      valueType: refId ? "ref" : "int",
+      refId,
+    })),
+  };
+}
+
+test("referenced objects compose into a chain, a tree or a graph", () => {
+  const a = shapeObject("o1", "a", [
+    ["value", "1"],
+    ["next", "ref", "o2"],
+  ]);
+  const b = shapeObject("o2", "b", [
+    ["value", "2"],
+    ["next", "ref", "o3"],
+  ]);
+  const c = shapeObject("o3", "c", [["value", "3"]]);
+  const chain = structureOf([a, b, c]);
+  assert.equal(chain.kind, "linked-list");
+  assert.deepEqual(
+    chain.order.map((node) => node.value),
+    ["1", "2", "3"],
+    "the chain follows the recorded next references",
+  );
+
+  const root = shapeObject("t1", "root", [
+    ["value", "4"],
+    ["left", "ref", "t2"],
+    ["right", "ref", "t3"],
+  ]);
+  const left = shapeObject("t2", "left", [["value", "2"]]);
+  const right = shapeObject("t3", "right", [["value", "6"]]);
+  const tree = structureOf([root, left, right]);
+  assert.equal(tree.kind, "tree");
+  assert.deepEqual(
+    tree.levels.map((level) => level.map((node) => node.value)),
+    [["4"], ["2", "6"]],
+    "left and right stay on their own depth row",
+  );
+  assert.deepEqual(
+    tree.levels[1].map((node) => node.role),
+    ["left", "right"],
+    "each node names the recorded edge that reached it",
+  );
+
+  const graphA = shapeObject("g1", "A", [
+    ["value", "A"],
+    ["left", "ref", "g2"],
+    ["right", "ref", "g3"],
+  ]);
+  const graphB = shapeObject("g2", "B", [
+    ["value", "B"],
+    ["next", "ref", "g3"],
+  ]);
+  const graphC = shapeObject("g3", "C", [
+    ["value", "C"],
+    ["next", "ref", "g1"],
+  ]);
+  assert.equal(
+    structureOf([graphA, graphB, graphC]).kind,
+    "graph",
+    "a cycle is a graph, not a tree",
+  );
+
+  // The same shape can be written with adjacency lists: a node attribute
+  // points at a list, and that list's cells point at nodes.
+  const adjacency = (objectId, targets) => ({
+    key: `object:${objectId}`,
+    objectId,
+    type: "list",
+    objectType: "list",
+    label: "edges",
+    slots: targets.map((refId, index) => ({ kind: "cell", index, refId })),
+  });
+  const adjacencyGraph = structureOf([
+    shapeObject("h1", "A", [
+      ["value", "A"],
+      ["edges", "ref", "h4"],
+    ]),
+    shapeObject("h2", "B", [
+      ["value", "B"],
+      ["edges", "ref", "h5"],
+    ]),
+    shapeObject("h3", "C", [
+      ["value", "C"],
+      ["edges", "ref", "h6"],
+    ]),
+    adjacency("h4", ["h2", "h3"]),
+    adjacency("h5", ["h3"]),
+    adjacency("h6", ["h1"]),
+  ]);
+  assert.equal(adjacencyGraph.kind, "graph");
+  assert.equal(
+    adjacencyGraph.nodes.find((node) => node.value === "A").links.length,
+    2,
+    "the adjacency list becomes two recorded edges",
+  );
+  assert.deepEqual(
+    [...adjacencyGraph.auxiliaryIds].sort(),
+    ["h4", "h5", "h6"],
+    "the adjacency lists are part of the edges, not extra cards",
+  );
+
+  const plain = shapeObject("p1", "person", [["name", '"Asha"']]);
+  assert.equal(
+    structureOf([plain, shapeObject("p2", "other", [["name", '"Ravi"']])]),
+    null,
+    "objects with no recorded references keep their generic cards",
+  );
 });
