@@ -1,11 +1,11 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 10
+current_phase: "11A"
 status: complete
-stopped_at: Phase 10 complete; seven structures, the full hash table, eleven lessons, tests and docs done; pushed.
-last_updated: "2026-10-29T00:00:00.000Z"
-last_activity: 2026-10-29
-last_activity_desc: Phase 10 complete
+stopped_at: Phase 11A complete; unified Motion canvas with a vertical call stack, generic primitives and recorded shapes; pushed.
+last_updated: "2026-10-31T00:00:00.000Z"
+last_activity: 2026-10-31
+last_activity_desc: Phase 11A complete
 state_head: f86c79e145f030458326c6f27060846bc7da1199
 progress:
   total_phases: 3
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-10-26)
 
 ## Current Position
 
-Phase: 10 — COMPLETE
+Phase: 11A — COMPLETE
 Plan: 1 of 1
-Status: Phase 10 shipped
-Last activity: 2026-10-29 — Phase 10 complete
+Status: Phase 11A shipped
+Last activity: 2026-10-31 — Phase 11A complete
 
 Progress: [██████████] 100%
 

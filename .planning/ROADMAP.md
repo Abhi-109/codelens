@@ -9,6 +9,7 @@ CodeLens records real Python execution and draws it. Phase 7A added the decision
 - [x] **Phase 7: Automatic visualization planner (7A)** - Detect concepts, validate a plan, select a real renderer from trace evidence, and optionally refine with AI.
 - [x] **Phase 9: Secure AI planner activation (7B)** - A same-origin server route holds the provider credential, validates every request and response, and the planner gains a measured quality corpus.
 - [x] **Phase 10: Data Structures Lab expansion** - Seven complete teaching structures, with a full hash table (four hash functions, four collision strategies, tombstones, resizing) and eleven seeded lessons.
+- [x] **Phase 11A: Unified Motion visualization** - One visible Motion canvas with a vertical call stack, generic execution primitives, and recorded linked-list, tree and graph compositions.
 
 ## Phase Details
 
@@ -79,6 +80,7 @@ and reversible migration steps. Neither is implemented or implied by Phase 11.
 | 9. Secure AI planner activation (7B) | 1/1 | Complete | 2026-10-26 |
 | 10. Data Structures Lab expansion | 1/1 | Complete | 2026-10-29 |
 | 11. Hash table learning enhancements + graph repair | 0/1 | In progress | — |
+| 11A. Unified Motion visualization | 1/1 | Complete | 2026-10-31 |
 | 12. Cuckoo hashing and incremental rehashing | 0/0 | Deferred | — |
 
 ### Phase 7C: Live AI validation and deployment hardening

@@ -1062,3 +1062,22 @@ remaining animation-spec work is unchanged: Phase 4 (frames, recursion, objects)
   tracer or explanation change.
 - Not verified live: no provider credential and no deployed route were available, so the
   model path is implemented and mock-tested only. Docs: `docs/visualization-planner.md`.
+
+## Phase 11A notes: unified Motion visual quality and generic primitives
+- The Motion canvas is now the only user-facing visualization mode. The internal
+  renderer registry and the 122-case planner baseline are unchanged.
+- Function calls render as a vertical call stack, newest call first. Each frame names
+  the function, its recorded depth, the line it is running (or was called from), its
+  local values, and its active/waiting/returning state. A returning frame carries the
+  value the trace recorded. The stack keeps the most recent 8 calls and says how many
+  earlier calls it left out; the Inspector still holds the full recording.
+- Scalar tiles show a changed value with the previous snapshot as `old -> new`. The
+  previous value comes from the plan's own previous state, never a reconstruction.
+- Class instances that reference one another compose into a recorded shape: a chain is
+  a linked list, one root with at most two children is a tree, and a cycle or a wider
+  fan-out is a graph. Adjacency lists (a node attribute pointing at a list of nodes)
+  are followed one hop. Objects without recorded references keep their generic cards.
+- The first cursor position shows an execution introduction instead of an empty canvas;
+  steps with no drawable change show the line and an honest short note.
+- No tracer, trace-format or planner change. All motion animations remain tied to the
+  shared cursor; the view model is a pure function of one position.

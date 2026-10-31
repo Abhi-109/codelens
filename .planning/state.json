@@ -24,6 +24,11 @@
       "status": "complete"
     },
     {
+      "number": "11A",
+      "name": "Unified Motion visualization",
+      "status": "complete"
+    },
+    {
       "number": "13",
       "name": "Live AI validation and deployment hardening (7C)",
       "status": "in_progress"
