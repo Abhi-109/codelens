@@ -213,7 +213,7 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 136 Python tests: the tracer and its comparison events, the
                       # flowchart model, the static program profile and the corpus
-npm run test:js       # 917 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 877 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6
                       # dict/set/object contents and lifecycle), the pure motion
@@ -246,10 +246,9 @@ npm run test:js       # 917 JS tests: the animation diff vocabulary, the one-tra
                       # linear/quadratic/double probing, tombstones and resizes),
                       # the deterministic concept detector, the renderer
                       # capability registry, the versioned plan validator, the
-                      # deterministic planner, the optional AI provider, the
-                      # 122-case planner quality corpus, and the server route
-                      # that holds the provider key (request validation, prompt,
-                      # provider adapter, rate limit, Vercel + dev adapters)
+                      # deterministic planner, the
+                      # 122-case planner quality corpus, and the pure motion
+                      # stack and recorded-shape compositions
 npm run lint          # oxlint
 npm run build         # production build
 ```
@@ -280,7 +279,10 @@ scripted mock — that measures validation and rejection, not a model.
 `check:browser` starts its own dev server and headless Chrome, then checks the motion
 canvas against real layout: consecutive swaps, an interrupted swap at 1x and 4x, mid-move
 Back and slider seeks, a burst of steps, comparisons, persistent green positions, themes,
-reduced motion, and short and long arrays. It also drives the data-structure lab (all
+reduced motion, and short and long arrays. It also checks the recorded compositions: a
+chain of references drawn as one linked list, left/right references as a tree, a cycle as
+a graph, and a deep recursion as a vertical call stack whose active frame leads. It then
+drives the data-structure lab (all
 seven structures: every operation, Back/Next/seek/reset, invalid input, the four hash
 strategies, tombstones, a resize and the hash-table exercises), opens a lesson's program
 in the visualizer and a hash lesson's seeded table, and checks both themes, reduced
@@ -383,8 +385,8 @@ codelens/
 │   │   ├── motion/
 │   │   │   ├── plan.js          # cursor -> stable nodes + generic motion operations (pure)
 │   │   │   ├── plan.test.mjs   # real traces, reversibility, seeks, timing, cancellation
-│   │   │   ├── view.js          # plan -> drawable nodes, ghosts and step flags (pure)
-│   │   │   ├── view.test.mjs   # real-trace action-to-render mapping
+│   │   │   ├── view.js          # plan -> drawable nodes, ghosts, step flags and recorded shapes (pure)
+│   │   │   ├── view.test.mjs   # real-trace action-to-render mapping and shape classification
 │   │   │   ├── stageResult.js   # output, last return and ending at the cursor (pure)
 │   │   │   ├── stageResult.test.mjs
 │   │   │   ├── MotionStage.jsx  # persistent data cards, FLIP moves, cancellation

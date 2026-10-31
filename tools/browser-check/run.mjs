@@ -81,6 +81,47 @@ const RECURSION = `def fact(n):
 print(fact(5))
 `;
 
+// The three reference shapes: a chain, a binary tree and a cyclic graph.
+const LINKED = `class Node:
+    def __init__(self, value):
+        self.value = value
+        self.next = None
+
+a = Node(1)
+b = Node(2)
+c = Node(3)
+a.next = b
+b.next = c
+current = a
+while current:
+    print(current.value)
+    current = current.next
+`;
+const TREE = `class Node:
+    def __init__(self, value):
+        self.value = value
+        self.left = None
+        self.right = None
+
+root = Node(5)
+root.left = Node(3)
+root.right = Node(8)
+print(root.value, root.left.value, root.right.value)
+`;
+const GRAPH = `class Node:
+    def __init__(self, value):
+        self.value = value
+        self.edges = []
+
+a = Node("A")
+b = Node("B")
+c = Node("C")
+a.edges = [b, c]
+b.edges = [c]
+c.edges = [a]
+print(a.value, b.value, c.value)
+`;
+
 // --- assertions -------------------------------------------------------------
 
 const failures = [];
@@ -131,6 +172,7 @@ function readStage(browser) {
       explanation: explain?.textContent ?? null,
       explainTop: explain ? Math.round(explain.getBoundingClientRect().top) : null,
       rowBottom: row ? Math.round(row.getBoundingClientRect().bottom) : null,
+      stageBottom: Math.round(stage.getBoundingClientRect().bottom),
       rowScrolls: row ? row.scrollWidth > row.clientWidth + 1 : false,
       rowScrollWidth: row?.scrollWidth ?? null,
       rowClientWidth: row?.clientWidth ?? null,
@@ -739,6 +781,11 @@ async function bubbleSort(browser) {
     "no stale ghost after the swap",
     JSON.stringify(swapped.ghosts),
   );
+  check(
+    swapped.rowBottom !== null && swapped.rowBottom <= swapped.stageBottom + 1,
+    "the array stays inside the visible canvas",
+    `${swapped.rowBottom} <= ${swapped.stageBottom}`,
+  );
   await browser.screenshot("swap-7");
 
   // Backward playback across the swap.
@@ -1022,6 +1069,104 @@ async function playbackAndLayout(browser) {
   await browser.screenshot("narrow");
   await browser.send("Emulation.clearDeviceMetricsOverride");
   await sleep(300);
+}
+
+// --- C2. reference shapes and the recursion stack ---------------------------
+
+async function dataShapes(browser) {
+  console.log("\n--- reference shapes and recursion ---");
+  const readShape = () =>
+    browser.evaluate(`(() => {
+      const section = document.querySelector(".motion-structure");
+      const nodes = [...document.querySelectorAll(".motion-structure .motion-node")];
+      return {
+        exists: Boolean(section),
+        linked: Boolean(document.querySelector(".motion-structure.is-linked")),
+        tree: Boolean(document.querySelector(".motion-structure.is-tree")),
+        graph: Boolean(document.querySelector(".motion-structure.is-graph")),
+        nodes: nodes.length,
+        values: nodes.map((node) => node.querySelector(".motion-node-value")?.textContent ?? ""),
+        levels: document.querySelectorAll(".motion-structure .motion-level").length,
+        objectCards: document.querySelectorAll(".motion-object").length,
+        overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      };
+    })()`);
+
+  await openProgram(browser, LINKED);
+  await seek(browser, (await readStage(browser)).max);
+  const linked = await readShape();
+  check(linked.linked, "a chain of references is drawn as a linked list", JSON.stringify(linked));
+  check(
+    linked.nodes === 3 && linked.objectCards === 0,
+    "the linked nodes are one composition, not separate cards",
+    JSON.stringify(linked),
+  );
+  check(
+    linked.values.join(",") === "1,2,3",
+    "the linked list keeps the recorded order",
+    linked.values.join(","),
+  );
+  check(!linked.overflow, "the linked list does not overflow the page");
+  await browser.screenshot("linked-list");
+
+  await openProgram(browser, TREE);
+  await seek(browser, (await readStage(browser)).max);
+  const tree = await readShape();
+  check(tree.tree, "left/right references are drawn as a tree", JSON.stringify(tree));
+  check(
+    tree.levels >= 2 && tree.values.join(",") === "5,3,8",
+    "the tree keeps its root and two children on separate levels",
+    `${tree.levels} levels | ${tree.values.join(",")}`,
+  );
+  check(!tree.overflow, "the tree does not overflow the page");
+  await browser.screenshot("tree");
+
+  await openProgram(browser, GRAPH);
+  await seek(browser, (await readStage(browser)).max);
+  const graph = await readShape();
+  check(graph.graph, "a cycle of references is drawn as a graph", JSON.stringify(graph));
+  check(
+    graph.nodes === 3,
+    "every recorded graph node is on the canvas",
+    `${graph.nodes} nodes | ${graph.values.join(",")}`,
+  );
+  check(!graph.overflow, "the graph does not overflow the page");
+  await browser.screenshot("graph");
+
+  // Recursion: the active call leads a vertical, readable stack.
+  await openProgram(browser, RECURSION);
+  const recursionMax = (await readStage(browser)).max;
+  let deep = null;
+  for (let index = 0; index <= recursionMax && deep === null; index += 1) {
+    await seek(browser, index);
+    const stack = await browser.evaluate(`(() => {
+      const frames = [...document.querySelectorAll(".motion-frame")];
+      const active = frames.filter((frame) => frame.classList.contains("is-active"));
+      const stage = document.querySelector(".motion-stage")?.getBoundingClientRect();
+      return {
+        count: frames.length,
+        active: active.length,
+        state: active[0]?.querySelector(".motion-frame-state")?.textContent ?? null,
+        firstActive: frames[0]?.classList.contains("is-active") ?? false,
+        inside: stage
+          ? frames.every((frame) => {
+              const rect = frame.getBoundingClientRect();
+              return rect.left >= stage.left - 1 && rect.right <= stage.right + 1;
+            })
+          : false,
+      };
+    })()`);
+    if (stack.count >= 4) deep = { index, ...stack };
+  }
+  check(deep !== null, "a recursive run records a multi-frame stack", String(deep?.count));
+  check(deep?.active === 1, "exactly one frame is active", JSON.stringify(deep));
+  check(
+    deep?.firstActive && deep?.state === "active",
+    "the active call leads the vertical stack",
+    JSON.stringify(deep),
+  );
+  check(deep?.inside, "every frame stays inside the canvas", JSON.stringify(deep));
+  await browser.screenshot("recursion-stack");
 }
 
 // --- D. dictionary and no-array programs ------------------------------------
@@ -2365,6 +2510,7 @@ async function main() {
     await interruption(browser);
     await bubbleSort(browser);
     await playbackAndLayout(browser);
+    await dataShapes(browser);
     await fallbacks(browser);
     await productPages(browser);
     await releaseRegressions(browser);
