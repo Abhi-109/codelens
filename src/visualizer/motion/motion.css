@@ -583,13 +583,47 @@
 
 /* One sentence about what the step means, directly under the data it describes.
  * It is built from the same plan as the step head, so the two cannot disagree. */
-.motion-explain {
+.motion-explain-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   flex: none;
+  max-width: 72ch;
+}
+  flex: none;
+  align-items: baseline;
+  gap: 8px;
   max-width: 72ch;
   margin: 0;
   font-size: 14px;
   line-height: 1.55;
   color: var(--text-h);
+}
+
+.motion-explain-kind {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font: 600 9px/1.6 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.motion-explain-kind.is-compare { color: var(--compare-ring); border-color: var(--compare-ring); }
+.motion-explain-kind.is-swap { color: var(--accent); border-color: var(--accent-border); }
+.motion-explain-kind.is-shift { color: var(--accent); border-color: var(--accent-border); }
+.motion-explain-kind.is-insert { color: var(--ok); border-color: var(--ok); }
+.motion-explain-kind.is-remove { color: var(--warn); border-color: var(--warn); }
+.motion-explain-kind.is-change { color: var(--text); }
+.motion-explain-kind.is-call { color: var(--violet); border-color: var(--violet); }
+.motion-explain-kind.is-return { color: var(--ok); border-color: var(--ok); }
+.motion-explain-kind.is-error { color: var(--warn); border-color: var(--warn); }
+
+.motion-stage.is-error {
+  border-color: var(--warn);
+  box-shadow: inset 0 0 0 1px var(--warn);
 }
 
 /* The data and its one-sentence explanation travel together: the group is
@@ -917,15 +951,22 @@
   opacity: 0.78;
 }
 
+.motion-object.is-sequence .motion-slots,
 .motion-list-row {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  padding-bottom: 2px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 12px,
+    black calc(100% - 12px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 12px,
+    black calc(100% - 12px),
+    transparent 100%
+  );
 }
 
 .motion-link-arrow {

@@ -604,7 +604,10 @@ export default function MotionStage({ plan, trace = [], result = null }) {
   const stack = [...view.frames].reverse();
 
   return (
-    <div className="motion-stage" ref={stageRef}>
+    <div
+      className={classNames("motion-stage", view.ending?.id === "error" && "is-error")}
+      ref={stageRef}
+    >
       {/* One place for the step: which line ran, what it verifiably did, and the
           source itself. A comparison can sit beside the operation later without
           rearranging this block. */}
@@ -701,7 +704,19 @@ export default function MotionStage({ plan, trace = [], result = null }) {
           </div>
         ) : null}
 
-        {view.explanation ? <p className="motion-explain">{view.explanation}</p> : null}
+        {view.explanation ? (
+          <div className="motion-explain-row">
+            <span
+              className={classNames(
+                "motion-explain-kind",
+                `is-${view.feedback?.kind ?? "neutral"}`,
+              )}
+            >
+              {view.feedback?.kind ?? "step"}
+            </span>
+            <p className="motion-explain">{view.explanation}</p>
+          </div>
+        ) : null}
       </div>
 
       {view.output ? (
