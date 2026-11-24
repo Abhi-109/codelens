@@ -1,10 +1,40 @@
 # Animation visualizer: progress
 
-**Current phase:** 1 (Diff engine) — tasks 1–4, 5a–5c and 6 of 8 done.
-**Current milestone:** Motion-first visualizer — Stage 1 (numeric bars) done; Stage 2 awaits
-approval. Task 7 Stages 1–3 remain complete; the diff engine's remaining `apply.js`/golden
-work is separately scoped.
-**Last updated:** 2026-10-26
+**Current phase:** Next-level redesign — Phase 0 (contract) done, Phase 2 (Focus
+surface) in progress. The historical Phase 1 diff-engine work is done through task 6.
+**Current milestone:** Focus is the default visualizer; Studio keeps every existing
+canvas and inspector behind one toggle. See `docs/redesign.md`.
+**Last updated:** 2026-11-24
+
+## Next-level redesign (started 2026-11-24)
+- **Phase 0 landed.** `docs/animation-spec.md` gained the Focus amendment, the
+  universal-stage contract and the multi-language boundary; `docs/redesign.md` is the
+  working contract. No trace, diff or renderer rule changed.
+- **Focus vs Studio.** Focus is one editor plus one stage plus a compact transport. Studio
+  is the previous workspace, unchanged and reachable through the Focus header and
+  Ctrl/Cmd+., sharing the same session, cursor, playback and speed. Nothing was deleted.
+- **Universal stage.** Scalars are no longer hidden when a collection is drawn; the stage
+  renders the current call's values beside its data. Remaining value-kind work (strings as
+  cells, nested contents, opaque values, I/O events) is Phase 3.
+- **Multi-language is recorded, not built.** Python stays the only runnable language; the
+  redesign documents the adapter boundary (runtime -> trace contract -> diff -> stage) so a
+  second language does not need a UI rewrite and cannot be advertised before it runs.
+- **Verification (2026-11-24).** 136 Python tests, **892 JS tests** (15 new: 10 tokenizer,
+  5 Focus layout), oxlint clean, production build clean (largest chunk 432 kB, no
+  advisory). Real headless-Chrome pass on `?example=bubble-sort`: the welcome stage, a
+  completed 53-step run, Next/Back, Focus -> Studio -> Focus preserving step 2/53, both
+  themes, 390px with no page overflow, and **no console errors**. Screenshots inspected:
+  `focus-welcome.png`, `focus-run-light.png`, `focus-run-dark.png`, `focus-mobile-light.png`,
+  `studio-light.png`.
+- **Two real defects found in that pass, both fixed.** The new surface collapsed to its
+  content height because `.focus` had `flex: 1` but the shell's main is not a flex
+  container; `height: 100%` makes both panes use the screen. And `motion.css` had a lost
+  `.motion-explain` selector, whose orphan declarations broke `vite build` (lightningcss
+  rejected the stray token); the rule is restored. The latter was pre-existing and is
+  stated here rather than hidden.
+- **Opt-in browser harness:** `check:browser` still drives the old Studio selectors. It
+  was not re-run; the Focus surface needs its own section there in a follow-up. This is a
+  limitation, not a pass.
 
 ## Phase checklist
 - [x] 0 Audit

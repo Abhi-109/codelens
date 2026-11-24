@@ -13,6 +13,18 @@ No tabs, inspector cards, timeline tables, comparison views, call-stack dashboar
 
 **Approved Task 7 amendment (2026-10-24):** the right Visual Animation panel may contain a compact inspector using tabs and a switcher for the existing visualization canvases. These are views inside the single right panel, not additional primary panels. This supersedes the "No tabs..." sentence above for the Task 7 renderer; see the decision log.
 
+**Approved Focus amendment (2026-11-24):** the workspace opens in a new **Focus**
+surface: one code editor and one visualization stage with a compact playback
+strip, and no canvas tabs, inspector drawer, run-story card, learning-mode
+switch, glossary button or developer menu. The previous workspace is retained
+as **Studio**, reachable by one toggle (and Ctrl/Cmd+.), unchanged and sharing
+the same session, cursor, playback and speed. This supersedes the "No tabs..."
+sentence for Focus only; Studio keeps the Task 7 layout. A run must always
+produce a non-blank, truthful stage: what cannot be drawn is named. v1 execution
+remains Python; the trace contract is language-neutral and a later language
+adapter may supply the same events, but no language is advertised until it can
+run and record.
+
 **Caption line (Decision D1, owner may change):** one short, subtitle-style line inside the stage built only from recorded facts ("`j` is compared with `j + 1`; 12 > 11, so they swap"). It has a toggle and is on by default.
 
 ## 2. Non-goals for v1
@@ -116,3 +128,6 @@ Rules:
 | 2026-10-24 | Task 7 keeps exactly two primary panels, Code and Visual Animation. The existing inspector tabs and canvas switcher live inside the right panel as views, never as separate primary panels. This is the approved Task 7 layout; remaining `apply.js` and whole-corpus golden work is separately scoped. | owner |
 | 2026-10-24 | Task 7 Stage 2 adds `Motion` as an additional canvas in the existing switcher while the two-panel layout is still pending. It uses the shared event cursor and keeps every existing canvas and the default Adaptive view unchanged. | owner |
 | 2026-10-24 | Bars are no longer gated at eight elements: the Motion canvas draws any non-empty list or tuple whose values are all finite numbers as bars, at every length. Empty, mixed, boolean and unsupported collections keep the cell representation. This changes the Stage 1 threshold only; the action vocabulary and cursor are untouched. | owner |
+| 2026-11-24 | **Focus is the default visualizer surface; Studio remains the full workspace behind one toggle.** Both share one session, cursor, playback and speed. This satisfies the "only code editor and visualizer" brief without deleting any view, per the repository rule that user-facing views stay reachable. Recorded in `docs/redesign.md`. | owner |
+| 2026-11-24 | **Universal stage contract:** every recorded step produces a non-blank, truthful stage. Unsupported or unrecordable execution is named, never animated or invented. A pure coverage report and a corpus-wide test enforce it. | owner |
+| 2026-11-24 | **Multi-language is an adapter boundary, not a claim.** Python remains the only runnable language; a second language must supply its own runtime, trace evidence, corpus and docs before it appears in the UI. | owner |

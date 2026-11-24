@@ -37,6 +37,11 @@ CodeLens fixes both halves of that:
 
 ## Features
 
+- **Focus view, Studio depth** — the visualizer opens as just a code editor and an
+  animation stage with one transport, so nothing competes with the program. One
+  toggle (Ctrl/Cmd+.) opens **Studio**, the full workspace with every canvas, the
+  inspector, the run map and the developer detail. Both are the same run: the
+  cursor, playback and speed carry across untouched.
 - **Step-by-step replay** — Back, Play/Pause, Next, a step slider, and speed control.
 - **One step, every panel** — the highlighted line, the graph node, the variables,
   the changes, the call stack and the explanation all come from a single tested
@@ -213,7 +218,7 @@ Three suites, all of which should pass on every commit:
 ```bash
 npm run test:tracer   # 136 Python tests: the tracer and its comparison events, the
                       # flowchart model, the static program profile and the corpus
-npm run test:js       # 877 JS tests: the animation diff vocabulary, the one-transition
+npm run test:js       # 892 JS tests: the animation diff vocabulary, the one-transition
                       # diff and its inverse (including task-5 list/tuple state,
                       # 5b swap/shift movement, 5c insert/pop shapes and task-6
                       # dict/set/object contents and lifecycle), the pure motion
@@ -371,6 +376,15 @@ codelens/
 │   │   └── datastructures.css
 │   ├── App.jsx             # the Python visualizer: orchestrator + tracer wiring
 │   ├── App.css
+│   ├── editor/             # the Focus editor's pure presentation layer
+│   │   ├── highlight.js    # a forgiving Python tokenizer (keywords, strings, comments)
+│   │   └── highlight.test.mjs
+│   ├── visualizer/focus/   # the default surface: one editor, one stage
+│   │   ├── FocusView.jsx   # editor + stage + transport, and the Studio toggle
+│   │   ├── CodeEditor.jsx  # textarea over a highlighted copy; read-only stepping view
+│   │   ├── focusLayout.js  # surface/split persistence and drag maths (pure)
+│   │   ├── focusLayout.test.mjs
+│   │   └── focus.css       # the Focus surface, token-only, both themes
 │   ├── animation/          # the action diff behind the new animation page
 │   │   ├── actions.js      # vocabulary, effects, targets, deterministic ids
 │   │   ├── actions.test.mjs
@@ -513,9 +527,10 @@ in [docs/scope.md](docs/scope.md).
 
 ## Status
 
-Working end to end, and teaching: the tracer runs the bundled examples plus a
-68-program corpus covering 34 categories of Python, and the UI replays any of
-them on six canvases — Adaptive, call tree, control flow, combined, timeline and
+Working end to end, and teaching. The visualizer now opens in **Focus** — one
+editor and one stage — with the full six-canvas **Studio** workspace one toggle
+away. The tracer runs the bundled examples plus a 68-program corpus covering 34
+categories of Python, and the UI replays any of them on six canvases — Adaptive, call tree, control flow, combined, timeline and
 motion — with a six-section inspector and plain-English explanations for every
 kind of step. One workspace toolbar, one canvas toolbar and one playback bar
 replace the four competing control rows the page used to have; the drawing keeps

@@ -590,11 +590,10 @@
   flex: none;
   max-width: 72ch;
 }
-  flex: none;
-  align-items: baseline;
-  gap: 8px;
-  max-width: 72ch;
+
+.motion-explain {
   margin: 0;
+  max-width: 72ch;
   font-size: 14px;
   line-height: 1.55;
   color: var(--text-h);

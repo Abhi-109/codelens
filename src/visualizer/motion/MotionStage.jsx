@@ -584,9 +584,9 @@ export default function MotionStage({ plan, trace = [], result = null }) {
 
   const hasValues = view.scalars.length > 0 || view.objects.length > 0 || Boolean(view.lastReturn);
   const showEmpty = !hasValues && !view.output && !view.ending;
-  // The call frames already list every local, so scalar tiles are only added
-  // when there is no collection for them to compete with.
-  const showScalars = view.scalars.length > 0 && view.objects.length === 0 && !view.structure;
+  // Scalars are values too. A loop index or a counter belongs beside the list
+  // it moves, not only on a canvas that happens to have no list.
+  const showScalars = view.scalars.length > 0 && !view.structure;
   // Objects drawn as a chain/tree/graph are one composition, not separate
   // cards; an adjacency list is part of the edges, not a card of its own.
   const drawn = view.structure
@@ -646,7 +646,7 @@ export default function MotionStage({ plan, trace = [], result = null }) {
           ))}
           {view.framesHidden > 0 ? (
             <span className="motion-frames-more">
-              +{view.framesHidden} earlier calls not shown. The Inspector lists them all.
+              +{view.framesHidden} earlier calls not shown.
             </span>
           ) : null}
         </section>

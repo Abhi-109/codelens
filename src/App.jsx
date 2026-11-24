@@ -23,6 +23,8 @@ import PlaybackBar from "./visualizer/PlaybackBar.jsx";
 import RunStoryCard from "./visualizer/RunStoryCard.jsx";
 import VisualizationPane from "./visualizer/VisualizationPane.jsx";
 
+import FocusView from "./visualizer/focus/FocusView.jsx";
+import { isSurface, loadSurface, saveSurface } from "./visualizer/focus/focusLayout.js";
 import { loadSpeed, playbackIntervalMs, saveSpeed } from "./visualizer/playback.js";
 import {
   LEARNING_MODES,
@@ -247,6 +249,9 @@ function Workspace() {
   // The learning mode is workspace-wide: it decides how much technical
   // detail every surface uses, and it is remembered between visits.
   const [mode, setModeState] = useState(() => loadMode());
+  // Focus is the default surface: one editor, one stage. Studio is the full
+  // workspace, kept one toggle away rather than deleted.
+  const [surface, setSurfaceState] = useState(loadSurface);
   const [showTraceDetails, setShowTraceDetails] = useState(false);
   const [engine, setEngine] = useState("idle");
   const [showJson, setShowJson] = useState(false);
@@ -296,6 +301,11 @@ function Workspace() {
   // Both preferences are written through a handler, so a blocked or missing
   // localStorage never stops the control working for this session - it just
   // stops being remembered.
+  const setSurface = (next) => {
+    const chosen = isSurface(next) ? next : "focus";
+    setSurfaceState(chosen);
+    saveSurface(chosen);
+  };
   const setMode = (next) => {
     const chosen = isLearningMode(next) ? next : DEFAULT_MODE;
     setModeState(chosen);
@@ -325,6 +335,18 @@ function Workspace() {
   // The adapter choice is presentation too: it changes which validated scene
   // is drawn, never the cursor, playback or selected call.
   const setAdapter = (next) => dispatch(sessionActions.selectAdapter(next));
+
+  // Ctrl/Cmd + . flips between Focus and Studio without touching the run.
+  useEffect(() => {
+    function onShortcut(event) {
+      if ((event.metaKey || event.ctrlKey) && event.key === ".") {
+        event.preventDefault();
+        setSurface(surface === "focus" ? "studio" : "focus");
+      }
+    }
+    window.addEventListener("keydown", onShortcut);
+    return () => window.removeEventListener("keydown", onShortcut);
+  }, [surface]);
 
   const trace = selectTrace(session);
   const traceIndex = selectTraceIndex(session);
@@ -707,6 +729,40 @@ function Workspace() {
     paneRefs.current[to]?.focus();
   };
 
+  if (surface === "focus") {
+    return (
+      <FocusView
+        source={source}
+        setSource={setSource}
+        editing={editing}
+        setEditing={setEditing}
+        result={result}
+        trace={trace}
+        index={index}
+        playing={playing}
+        speed={speed}
+        running={running}
+        runState={runState}
+        engine={engine}
+        motionPlan={motionPlan}
+        errorLine={errorLine}
+        line={line}
+        hint={view.hint}
+        justRanLine={view.previousLine}
+        usesInput={usesInput}
+        inputsText={inputsText}
+        setInputsText={setInputsText}
+        fileName={fileName}
+        onRun={handleRun}
+        onJump={jumpTo}
+        onJumpLine={jumpToLine}
+        onTogglePlay={() => dispatch(sessionActions.togglePlaying())}
+        onSpeedChange={setSpeed}
+        onStudio={() => setSurface("studio")}
+      />
+    );
+  }
+
   return (
     <div className="app">
       {/* One toolbar for the whole workspace: which file, how the run stands,
@@ -764,6 +820,25 @@ function Workspace() {
         </button>
 
         <div className="tb-spacer" />
+
+        <button
+          type="button"
+          className="ghost tb-focus"
+          onClick={() => setSurface("focus")}
+          title="Focus view: just the editor and the animation (Ctrl/Cmd + .)"
+        >
+          <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+            <path
+              d="M6 2.5H2.5V6M10 2.5h3.5V6M6 13.5H2.5V10M10 13.5h3.5V10"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          Focus
+        </button>
 
         {/* The learning mode belongs to the whole workspace, not to one pane,
             so it lives in the bar that is on screen whichever pane you are in. */}

@@ -3,6 +3,28 @@
 The order below is the working plan. Tiers are worked one at a time, and the
 project is left in a runnable, demoable state after each task.
 
+## Next-level redesign (started 2026-11-24)
+
+The contract is in [redesign.md](redesign.md). The visualizer now has two surfaces
+over one execution session:
+
+- [x] **Phase 0 — contract.** Spec v2 amendment (Focus default, Studio retained,
+      universal stage, multi-language boundary), `redesign.md`, this roadmap.
+- [ ] **Phase 1 — design foundation.** New token layer, control primitives,
+      refreshed shell.
+- [x] **Phase 2 — Focus surface.** One editor + one stage + compact transport;
+      Studio reachable by one toggle and Ctrl/Cmd+.; no view deleted.
+- [ ] **Phase 3 — universal stage.** Strings as cells, nested contents, opaque
+      values, I/O events, coverage report + corpus-wide blank-stage test.
+- [ ] **Phase 4 — diff/motion completeness.** String/slice/augmented/multi-target
+      shapes, nested writes, memoised diffs, measured budgets.
+- [ ] **Phase 5 — site-wide redesign.** Home, Learn, Docs, lab and shell.
+- [ ] **Phase 6 — Python breadth + language adapters.** Audit generators/async/
+      context managers; keep the trace contract; no language advertised until it runs.
+- [ ] **Phase 7 — hardening.** Keyboard, ARIA, reduced motion, engine failure
+      states, performance budgets.
+- [ ] **Phase 8 — polish.** Welcome/demo, docs, release drift check.
+
 ## Tier 1: Housekeeping
 
 - [x] Remove the unused `@dagrejs/dagre` dependency (the graph has been

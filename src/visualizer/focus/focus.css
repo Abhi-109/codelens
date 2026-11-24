@@ -1,0 +1,934 @@
+/* The Focus surface: one editor, one stage, one transport.
+ *
+ * Everything colour-related comes from tokens.css. The syntax palette is a set
+ * of aliases so the editor can be retuned in one place, and both themes are
+ * covered without a single raw colour below. */
+
+.focus {
+  --syn-keyword: var(--violet);
+  --syn-string: var(--teal);
+  --syn-number: var(--copper);
+  --syn-builtin: var(--accent);
+  --syn-constant: var(--copper);
+  --ed-surface: var(--surface);
+  --stage-grid: var(--border);
+
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  /* The shell gives the app's main a definite height; "100%" is what makes the
+     two panes use the screen instead of collapsing to their content. */
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.focus,
+.focus *,
+.focus *::before,
+.focus *::after {
+  box-sizing: border-box;
+}
+
+/* --- Header ------------------------------------------------------------- */
+
+.focus-top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  height: 54px;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.focus-id {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.focus-lang {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font: 700 10px/1 var(--mono);
+  letter-spacing: 0.04em;
+}
+
+.focus-file {
+  overflow: hidden;
+  font: 600 13px/1.4 var(--mono);
+  color: var(--text-h);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focus-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.focus-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+
+.focus-status.is-ready .focus-status-dot,
+.focus-status.is-loaded .focus-status-dot {
+  background: var(--text);
+}
+
+.focus-status.is-running .focus-status-dot,
+.focus-status.is-loading .focus-status-dot {
+  background: var(--accent);
+}
+
+.focus-status.is-running,
+.focus-status.is-loading {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.focus-status.is-completed .focus-status-dot {
+  background: var(--ok);
+}
+
+.focus-status.is-completed {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.focus-status.is-error .focus-status-dot,
+.focus-status.is-internal_error .focus-status-dot {
+  background: var(--danger);
+}
+
+.focus-status.is-error,
+.focus-status.is-internal_error {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.focus-status.is-step_limit .focus-status-dot,
+.focus-status.is-timeout .focus-status-dot,
+.focus-status.is-output_limit .focus-status-dot {
+  background: var(--warn);
+}
+
+.focus-status.is-step_limit,
+.focus-status.is-timeout,
+.focus-status.is-output_limit,
+.focus-status.is-edited {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.focus-engine {
+  font-size: 11px;
+  color: var(--text);
+}
+
+.focus-engine.is-failed {
+  color: var(--danger);
+}
+
+.focus-top-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* --- Buttons ------------------------------------------------------------ */
+
+.focus-run {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--control-md);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+}
+
+.focus-run:hover:not(:disabled) {
+  background: var(--btn-primary-hover-bg);
+}
+
+.focus-run:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.focus-run-lg {
+  height: 42px;
+  padding: 0 var(--space-6);
+  font-size: 14px;
+}
+
+.focus-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-sm);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
+}
+
+.focus-ghost:hover {
+  border-color: var(--border-strong);
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+.focus-ghost kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--code-bg);
+  font: 10px/1.4 var(--mono);
+  color: var(--text);
+}
+
+.focus-tbtn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-h);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+
+.focus-tbtn:hover:not(:disabled) {
+  background: var(--code-bg);
+}
+
+.focus-tbtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.focus-tbtn-play {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+/* --- Main split -------------------------------------------------------- */
+
+.focus-main {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  gap: 0;
+  min-height: 0;
+  padding: var(--space-4);
+}
+
+.focus-editor-pane {
+  display: flex;
+  flex: 0 0 var(--focus-left, 38%);
+  flex-direction: column;
+  min-width: 260px;
+  max-width: 72%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--ed-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.focus-pane-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 40px;
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.focus-kicker {
+  flex: none;
+  font: 600 10px/1.4 var(--mono);
+  letter-spacing: 0.1em;
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.focus-pane-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.focus-note {
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+.focus-examples {
+  max-width: 150px;
+  height: var(--control-sm);
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.focus-editor-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.focus-code-wrap,
+.focus-readonly {
+  position: absolute;
+  inset: 0;
+}
+
+.focus-highlight,
+.focus-input,
+.focus-readonly {
+  font: 13px/1.8 var(--mono);
+  tab-size: 4;
+}
+
+.focus-highlight {
+  margin: 0;
+  overflow: hidden;
+  padding: var(--space-4) 0;
+  pointer-events: none;
+  white-space: pre;
+}
+
+.focus-code-line {
+  display: flex;
+  min-height: 1.8em;
+  white-space: pre;
+}
+
+.focus-ln {
+  flex: 0 0 52px;
+  padding-right: var(--space-3);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  opacity: 0.42;
+  user-select: none;
+}
+
+.focus-code-text {
+  min-width: 0;
+  white-space: pre;
+}
+
+.focus-input {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: var(--space-4) var(--space-4) var(--space-4) 52px;
+  overflow: auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--accent);
+  resize: none;
+  -webkit-text-fill-color: transparent;
+  white-space: pre;
+}
+
+.focus-input::placeholder {
+  color: var(--text);
+  opacity: 0.55;
+  -webkit-text-fill-color: var(--text);
+}
+
+.focus-input::selection {
+  background: var(--accent-bg);
+}
+
+/* The read-only view while stepping: the same code, with the line about to
+ * run lit. Every line is a jump target, like the old code panel. */
+.focus-readonly {
+  overflow: auto;
+  padding: var(--space-4) 0;
+}
+
+button.focus-code-line {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-h);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.focus-code-line:hover {
+  background: var(--code-bg);
+}
+
+button.focus-code-line.is-current {
+  background: var(--accent-bg);
+  box-shadow: inset 3px 0 var(--accent);
+}
+
+button.focus-code-line.is-current .focus-ln {
+  color: var(--accent);
+  opacity: 1;
+}
+
+button.focus-code-line.just-ran {
+  background: color-mix(in srgb, var(--accent-bg) 45%, transparent);
+}
+
+button.focus-code-line.is-error {
+  background: var(--danger-bg);
+  box-shadow: inset 3px 0 var(--danger);
+}
+
+.focus-hint {
+  margin-left: var(--space-3);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Syntax. Presentation only; the tokenizer's classes are the whole contract. */
+.tok-keyword {
+  color: var(--syn-keyword);
+  font-weight: 600;
+}
+
+.tok-string {
+  color: var(--syn-string);
+}
+
+.tok-number {
+  color: var(--syn-number);
+}
+
+.tok-builtin {
+  color: var(--syn-builtin);
+}
+
+.tok-constant {
+  color: var(--syn-constant);
+  font-weight: 600;
+}
+
+.tok-comment {
+  color: var(--text);
+  font-style: italic;
+  opacity: 0.62;
+}
+
+.tok-operator,
+.tok-punct {
+  color: var(--text);
+}
+
+/* --- Editor footer and inputs ------------------------------------------ */
+
+.focus-inputs {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+  background: var(--code-bg);
+  font-size: 10.5px;
+  color: var(--text);
+}
+
+.focus-inputs textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-h);
+  font: 12px/1.5 var(--mono);
+  resize: vertical;
+}
+
+.focus-pane-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 32px;
+  padding: 0 var(--space-4);
+  border-top: 1px solid var(--border);
+  font-size: 10.5px;
+  color: var(--text);
+}
+
+.focus-foot-right {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
+}
+
+/* --- Stage -------------------------------------------------------------- */
+
+.focus-stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 0;
+  margin-left: var(--space-3);
+}
+
+.focus-stage .focus-pane-head {
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border-bottom: 0;
+}
+
+.focus-stage-meta {
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.72;
+}
+
+.focus-stage-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--stage-grid) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* The motion stage keeps its own structure; Focus gives it the room and drops
+ * the inner card so the blueprint belongs to the whole stage. */
+.focus-stage-body .motion-stage {
+  flex: 1;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: none;
+  padding: var(--space-4) var(--space-5);
+}
+
+.focus-stage-body .motion-stage.motion-empty {
+  border: 1px dashed var(--border);
+  background: transparent;
+}
+
+.focus-stage-body.is-waiting {
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- Welcome ------------------------------------------------------------ */
+
+.focus-welcome {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-8);
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-6);
+}
+
+.focus-welcome-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 46ch;
+}
+
+.focus-welcome h1 {
+  margin: 0;
+  font-size: clamp(26px, 3.4vw, 40px);
+  font-weight: 650;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--text-h);
+}
+
+.focus-welcome p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.focus-welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.focus-welcome-hint {
+  font-size: 12px;
+  color: var(--text);
+  opacity: 0.75;
+}
+
+.focus-start-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.focus-start {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
+}
+
+.focus-start:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.focus-start-name {
+  font: 600 12px/1.4 var(--mono);
+  color: var(--text-h);
+}
+
+.focus-start-code {
+  overflow: hidden;
+  font: 10.5px/1.5 var(--mono);
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+/* --- Transport ---------------------------------------------------------- */
+
+.focus-transport {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: 4px var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.focus-seek {
+  flex: 1;
+  min-width: 60px;
+  height: 4px;
+  margin: 0 var(--space-2);
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.focus-count {
+  flex: none;
+  min-width: 62px;
+  font: 600 11px/1.4 var(--mono);
+  color: var(--text-h);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.focus-transport-state {
+  flex: none;
+  max-width: 110px;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focus-transport-state.is-completed {
+  color: var(--ok);
+}
+
+.focus-transport-state.is-error {
+  color: var(--danger);
+}
+
+.focus-speed {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  margin-left: var(--space-2);
+}
+
+.focus-speed-label {
+  font-size: 10px;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.focus-speed select {
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+}
+
+/* --- Error without a trace --------------------------------------------- */
+
+.focus-error-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8);
+  text-align: center;
+}
+
+.focus-error-card strong {
+  font-size: 18px;
+  color: var(--danger);
+}
+
+.focus-error-card p {
+  max-width: 52ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.focus-error-note {
+  opacity: 0.7;
+}
+
+/* --- Splitter ----------------------------------------------------------- */
+
+.focus-split {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 12px;
+  min-height: 0;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.focus-split span {
+  width: 2px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  background: var(--border);
+  transition: background-color var(--dur-fast) ease;
+}
+
+.focus-split:hover span,
+.focus-split:focus-visible span {
+  background: var(--accent);
+}
+
+.focus-split:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+/* --- Responsive --------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .focus-main {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .focus-editor-pane {
+    flex: 0 0 38%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .focus-split {
+    display: none;
+  }
+
+  .focus-stage {
+    flex: 1 1 0;
+    margin-left: 0;
+    min-height: 0;
+  }
+
+  .focus-stage-body {
+    min-height: 220px;
+  }
+}
+
+@media (max-width: 720px) {
+  .focus-top {
+    height: auto;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .focus-main {
+    padding: var(--space-2);
+  }
+
+  .focus-editor-pane {
+    flex-basis: 36%;
+  }
+
+  .focus-status,
+  .focus-file {
+    max-width: 42vw;
+  }
+
+  .focus-ghost kbd,
+  .focus-speed-label,
+  .focus-transport-state {
+    display: none;
+  }
+
+  .focus-welcome {
+    gap: var(--space-5);
+    padding: var(--space-4);
+  }
+
+  .focus-start-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .focus-transport {
+    gap: 2px;
+    padding: 4px var(--space-2);
+  }
+
+  .focus-seek {
+    margin: 0 4px;
+  }
+
+  .focus-pane-foot {
+    display: none;
+  }
+
+  .focus-stage-body .motion-stage {
+    padding: var(--space-3);
+  }
+}
+
+@media (max-width: 520px) {
+  .focus-top-actions .focus-ghost {
+    display: none;
+  }
+
+  .focus-id {
+    gap: var(--space-2);
+  }
+
+  .focus-lang {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+  }
+
+  .focus-count {
+    min-width: 48px;
+  }
+
+  .focus-speed select {
+    width: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focus-run,
+  .focus-ghost,
+  .focus-tbtn,
+  .focus-start,
+  .focus-split span {
+    transition: none;
+  }
+}
