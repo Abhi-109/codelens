@@ -50,7 +50,12 @@ export function coverageOf(plan, view) {
   const parts = [];
   if (Number.isInteger(view.line)) parts.push(COVERAGE_PART.line);
   if (view.feedback?.text) parts.push(COVERAGE_PART.operation);
-  if ((view.scalars?.length ?? 0) > 0 || (view.objects?.length ?? 0) > 0 || view.structure) {
+  if (
+    (view.scalars?.length ?? 0) > 0 ||
+    (view.objects?.length ?? 0) > 0 ||
+    (view.texts?.length ?? 0) > 0 ||
+    view.structure
+  ) {
     parts.push(COVERAGE_PART.values);
   }
   if ((view.frames?.length ?? 0) > 0) parts.push(COVERAGE_PART.frames);

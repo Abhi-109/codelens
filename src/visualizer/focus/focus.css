@@ -582,6 +582,12 @@ button.focus-code-line.is-error {
   background: transparent;
 }
 
+/* A sparse step should sit in the middle of the stage, not hug its left edge.
+ * A sequence still takes the full row, because its card is 100% wide. */
+.focus-stage-body .motion-data {
+  align-items: center;
+}
+
 .focus-stage-body.is-waiting {
   align-items: center;
   justify-content: center;

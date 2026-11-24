@@ -11,6 +11,7 @@
 import { showValue } from "../../tracer/values.js";
 import { MOTION_OPERATION, motionNodes, motionTargetKey } from "./plan.js";
 import { stageResult } from "./stageResult.js";
+import { textCards } from "./text.js";
 
 function flatten(nodes) {
   const map = new Map();
@@ -295,7 +296,9 @@ function scalarTiles(plan, flags, previous) {
     .map((variable) => ({
       key: variable.key,
       name: variable.name,
+      frameId: variable.frameId,
       text: variable.text,
+      raw: variable.value,
       valueType: variable.valueType,
       typeName:
         variable.valueType === "none"
@@ -780,6 +783,7 @@ export function motionView(plan, stage = null) {
   const feedback = operationFeedback(plan);
   const returned = returnOf(plan);
   const scalars = scalarTiles(plan, flags, previous);
+  const texts = textCards(scalars.scalars);
   const result = stageResult(stage?.trace, plan.index, stage?.result ?? null);
   const objects = plan.nodes.objects.map((object) => objectView(object, flags));
 
@@ -824,6 +828,12 @@ export function motionView(plan, stage = null) {
     framesHidden: frames.length - shown.length,
     scalars: scalars.scalars,
     scalarsHidden: scalars.scalarsHidden,
+    // Strings of two or more characters become character cells. The scalar
+    // tiles remain in the model (and in the tests); the renderer skips the
+    // ones that are drawn as cards instead.
+    texts: texts.cards,
+    textsSkipped: texts.skipped,
+    textScalarKeys: [...texts.scalarKeys],
     lastReturn: result.lastReturn,
     output: result.output,
     ending: result.ending,

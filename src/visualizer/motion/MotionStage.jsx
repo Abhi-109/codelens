@@ -62,6 +62,49 @@ function Value({ node }) {
   );
 }
 
+/**
+ * A recorded string as character cells. The cells are presentation: the trace
+ * has no per-character identity, so they never carry a move or a comparison,
+ * only the string's own changed/highlighted state.
+ */
+function TextCard({ text }) {
+  return (
+    <div
+      className={classNames(
+        "motion-text",
+        text.changed && "is-changed",
+        text.highlighted && "is-highlighted",
+      )}
+      data-key={text.key}
+    >
+      <div className="motion-text-head">
+        <span className="motion-text-name">{text.name}</span>
+        <span className="motion-text-meta">
+          {text.length} {text.length === 1 ? "character" : "characters"}
+        </span>
+      </div>
+      <div className="motion-text-cells" role="list" aria-label={`${text.name} characters`}>
+        {text.chars.map((cell) => (
+          <span
+            key={cell.key}
+            className="motion-char"
+            role="listitem"
+            title={`${text.name}[${cell.index}] = ${JSON.stringify(cell.char)}`}
+          >
+            <span className="motion-char-glyph">{cell.glyph}</span>
+            <span className="motion-char-index" aria-hidden="true">
+              {cell.index}
+            </span>
+          </span>
+        ))}
+      </div>
+      {text.hidden > 0 ? (
+        <span className="motion-text-more">+{text.hidden} more characters</span>
+      ) : null}
+    </div>
+  );
+}
+
 /** A primitive variable from the current call: name, value and type. */
 function ScalarTile({ tile }) {
   return (
@@ -582,11 +625,19 @@ export default function MotionStage({ plan, trace = [], result = null }) {
     );
   }
 
-  const hasValues = view.scalars.length > 0 || view.objects.length > 0 || Boolean(view.lastReturn);
+  // Strings of two or more characters are drawn as character cards, so their
+  // scalar tile is skipped here. The model keeps both; only the drawing picks.
+  const textKeys = new Set(view.textScalarKeys ?? []);
+  const scalarTiles = view.scalars.filter((tile) => !textKeys.has(tile.key));
+  const hasValues =
+    view.scalars.length > 0 ||
+    view.objects.length > 0 ||
+    view.texts.length > 0 ||
+    Boolean(view.lastReturn);
   const showEmpty = !hasValues && !view.output && !view.ending;
   // Scalars are values too. A loop index or a counter belongs beside the list
   // it moves, not only on a canvas that happens to have no list.
-  const showScalars = view.scalars.length > 0 && !view.structure;
+  const showScalars = scalarTiles.length > 0 && !view.structure;
   // Objects drawn as a chain/tree/graph are one composition, not separate
   // cards; an adjacency list is part of the edges, not a card of its own.
   const drawn = view.structure
@@ -657,16 +708,24 @@ export default function MotionStage({ plan, trace = [], result = null }) {
       <div className="motion-data">
         {view.lastReturn ? <ReturnTile returned={view.lastReturn} /> : null}
 
+        {view.texts.length > 0 ? (
+          <section className="motion-texts" aria-label="Text values">
+            {view.texts.map((text) => (
+              <TextCard key={text.key} text={text} />
+            ))}
+          </section>
+        ) : null}
+
         {showScalars ? (
           <section className="motion-scalars" aria-label="Values">
-            {view.scalars.map((tile) => (
+            {scalarTiles.map((tile) => (
               <ScalarTile key={tile.key} tile={tile} />
             ))}
           </section>
         ) : null}
         {showScalars && view.scalarsHidden > 0 ? (
           <p className="motion-scalars-more">
-            +{view.scalarsHidden} more in the Variables tab
+            +{view.scalarsHidden} more values not shown
           </p>
         ) : null}
 

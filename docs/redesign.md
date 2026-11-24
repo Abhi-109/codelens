@@ -66,7 +66,7 @@ construct must say so.
 | Area | Today | Target |
 |---|---|---|
 | Scalars beside collections | Hidden when a collection is drawn | Always visible, capped and ranked |
-| Strings | One scalar tile | Character cells when the trace indexes them; full text otherwise |
+| Strings | One scalar tile | Indexed character cells for 2–60 character strings; full text tile otherwise |
 | Nested containers | Parent card only | Bounded nested rows with the inner change marked |
 | Opaque values | `other` pill | Card with class, repr and an honest "not further inspected" |
 | I/O and errors | Output/status area | First-class stage events, including input prompts |

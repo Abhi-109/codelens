@@ -1545,3 +1545,21 @@ test("a name that appeared from def, class or import is a visible value", () => 
   assert.ok(mod, "the imported module is a value in the stage");
   assert.ok(mod.text.length > 0);
 });
+
+test("a recorded string is offered as a character card beside its scalar", () => {
+  const p = program("variables");
+  const view = motionView(planAt(p, p.trace.length - 1), p);
+  const card = view.texts.find((text) => text.name === "name");
+  assert.ok(card, "the string variable becomes a character card");
+  assert.equal(card.key, "text:1:name");
+  assert.equal(card.length, "Asha".length);
+  assert.deepEqual(
+    card.chars.map((cell) => cell.glyph),
+    ["A", "s", "h", "a"],
+  );
+  assert.ok(view.textScalarKeys.includes(card.scalarKey), "the renderer knows which tile to skip");
+  assert.ok(
+    view.scalars.some((tile) => tile.key === card.scalarKey),
+    "the scalar model keeps the same value; only the drawing chooses a card",
+  );
+});

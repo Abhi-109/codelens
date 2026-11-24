@@ -48,7 +48,20 @@ canvas and inspector behind one toggle. See `docs/redesign.md`.
   `import math` drew a frame and a sentence but not the name that had just appeared.
   They are now tiles (`greet()`, `class Dog`, `math`), tested on real fixtures for all
   three. Strings as character cells, nested contents and I/O events remain.
-- **Counts after this slice:** 136 Python tests, **897 JS tests**, lint and build clean.
+- **Strings became character cells (Phase 3b).** A recorded string of 2–60 characters now
+  draws as one card of indexed character cells (`A s h a`), with a visible glyph for space,
+  tab, carriage return and newline, a code-point count (emoji are one cell), and `+N more`
+  past 32 cells. A one-character string, a string over 60 characters and a tracer-truncated
+  string stay ordinary tiles: the trace does not prove their full contents. Cells have no
+  per-character identity, so they never carry a move or a comparison; the card inherits
+  only the string variable's changed/highlighted state. The scalar model still contains
+  the value, so existing views and tests are unchanged; the renderer skips the duplicate
+  tile. At most three string cards are drawn per step.
+- **Verification for strings.** 8 new `text.test.mjs` tests and one real-fixture view test;
+  headless Chrome on `?example=variables` at the final step found one card with glyphs
+  `Asha`, no console errors, and both themes inspected (`variables-text-light.png`,
+  `variables-text-dark.png`).
+- **Counts after this slice:** 136 Python tests, **906 JS tests**, lint and build clean.
 
 ## Phase checklist
 - [x] 0 Audit

@@ -16,8 +16,9 @@ over one execution session:
       Studio reachable by one toggle and Ctrl/Cmd+.; no view deleted.
 - [x] **Phase 3a — coverage guard.** Pure per-step coverage report; every step of
       all 122 fixture programs checked for a blank or unanchored stage.
-- [ ] **Phase 3b — value kinds.** Started: `def`, `class` and `import` names
-      are visible values. Remaining: strings as cells, nested contents, I/O events.
+- [ ] **Phase 3b — value kinds.** `def`/`class`/`import` names are visible
+      values, and recorded strings draw as character cells. Remaining: nested
+      contents and I/O events.
 - [ ] **Phase 4 — diff/motion completeness.** String/slice/augmented/multi-target
       shapes, nested writes, memoised diffs, measured budgets.
 - [ ] **Phase 5 — site-wide redesign.** Home, Learn, Docs, lab and shell.
