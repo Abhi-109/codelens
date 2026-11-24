@@ -1519,3 +1519,29 @@ test("referenced objects compose into a chain, a tree or a graph", () => {
     "objects with no recorded references keep their generic cards",
   );
 });
+
+test("a name that appeared from def, class or import is a visible value", () => {
+  const find = (name, predicate) => {
+    const p = program(name);
+    for (let index = 0; index < p.trace.length; index += 1) {
+      const view = motionView(planAt(p, index), { trace: p.trace, result: p.result });
+      const hit = view.scalars.find(predicate);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  const fn = find("function-print-return", (tile) => tile.name === "report");
+  assert.ok(fn, "the defined function is a value in the stage");
+  assert.equal(fn.text, "report()");
+  assert.equal(fn.valueType, "function");
+
+  const cls = find("class-basic", (tile) => tile.name === "Dog");
+  assert.ok(cls, "the defined class is a value in the stage");
+  assert.equal(cls.text, "class Dog");
+  assert.equal(cls.valueType, "class");
+
+  const mod = find("import-module", (tile) => tile.valueType === "module");
+  assert.ok(mod, "the imported module is a value in the stage");
+  assert.ok(mod.text.length > 0);
+});

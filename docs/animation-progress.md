@@ -43,7 +43,12 @@ canvas and inspector behind one toggle. See `docs/redesign.md`.
   It runs in about 0.23 s. This is a guard, not a claim that every Python construct has a
   bespoke drawing; value-kind coverage (strings as cells, nested contents, I/O events) is
   the next Phase 3 slice.
-- **Counts after Phase 3a:** 136 Python tests, **896 JS tests**, lint and build clean.
+- **Phase 3b started with the smallest real gap.** Functions, classes and modules were
+  filtered out of the scalar strip, so the step after `def greet():`, `class Dog:` or
+  `import math` drew a frame and a sentence but not the name that had just appeared.
+  They are now tiles (`greet()`, `class Dog`, `math`), tested on real fixtures for all
+  three. Strings as character cells, nested contents and I/O events remain.
+- **Counts after this slice:** 136 Python tests, **897 JS tests**, lint and build clean.
 
 ## Phase checklist
 - [x] 0 Audit

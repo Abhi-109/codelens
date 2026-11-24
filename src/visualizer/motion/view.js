@@ -269,10 +269,22 @@ function slotView(slot, flags) {
 export const MAX_VISIBLE_FRAMES = 8;
 
 /* A scalar-only program still has values worth seeing. The current call's
- * primitive variables become compact tiles; collections keep their object
- * cards, and functions, classes and modules are context rather than data. */
+ * simple values become compact tiles. Functions, classes and modules count:
+ * after `def`, `class` or `import`, the name that appeared is the step's
+ * visible result, and hiding it made those steps look like nothing happened.
+ * Collections keep their object cards instead of a duplicate tile. */
 export const MAX_VISIBLE_SCALARS = 12;
-const SCALAR_TYPES = new Set(["int", "float", "str", "bool", "none", "other"]);
+const SCALAR_TYPES = new Set([
+  "int",
+  "float",
+  "str",
+  "bool",
+  "none",
+  "other",
+  "function",
+  "class",
+  "module",
+]);
 
 function scalarTiles(plan, flags, previous) {
   const frames = plan?.nodes?.frames ?? [];
