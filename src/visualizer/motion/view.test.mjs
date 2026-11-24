@@ -1563,3 +1563,17 @@ test("a recorded string is offered as a character card beside its scalar", () =>
     "the scalar model keeps the same value; only the drawing chooses a card",
   );
 });
+
+test("a nested container keeps an inline preview and its own card", () => {
+  const p = program("nested-lists");
+  const view = motionView(planAt(p, p.trace.length - 1), p);
+  const lists = view.objects.filter((object) => object.type === "list");
+  const outer = lists.find((object) => object.slots.some((slot) => slot.refId));
+  assert.ok(outer, "the outer list has a reference cell");
+  const inner = outer.slots.find((slot) => slot.refId);
+  assert.match(inner.text, /^\[/, "the cell carries the inner list's recorded preview");
+  assert.ok(
+    lists.some((object) => object.objectId === inner.refId),
+    "the nested list also has its own card",
+  );
+});

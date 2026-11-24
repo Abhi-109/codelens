@@ -61,7 +61,11 @@ canvas and inspector behind one toggle. See `docs/redesign.md`.
   headless Chrome on `?example=variables` at the final step found one card with glyphs
   `Asha`, no console errors, and both themes inspected (`variables-text-light.png`,
   `variables-text-dark.png`).
-- **Counts after this slice:** 136 Python tests, **906 JS tests**, lint and build clean.
+- **Nested containers were already truthful; now they are proven.** The outer list's cell
+  carries the inner list's recorded preview (`[3, 1]`) and the inner list has its own card.
+  A new real-fixture test on `nested-lists` pins both facts, so "nested contents" is no
+  longer listed as a gap. I/O as a distinct stage fact remains.
+- **Counts after this slice:** 136 Python tests, **907 JS tests**, lint and build clean.
 
 ## Phase checklist
 - [x] 0 Audit

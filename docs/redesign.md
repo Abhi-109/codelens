@@ -67,7 +67,7 @@ construct must say so.
 |---|---|---|
 | Scalars beside collections | Hidden when a collection is drawn | Always visible, capped and ranked |
 | Strings | One scalar tile | Indexed character cells for 2–60 character strings; full text tile otherwise |
-| Nested containers | Parent card only | Bounded nested rows with the inner change marked |
+| Nested containers | Inline preview plus a separate card (verified) | Keep the preview, mark the inner change when a verified action names it |
 | Opaque values | `other` pill | Card with class, repr and an honest "not further inspected" |
 | I/O and errors | Output/status area | First-class stage events, including input prompts |
 | Statement shapes | Swap/shift/insert/pop/dict/object | Strings, slices, augmented/multi-target, nested writes, comprehension writes |
