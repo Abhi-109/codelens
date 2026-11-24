@@ -35,6 +35,15 @@ canvas and inspector behind one toggle. See `docs/redesign.md`.
 - **Opt-in browser harness:** `check:browser` still drives the old Studio selectors. It
   was not re-run; the Focus surface needs its own section there in a follow-up. This is a
   limitation, not a pass.
+- **Universal coverage is measured (Phase 3a).** `src/visualizer/motion/coverage.js`
+  classifies what one rendered step actually carries: line, operation, values, frames,
+  output, return, ending, intro. `coverage.test.mjs` walks **every step of all 122 fixture
+  programs** (68 corpus + 54 recognition) through the real `planMotion`/`motionView` and
+  asserts no blank step, no unanchored text-only step, and that most steps carry a visual.
+  It runs in about 0.23 s. This is a guard, not a claim that every Python construct has a
+  bespoke drawing; value-kind coverage (strings as cells, nested contents, I/O events) is
+  the next Phase 3 slice.
+- **Counts after Phase 3a:** 136 Python tests, **896 JS tests**, lint and build clean.
 
 ## Phase checklist
 - [x] 0 Audit

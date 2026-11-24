@@ -14,8 +14,10 @@ over one execution session:
       refreshed shell.
 - [x] **Phase 2 — Focus surface.** One editor + one stage + compact transport;
       Studio reachable by one toggle and Ctrl/Cmd+.; no view deleted.
-- [ ] **Phase 3 — universal stage.** Strings as cells, nested contents, opaque
-      values, I/O events, coverage report + corpus-wide blank-stage test.
+- [x] **Phase 3a — coverage guard.** Pure per-step coverage report; every step of
+      all 122 fixture programs checked for a blank or unanchored stage.
+- [ ] **Phase 3b — value kinds.** Strings as cells, nested contents, opaque
+      values, I/O events.
 - [ ] **Phase 4 — diff/motion completeness.** String/slice/augmented/multi-target
       shapes, nested writes, memoised diffs, measured budgets.
 - [ ] **Phase 5 — site-wide redesign.** Home, Learn, Docs, lab and shell.

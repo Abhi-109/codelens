@@ -93,7 +93,7 @@ construct must say so.
 | 0 | Spec v2, this contract, roadmap/progress | done |
 | 1 | Design foundation: tokens, primitives, shell | next |
 | 2 | Focus workspace (editor + stage + transport, Studio toggle) | in progress |
-| 3 | Universal stage coverage (strings, nested, opaque, I/O) | pending |
+| 3 | Universal stage coverage (strings, nested, opaque, I/O) | partly: measured coverage guard landed; value kinds pending |
 | 4 | Diff/motion completeness + performance | pending |
 | 5 | Site-wide redesign | pending |
 | 6 | Python breadth audit; multi-language adapter boundary | pending |
