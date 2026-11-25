@@ -25,9 +25,9 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-sm: 7px;
+  --radius-md: 11px;
+  --radius-lg: 18px;
   --radius-pill: 999px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -45,161 +45,161 @@
   --dur-med: 200ms;
 }
 
-/* --- Light: warm paper, ink, one blue -------------------------------- */
+/* --- Light: sea glass, blush, deep teal ------------------------------- */
 
 :root,
 [data-theme='light'] {
   color-scheme: light;
 
-  --bg: #f7f7f4;
-  --surface: #ffffff;
-  --raised: #ffffff;
-  --border: #e4e3dd;
-  --border-strong: #cbc9c1;
+  /* The supplied light palette: #F7CBCA blush, #DDD3D3 warm grey,
+     #F1F7F7 sea glass, #D5E5E5 mint, #BDD7D8 pool, #5D6B6B slate.
+     Body ink is a shade deeper than the slate so it also clears AA on the
+     mint code panel; the slate itself stays for quiet labels and rules. */
+  --bg: #f1f7f7;
+  --surface: #f1f7f7;
+  --raised: #d5e5e5;
+  --border: #bdd7d8;
+  --border-strong: #5d6b6b;
 
-  /* Names the playground already uses, retuned to this palette. */
-  --text: #565b66;
-  --text-h: #14161a;
-  /* Accent as *text* and as a thin graphic. On a light surface the same blue
-     can also be the fill white sits on - both directions clear 4.5:1 here.
-     That is precisely what stops being true in the dark theme, where the two
-     roles are split for real. */
-  --accent: #2f57d6;
-  --accent-fill: #2f57d6;
-  --accent-bg: rgb(47 87 214 / 8%);
-  --accent-border: rgb(47 87 214 / 32%);
-  --code-bg: #f1f1ec;
+  --text: #3f5252;
+  --text-h: #294d61;
+  --accent: #0b6c71;
+  --accent-fill: #0b6c71;
+  --accent-bg: rgb(12 112 117 / 8%);
+  --accent-border: rgb(12 112 117 / 32%);
+  --code-bg: #d5e5e5;
 
-  /* Brand. On a light surface the logo is one colour: ink. */
-  --logo-mark: #14161a;
-  --logo-word: #14161a;
+  /* Brand: deep teal on sea glass. */
+  --logo-mark: #0b6c71;
+  --logo-word: #294d61;
 
-  /* Accents. Dark enough to read as text on a white panel. */
-  --teal: #0f766e;
-  --violet: #6d28d9;
+  /* Accents. Dark enough to read as text on a panel. */
+  --teal: #0b6c71;
+  --violet: #5a4b7c;
 
   /* The control-flow canvas colours its five shape families. Every one of
      these is measured as a *stroke*: a shape outline has to clear 3:1 or the
      family stops being distinguishable, which is the whole point of the
      colour. Decisions and loops take --edge-back, already the colour of the
      arrow that loops back to them. */
-  --slate: #5f6b7c;
-  --copper: #b34a10;
+  --slate: #5d6b6b;
+  --copper: #a9553d;
 
   /* Status. Measured, not guessed. */
-  --ok: #14722f;
-  --warn: #a15c00;
-  --danger: #c62828;
-  --danger-bg: rgb(198 40 40 / 7%);
+  --ok: #2f6b4f;
+  --warn: #8a5a00;
+  --danger: #a53533;
+  --danger-bg: rgb(165 53 51 / 8%);
 
   /* A recorded comparison is evidence: gold, and nothing else is gold. Text
      has to be dark to clear 4.5:1 on paper, so the ring - a graphic, 3:1 -
-     is the brighter gold the eye reads as gold. */
+     is a brighter gold the eye reads as gold. */
   --compare: #8a5a00;
-  --compare-ring: #b07d00;
+  --compare-ring: #9c6c12;
   --compare-bg: rgb(138 90 0 / 9%);
 
   /* Text on top of the accent colour. */
-  --on-accent: #ffffff;
+  --on-accent: #f1f7f7;
 
-  /* Primary buttons are ink in light mode, blue in dark mode. One token pair,
-     so every primary button agrees. */
-  --btn-primary-bg: #16181d;
-  --btn-primary-fg: #ffffff;
-  --btn-primary-hover-bg: #2a2e37;
+  /* Primary buttons are deep teal on sea glass. */
+  --btn-primary-bg: #294d61;
+  --btn-primary-fg: #f1f7f7;
+  --btn-primary-hover-bg: #0b6c71;
 
-  /* Hero: one quiet bloom, no gradient headline. */
-  --hero-wash-a: rgb(47 87 214 / 7%);
+  /* Hero: a blush bloom over sea glass, with a pool-teal counterweight. */
+  --hero-wash-a: rgb(247 203 202 / 72%);
+  --hero-wash-b: rgb(15 150 156 / 16%);
 
-  /* Execution-graph edge colours, by meaning. The return path is the same
-     teal as --teal, for the same reason: it has to clear 4.5:1, because the
-     legend prints it as text and the value riding on the arrow does too. */
-  --edge-call: #7c3aed;
-  --edge-return: #0f766e;
-  --edge-back: #a16207;
-  --edge-error: #c62828;
+  /* Execution-graph edge colours, by meaning. */
+  --edge-call: #0b6c71;
+  --edge-return: #2f6b4f;
+  --edge-back: #8a5a00;
+  --edge-error: #a53533;
 
   /* One colour per call depth, so nested calls can be told apart. */
-  --call-0: #aa3bff;
-  --call-1: #0d9488;
-  --call-2: #c2410c;
-  --call-3: #2563eb;
-  --call-4: #db2777;
-  --call-5: #14722f;
+  --call-0: #5a4b7c;
+  --call-1: #0b6c71;
+  --call-2: #a9553d;
+  --call-3: #294d61;
+  --call-4: #8a4f6b;
+  --call-5: #2f6b4f;
 
-  --focus: #2f57d6;
+  --focus: #0b6c71;
+
+  --shadow-sm: 0 1px 2px rgb(41 77 97 / 8%);
+  --shadow-md: 0 18px 48px rgb(41 77 97 / 14%);
 }
 
-/* --- Dark: charcoal, not navy ---------------------------------------- */
+/* --- Dark: deep-water teal, shallow-water light ----------------------- */
 
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #0e1014;
-  --surface: #14161b;
-  --raised: #1a1d23;
-  --border: #23262f;
-  --border-strong: #343a46;
+  /* The supplied dark palette: #05161A abyss, #072E33 deep, #0C7075 lagoon,
+     #0F969C current, #6DA5C0 shallows, #294D61 reef. */
+  --bg: #05161a;
+  --surface: #072e33;
+  --raised: #0a3a40;
+  --border: #163e46;
+  --border-strong: #294d61;
 
-  --text: #9aa3b2;
-  --text-h: #e8eaee;
-  /* Accent as *text* on a dark surface. The fill that white text sits on goes
-     the other way - lighten that and white starts to sink - so it is its own
-     token. */
-  --accent: #5b9dff;
-  --accent-fill: #2563eb;
-  --accent-bg: rgb(91 157 255 / 12%);
-  --accent-border: rgb(91 157 255 / 42%);
-  --code-bg: #12141a;
+  --text: #a9c6c6;
+  --text-h: #f1f7f7;
+  /* Accent as *text* on a dark surface. The fill the light label sits on goes
+     the other way, so it keeps its own token. */
+  --accent: #6da5c0;
+  --accent-fill: #0c7075;
+  --accent-bg: rgb(109 165 192 / 12%);
+  --accent-border: rgb(109 165 192 / 40%);
+  --code-bg: #041f24;
 
-  /* Brand: electric lime mark, warm white wordmark. */
-  --logo-mark: #c7ff5e;
-  --logo-word: #f5f3ed;
+  /* Brand: current teal mark, sea-glass wordmark. */
+  --logo-mark: #0f969c;
+  --logo-word: #f1f7f7;
 
-  --teal: #22d3c5;
-  --violet: #a78bfa;
+  --teal: #6da5c0;
+  --violet: #a9b8e8;
 
-  --slate: #94a3b8;
-  --copper: #fb923c;
+  --slate: #8fb6c6;
+  --copper: #f0a07c;
 
   /* Status on a dark surface: lighter tints, same meanings. */
-  --ok: #4ade80;
-  --warn: #fbbf24;
-  --danger: #f87171;
-  --danger-bg: rgb(248 113 113 / 10%);
+  --ok: #7fd1b9;
+  --warn: #f1c27d;
+  --danger: #ff9b96;
+  --danger-bg: rgb(255 155 150 / 10%);
 
-  /* Gold: a recorded comparison. Kept apart from the amber warning. One gold
-     works for both roles on charcoal. */
-  --compare: #e3b341;
-  --compare-ring: #e3b341;
-  --compare-bg: rgb(227 179 65 / 12%);
+  /* Gold: a recorded comparison. One gold works for both roles here. */
+  --compare: #e8c07a;
+  --compare-ring: #e8c07a;
+  --compare-bg: rgb(232 192 122 / 12%);
 
-  --on-accent: #ffffff;
+  --on-accent: #f1f7f7;
 
-  /* Primary buttons stay blue on a dark surface. Both values are chosen
-     against the white label on them: 5.17:1 at rest and 4.55:1 on hover. */
-  --btn-primary-bg: #2563eb;
-  --btn-primary-fg: #ffffff;
-  --btn-primary-hover-bg: #2f6afe;
+  /* Primary buttons are shallow water with abyss ink. */
+  --btn-primary-bg: #6da5c0;
+  --btn-primary-fg: #05161a;
+  --btn-primary-hover-bg: #8fbed4;
 
-  /* Hero: one quiet bloom, no gradient headline. */
-  --hero-wash-a: rgb(91 157 255 / 9%);
+  /* Hero: lagoon bloom with a shallow-water rim. */
+  --hero-wash-a: rgb(15 150 156 / 26%);
+  --hero-wash-b: rgb(109 165 192 / 14%);
 
-  --edge-call: #a78bfa;
-  --edge-return: #22d3c5;
-  --edge-back: #f5b942;
-  --edge-error: #f87171;
+  --edge-call: #6da5c0;
+  --edge-return: #7fd1b9;
+  --edge-back: #e8c07a;
+  --edge-error: #ff9b96;
 
   /* The same six call colours, lifted for a dark surface. */
-  --call-0: #c084fc;
-  --call-1: #4fd1c5;
-  --call-2: #fbbf24;
+  --call-0: #b9a7e8;
+  --call-1: #6dd3c9;
+  --call-2: #f0a07c;
   --call-3: #93c5fd;
   --call-4: #f9a8d4;
   --call-5: #86efac;
 
-  --focus: #6ea8fe;
+  --focus: #6da5c0;
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
-  --shadow-md: 0 8px 24px rgb(0 0 0 / 45%);
+  --shadow-md: 0 18px 48px rgb(0 0 0 / 48%);
 }
