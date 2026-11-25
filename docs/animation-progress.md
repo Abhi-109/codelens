@@ -8,6 +8,17 @@ canvas and inspector behind one toggle. See `docs/redesign.md`.
 **Last updated:** 2026-11-25
 
 ## Next-level redesign (started 2026-11-24)
+- **Visual identity and 3D landing (2026-11-25).** The light theme now uses the
+  sea-glass palette (#F1F7F7, #D5E5E5, #BDD7D8), blush (#F7CBCA), warm grey
+  (#DDD3D3) and slate (#5D6B6B); the dark theme uses abyss, deep, lagoon, current,
+  shallows and reef (#05161A, #072E33, #0C7075, #0F969C, #6DA5C0, #294D61).
+  Body ink is one shade deeper than slate so it also clears AA on mint. The
+  landing page has a pointer-tilted 3D stage around the real preview, floating
+  cards that read the current frame, a bento feature grid, an interactive
+  three-moment trace explorer, and a closing CTA, all in `src/pages/home.css`.
+  This is presentation only: no trace, renderer or panel rule changed, and the
+  visualizer keeps its two-panel layout. The contrast guard, 913 JS tests and
+  258/258 browser checks pass in both themes and at 390px.
 - **Phase 0 landed.** `docs/animation-spec.md` gained the Focus amendment, the
   universal-stage contract and the multi-language boundary; `docs/redesign.md` is the
   working contract. No trace, diff or renderer rule changed.

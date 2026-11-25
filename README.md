@@ -128,9 +128,10 @@ CodeLens fixes both halves of that:
   first use by a dismissible concept card, and a glossary drawer collects the terms.
 - **Works where beginners are** — phone and laptop, light and dark themes, with
   a theme toggle that is remembered and never flashes the wrong colours.
-- **A real site around it** — a landing page whose hero replays a real trace
-  step by step (variables, call stack and output, all from the engine's own
-  recording, pausing when you leave the tab), a language picker that is honest
+- **A real site around it** — a 3D landing page whose hero tilts under the pointer
+  and replays a real trace step by step (variables, call stack and output, all
+  from the engine's own recording, pausing when you leave the tab), a language
+  picker that is honest
   about what runs today, and docs, learn and about pages behind one shared
   shell with breadcrumbs, a footer, and loading / empty / error / 404 states.
 
@@ -350,6 +351,7 @@ codelens/
 │   │   └── shell.css
 │   ├── pages/              # one file per route (home, get-started, learn, ...)
 │   │   ├── Home.jsx            # the landing page and its live preview
+│   │   ├── home.css            # 3D hero stage, bento grid and trace explorer
 │   │   ├── GetStarted.jsx      # the language grid (Python only, honestly)
 │   │   ├── languages.js        # the language list + the homepage features (pure)
 │   │   ├── languages.test.mjs  # Python is the only language that links anywhere
