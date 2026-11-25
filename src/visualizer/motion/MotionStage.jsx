@@ -1,6 +1,6 @@
 import { Fragment, useLayoutEffect, useMemo, useRef } from "react";
 
-import { MOTION_ARC, MOTION_EASING, moveKeyframes } from "./choreography.js";
+import { MOTION_ARC, MOTION_EASING, moveKeyframes, staggerDelay } from "./choreography.js";
 import { createMotionController, motionTargetKey } from "./plan.js";
 import { motionView } from "./view.js";
 import "./motion.css";
@@ -67,9 +67,10 @@ function Value({ node }) {
  * has no per-character identity, so they never carry a move or a comparison,
  * only the string's own changed/highlighted state.
  */
-function TextCard({ text }) {
+function TextCard({ text, registerNode }) {
   return (
     <div
+      ref={registerNode}
       className={classNames(
         "motion-text",
         text.changed && "is-changed",
@@ -106,9 +107,10 @@ function TextCard({ text }) {
 }
 
 /** A primitive variable from the current call: name, value and type. */
-function ScalarTile({ tile }) {
+function ScalarTile({ tile, registerNode }) {
   return (
     <div
+      ref={registerNode}
       className={classNames(
         "motion-scalar",
         tile.changed && "is-changed",
@@ -477,6 +479,10 @@ export default function MotionStage({ plan, trace = [], result = null }) {
       if (!element?.animate) return null;
       const animation = element.animate(frames, {
         duration: Math.max(1, Math.round(options.duration ?? view.durationMs ?? 1)),
+        delay: Math.max(0, Math.round(options.delay ?? 0)),
+        // "both" keeps a delayed entrance hidden until its turn and holds the
+        // final frame after a move, which is the element's own layout slot.
+        fill: options.fill ?? "both",
         easing: options.easing ?? MOTION_EASING.move,
       });
       animations.current.push(animation);
@@ -576,6 +582,51 @@ export default function MotionStage({ plan, trace = [], result = null }) {
         easing: MOTION_EASING.fade,
       });
     }
+
+    // Scalar tiles and character cards have their own identity, apart from the
+    // frame chip that lists the same name. A value that appears rises into its
+    // slot; a value that changes makes one soft pulse. Both use transform and
+    // opacity only, and both are cancelled with every other animation.
+    const maxDelay = (view.durationMs ?? 0) >= 220 ? 64 : 0;
+    const valueNodes = [
+      ...view.scalars.map((tile) => ({ flagKey: tile.key, nodeKey: `scalar:${tile.key}` })),
+      ...(view.texts ?? []).map((text) => ({ flagKey: text.scalarKey, nodeKey: text.key })),
+    ];
+    const enteringValues = valueNodes.filter((node) => entering.has(node.flagKey));
+    const changedValues = valueNodes.filter(
+      (node) => !entering.has(node.flagKey) && view.changed.includes(node.flagKey),
+    );
+
+    enteringValues.forEach(({ nodeKey }, i) => {
+      const element = nodeRefs.current.get(nodeKey);
+      if (!element) return;
+      play(
+        element,
+        [
+          { opacity: 0, transform: "translateY(4px) scale(0.98)" },
+          { opacity: 1, transform: "translateY(0) scale(1)" },
+        ],
+        { easing: MOTION_EASING.enter, delay: staggerDelay(i, { max: maxDelay }) },
+      );
+    });
+
+    changedValues.forEach(({ nodeKey }, i) => {
+      const element = nodeRefs.current.get(nodeKey);
+      if (!element) return;
+      play(
+        element,
+        [
+          { opacity: 0.55, transform: "scale(0.985)" },
+          { opacity: 1, transform: "scale(1.012)" },
+          { opacity: 1, transform: "scale(1)" },
+        ],
+        {
+          duration: Math.min(view.durationMs || 200, 240),
+          easing: MOTION_EASING.fade,
+          delay: staggerDelay(i, { step: 12, max: Math.round(maxDelay / 2) }),
+        },
+      );
+    });
 
     // Keyed cards and frames keep their identity, so a normal FLIP is enough
     // when a sibling enters or leaves. Positional list cells are handled above
@@ -711,7 +762,11 @@ export default function MotionStage({ plan, trace = [], result = null }) {
         {view.texts.length > 0 ? (
           <section className="motion-texts" aria-label="Text values">
             {view.texts.map((text) => (
-              <TextCard key={text.key} text={text} />
+              <TextCard
+                key={text.key}
+                text={text}
+                registerNode={(node) => registerIn(nodeRefs, text.key, node)}
+              />
             ))}
           </section>
         ) : null}
@@ -719,7 +774,11 @@ export default function MotionStage({ plan, trace = [], result = null }) {
         {showScalars ? (
           <section className="motion-scalars" aria-label="Values">
             {scalarTiles.map((tile) => (
-              <ScalarTile key={tile.key} tile={tile} />
+              <ScalarTile
+                key={tile.key}
+                tile={tile}
+                registerNode={(node) => registerIn(nodeRefs, `scalar:${tile.key}`, node)}
+              />
             ))}
           </section>
         ) : null}

@@ -10,7 +10,13 @@ import { test } from "node:test";
 import { gunzipSync } from "node:zlib";
 
 import { snapshotAt, stateOf } from "../../animation/diff.js";
-import { MOTION_ARC, MOTION_EASING, moveKeyframes, offsetOf } from "./choreography.js";
+import {
+  MOTION_ARC,
+  MOTION_EASING,
+  moveKeyframes,
+  offsetOf,
+  staggerDelay,
+} from "./choreography.js";
 import { MOTION_OPERATION, motionDuration, planMotion } from "./plan.js";
 
 const read = (path) =>
@@ -89,6 +95,16 @@ test("a bow stays subtle: capped by the distance and zero when unrequested", () 
 
   const straight = moveKeyframes(-140, 0, { arc: 0 });
   assert.equal(straight.length, 2, "a plain FLIP adds no overshoot");
+});
+
+test("entrance delays cascade, are bounded, and start at zero", () => {
+  assert.equal(staggerDelay(0), 0);
+  assert.equal(staggerDelay(1), 16);
+  assert.equal(staggerDelay(3), 48);
+  assert.equal(staggerDelay(9), 64, "a long group never waits longer than the cap");
+  assert.equal(staggerDelay(9, { max: 0 }), 0, "fast playback can remove the cascade");
+  assert.equal(staggerDelay(-2), 0);
+  assert.equal(staggerDelay("nope"), 0);
 });
 
 test("each role has one curve, and movement is not the fade", () => {

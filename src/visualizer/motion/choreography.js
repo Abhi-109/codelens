@@ -22,7 +22,19 @@ export const MOTION_EASING = Object.freeze({
 });
 
 /** How far a moving cell bows off the straight line, in px. Deliberately small. */
-export const MOTION_ARC = Object.freeze({ swap: 10 });
+export const MOTION_ARC = Object.freeze({ swap: 16 });
+
+/**
+ * The entrance delay for the nth new element, so a group of values arrives as
+ * a short cascade instead of popping in together. Bounded: the last element is
+ * never more than `max` behind the first, which keeps a twelve-value step from
+ * looking slow and keeps a burst of steps interruptible.
+ */
+export function staggerDelay(index, { step = 16, max = 64 } = {}) {
+  const i = Number(index);
+  if (!Number.isFinite(i) || i <= 0) return 0;
+  return Math.min(Math.round(i * step), Math.max(0, max));
+}
 
 /** Below this distance a move is sub-pixel layout noise, not a movement. */
 const MIN_MOVE_PX = 0.5;

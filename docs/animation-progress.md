@@ -4,7 +4,7 @@
 surface) in progress. The historical Phase 1 diff-engine work is done through task 6.
 **Current milestone:** Focus is the default visualizer; Studio keeps every existing
 canvas and inspector behind one toggle. See `docs/redesign.md`.
-**Last updated:** 2026-11-24
+**Last updated:** 2026-11-25
 
 ## Next-level redesign (started 2026-11-24)
 - **Phase 0 landed.** `docs/animation-spec.md` gained the Focus amendment, the
@@ -65,7 +65,17 @@ canvas and inspector behind one toggle. See `docs/redesign.md`.
   carries the inner list's recorded preview (`[3, 1]`) and the inner list has its own card.
   A new real-fixture test on `nested-lists` pins both facts, so "nested contents" is no
   longer listed as a gap. I/O as a distinct stage fact remains.
-- **Counts after this slice:** 136 Python tests, **907 JS tests**, lint and build clean.
+- **Smoother value motion (Phase 3c).** Scalar tiles and character cards now animate their
+  own identity: a value that appears rises 4px and scales in, staggered 16ms per item and
+  capped so a wide step never feels slow; a value that changes makes one soft three-frame
+  scale pulse. `play()` gained an optional delay and now defaults to `fill: "both"`, so a
+  delayed entrance stays hidden and a finished move holds its final frame. Swap bows went
+  from 10px to 16px so the two cells visibly pass each other. Everything is transform and
+  opacity only, and reduced motion still skips the whole animation pass via `view.animate`.
+- **Verification for smoother motion.** In headless Chrome: a string card entered with the
+  two-frame rise at a 16ms stagger, a changed scalar ran the 3-keyframe 180ms pulse with
+  `fill: both`, and a bubble-sort swap ran three keyframes bowing 16px; no console errors.
+- **Counts after this slice:** 136 Python tests, **908 JS tests**, lint and build clean.
 
 ## Phase checklist
 - [x] 0 Audit

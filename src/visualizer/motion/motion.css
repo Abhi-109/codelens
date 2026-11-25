@@ -414,6 +414,7 @@
 }
 
 .motion-scalar {
+  transform-origin: center;
   display: flex;
   flex: 0 1 auto;
   flex-direction: column;
@@ -494,6 +495,7 @@
 }
 
 .motion-text {
+  transform-origin: center;
   display: flex;
   flex: 0 1 auto;
   flex-direction: column;
@@ -1311,6 +1313,8 @@
   .motion-cell-index,
   .motion-var,
   .motion-scalar,
+  .motion-text,
+  .motion-char,
   .motion-node {
     transition: none;
   }
