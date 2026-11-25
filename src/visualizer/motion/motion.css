@@ -491,6 +491,89 @@
   color: var(--text);
 }
 
+/* A value the tracer could not open: class and repr are recorded, contents are
+ * not. The card is wider than a scalar tile because the repr, not the value,
+ * is the point, and the note keeps the omission visible. */
+.motion-opaques {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.motion-opaque {
+  display: flex;
+  flex: 0 1 320px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+  max-width: 100%;
+  padding: 8px 10px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.motion-opaque.is-changed {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.motion-opaque.is-highlighted {
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+
+.motion-opaque-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.motion-opaque-name {
+  overflow: hidden;
+  font: 600 11.5px/1.4 var(--mono);
+  color: var(--text-h);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motion-opaque-type {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--code-bg);
+  font: 9.5px/1.5 var(--mono);
+  color: var(--text);
+  text-transform: lowercase;
+}
+
+.motion-opaque-repr {
+  display: block;
+  padding: 6px 8px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--code-bg);
+  font: 12px/1.5 var(--mono);
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+}
+
+.motion-opaque-note {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  opacity: 0.72;
+}
+
 /* A recorded string, shown as its characters. Presentation only: the trace
  * has no per-character identity, so a cell never claims a move or a compare. */
 .motion-texts {
@@ -1273,6 +1356,11 @@
     max-width: 100%;
   }
 
+  .motion-opaque {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
   /* Depth is already written on the frame; dropping the indent keeps a phone
    * from turning the stack into a narrow column. */
   .motion-frame {
@@ -1320,6 +1408,7 @@
   .motion-cell-index,
   .motion-var,
   .motion-scalar,
+  .motion-opaque,
   .motion-text,
   .motion-char,
   .motion-node {

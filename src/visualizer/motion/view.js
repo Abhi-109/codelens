@@ -300,6 +300,10 @@ function scalarTiles(plan, flags, previous) {
       text: variable.text,
       raw: variable.value,
       valueType: variable.valueType,
+      // `other` means the tracer recorded a class and a repr and nothing
+      // further: a property, a range, or a container past the heap cap. The
+      // stage draws it as an honest card instead of a plausible value tile.
+      opaque: variable.valueType === "other",
       typeName:
         variable.valueType === "none"
           ? "None"

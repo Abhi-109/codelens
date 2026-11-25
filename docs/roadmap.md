@@ -20,7 +20,8 @@ over one execution session:
       values, recorded strings draw as character cells, and nested containers
       keep their recorded inline preview beside their own card. Output and input
       steps are now first-class stage facts: the current chunk, or the recorded
-      prompt and supplied value, with its line.
+      prompt and supplied value, with its line. Opaque values get a wider card
+      with their recorded class, repr and a "not further inspected" note.
 - [ ] **Phase 4 — diff/motion completeness.** String/slice/augmented/multi-target
       shapes, nested writes, memoised diffs, measured budgets.
 - [ ] **Phase 5 — site-wide redesign.** Home, Learn, Docs, lab and shell.

@@ -89,10 +89,20 @@ canvas and inspector behind one toggle. See `docs/redesign.md`.
   `name = input('Your name? ')` with `Asha` supplied showed `line 1 input "Your name? " →
   "Asha"` at step 4/11, the prompt still in Output, both themes inspected
   (`io-input-light.png`, `io-input-dark.png`), and no console errors.
-- **Still open in the redesign table:** an opaque value is still a scalar tile with its
-  class and repr; the richer "not further inspected" card is not built. Phase 3's listed
-  value kinds are otherwise done.
-- **Counts after this slice:** 136 Python tests, **912 JS tests**, lint and build clean.
+- **Opaque values got their own card (redesign table closed).** A scalar whose recorded
+  type is `other` (a `property`, or the heap-cap fallback) is no longer a small tile. It
+  becomes a wider card: the name and its recorded class pill on the head row, the recorded
+  repr as code, and the literal note "Not further inspected". Nothing is invented — the
+  card shows only the class and repr the trace recorded. Ordinary scalars keep their
+  compact tiles, and the opaque section follows the scalar rules (capped, hidden while a
+  collection owns the stage).
+- **Verification for opaque values.** A `view` test over the real `class-property`
+  fixture asserts `next_value` is `valueType "other"`, `typeName "property"`, opaque, with
+  its recorded repr; the scalar test also pins that an ordinary int stays non-opaque. A
+  headless-Chrome run of that program found the card at step 11/22 with name, class, repr
+  and note correct in both themes (`opaque-light.png`, `opaque-dark.png`), no console
+  errors.
+- **Counts after this slice:** 136 Python tests, **913 JS tests**, lint and build clean.
 
 ## Phase checklist
 - [x] 0 Audit

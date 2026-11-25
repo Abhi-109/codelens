@@ -1144,6 +1144,23 @@ test("scalar-only programs show the current call's values as tiles", () => {
   assert.equal(byName.get("is_student").text, "True");
   assert.equal(byName.get("nothing").text, "None");
   assert.equal(byName.get("nothing").typeName, "None");
+  assert.equal(byName.get("age").opaque, false, "a recorded int is not opaque");
+});
+
+test("a value with only a class and repr is marked opaque", () => {
+  const p = program("class-property");
+  let tile = null;
+  for (let index = 0; index < p.trace.length; index += 1) {
+    const view = motionView(planAt(p, index), { trace: p.trace, result: p.result });
+    tile = view.scalars.find((candidate) => candidate.name === "next_value");
+    if (tile) break;
+  }
+
+  assert.ok(tile, "the property object reaches the stage");
+  assert.equal(tile.valueType, "other");
+  assert.equal(tile.typeName, "property");
+  assert.equal(tile.opaque, true, "the stage must not imply it inspected the contents");
+  assert.match(tile.text, /^<property object at 0x/);
 });
 
 test("a changed scalar is marked and comes first", () => {

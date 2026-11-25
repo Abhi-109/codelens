@@ -154,6 +154,37 @@ function ReturnTile({ returned }) {
   );
 }
 
+/* The tracer recorded a class and a repr for this value, but no contents. The
+ * card says exactly that instead of padding the repr into a value tile that
+ * would imply the stage inspected it. */
+function OpaqueCard({ tile, registerNode }) {
+  return (
+    <article
+      ref={registerNode}
+      className={classNames(
+        "motion-opaque",
+        tile.changed && "is-changed",
+        tile.highlighted && "is-highlighted",
+      )}
+      data-key={tile.key}
+    >
+      <header className="motion-opaque-head">
+        <span className="motion-opaque-name">{tile.name}</span>
+        <span className="motion-opaque-type">{tile.typeName}</span>
+      </header>
+      <code className="motion-opaque-repr" title={tile.text}>
+        {tile.text}
+      </code>
+      <p
+        className="motion-opaque-note"
+        title="The trace records only this value's class and repr."
+      >
+        Not further inspected
+      </p>
+    </article>
+  );
+}
+
 function Slot({ slot, registerNode }) {
   const keyed =
     slot.kind === "attribute" || (slot.kind === "entry" && slot.container !== "set");
@@ -680,6 +711,8 @@ export default function MotionStage({ plan, trace = [], result = null }) {
   // scalar tile is skipped here. The model keeps both; only the drawing picks.
   const textKeys = new Set(view.textScalarKeys ?? []);
   const scalarTiles = view.scalars.filter((tile) => !textKeys.has(tile.key));
+  const opaqueTiles = scalarTiles.filter((tile) => tile.opaque);
+  const plainTiles = scalarTiles.filter((tile) => !tile.opaque);
   const hasValues =
     view.scalars.length > 0 ||
     view.objects.length > 0 ||
@@ -688,7 +721,8 @@ export default function MotionStage({ plan, trace = [], result = null }) {
   const showEmpty = !hasValues && !view.output && !view.ending;
   // Scalars are values too. A loop index or a counter belongs beside the list
   // it moves, not only on a canvas that happens to have no list.
-  const showScalars = scalarTiles.length > 0 && !view.structure;
+  const showScalars = plainTiles.length > 0 && !view.structure;
+  const showOpaque = opaqueTiles.length > 0 && !view.structure;
   // Objects drawn as a chain/tree/graph are one composition, not separate
   // cards; an adjacency list is part of the edges, not a card of its own.
   const drawn = view.structure
@@ -771,9 +805,21 @@ export default function MotionStage({ plan, trace = [], result = null }) {
           </section>
         ) : null}
 
+        {showOpaque ? (
+          <section className="motion-opaques" aria-label="Values without recorded contents">
+            {opaqueTiles.map((tile) => (
+              <OpaqueCard
+                key={tile.key}
+                tile={tile}
+                registerNode={(node) => registerIn(nodeRefs, `scalar:${tile.key}`, node)}
+              />
+            ))}
+          </section>
+        ) : null}
+
         {showScalars ? (
           <section className="motion-scalars" aria-label="Values">
-            {scalarTiles.map((tile) => (
+            {plainTiles.map((tile) => (
               <ScalarTile
                 key={tile.key}
                 tile={tile}
