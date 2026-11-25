@@ -82,10 +82,35 @@ function endingOf(result) {
 }
 
 /**
- * The stage's output and ending for one cursor.
+ * The I/O event at exactly one trace index, or null.
+ *
+ * The fact is the event's own record, not the cumulative output string: an
+ * `output` step carries the chunk it wrote, and an `input` step carries the
+ * prompt and the value the run supplied. Reading only the cursor event means a
+ * later line can never inherit an earlier prompt, and a seek cannot show I/O
+ * that has not happened yet.
+ *
+ * @param {Array} trace
+ * @param {number} at an already-clamped index
+ * @returns {{kind: "output"|"input", text: string, prompt: string|null, line: number|null}|null}
+ */
+function ioAt(trace, at) {
+  const event = trace[at];
+  if (event?.event !== "output" && event?.event !== "input") return null;
+  return {
+    kind: event.event,
+    text: typeof event.text === "string" ? event.text : "",
+    prompt: event.event === "input" && typeof event.prompt === "string" ? event.prompt : null,
+    line: Number.isInteger(event.line) ? event.line : null,
+  };
+}
+
+/**
+ * The stage's output, current I/O event and ending for one cursor.
  *
  * `ending` is null until the cursor reaches the last recorded step, so a
- * program that is still running is never given a final result.
+ * program that is still running is never given a final result. `io` is null on
+ * every step that is not itself a recorded output or input event.
  *
  * @param {Array} trace
  * @param {number} index
@@ -94,7 +119,7 @@ function endingOf(result) {
 export function stageResult(trace, index, result = null) {
   const list = Array.isArray(trace) ? trace : [];
   if (list.length === 0) {
-    return { index: 0, atEnd: false, output: "", lastReturn: null, ending: null };
+    return { index: 0, atEnd: false, output: "", io: null, lastReturn: null, ending: null };
   }
   const at = Math.min(Math.max(Math.round(Number(index) || 0), 0), list.length - 1);
   const atEnd = at === list.length - 1;
@@ -102,6 +127,7 @@ export function stageResult(trace, index, result = null) {
     index: at,
     atEnd,
     output: outputAt(list, at),
+    io: ioAt(list, at),
     lastReturn: lastFunctionReturn(list, at),
     ending: atEnd ? endingOf(result) : null,
   };

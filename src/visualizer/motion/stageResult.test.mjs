@@ -1,6 +1,7 @@
-// The stage's non-diff facts: output at the cursor, the last named function
-// return, and the run's ending. Every assertion reads a real corpus trace or a
-// deliberately minimal trace shape, never the final output string on its own.
+// The stage's non-diff facts: output at the cursor, the current I/O event, the
+// last named function return, and the run's ending. Every assertion reads a real
+// corpus trace or a deliberately minimal trace shape, never the final output
+// string on its own.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -49,6 +50,54 @@ test("multiple output chunks join exactly, preserving spaces and newlines", () =
   assert.equal(end.output, p.result.output);
   assert.match(end.output, /one \| two\n/);
   assert.match(end.output, /no newline\.\.\.continues\n/);
+});
+
+test("the current I/O event is the cursor's own event, never a lookahead", () => {
+  const p = program("io-input");
+  const inputAt = p.trace.findIndex((event) => event.event === "input");
+  assert.ok(inputAt > 0);
+
+  const input = stageResult(p.trace, inputAt, p.result);
+  assert.deepEqual(input.io, {
+    kind: "input",
+    text: "Asha",
+    prompt: "Your name? ",
+    line: 1,
+  });
+  assert.equal(stageResult(p.trace, inputAt - 1, p.result).io.kind, "output");
+  assert.equal(stageResult(p.trace, inputAt - 1, p.result).io.text, "Your name? ");
+
+  const lineAt = p.trace.findIndex((event, index) => index > inputAt && event.event === "line");
+  assert.ok(lineAt > inputAt);
+  assert.equal(
+    stageResult(p.trace, lineAt, p.result).io,
+    null,
+    "a line step has no I/O event of its own",
+  );
+
+  for (let index = 0; index < inputAt; index += 1) {
+    assert.notEqual(
+      stageResult(p.trace, index, p.result).io?.kind,
+      "input",
+      `step ${index} cannot see the input that has not happened yet`,
+    );
+  }
+});
+
+test("each input read keeps its own prompt and value", () => {
+  const p = program("io-two-inputs");
+  const reads = p.trace
+    .map((event, index) => ({ event, index }))
+    .filter(({ event }) => event.event === "input")
+    .map(({ index }) => stageResult(p.trace, index, p.result).io);
+  assert.deepEqual(
+    reads.map((io) => [io.prompt, io.text]),
+    [
+      ["First? ", "Asha"],
+      ["Second? ", "Ravi"],
+    ],
+  );
+  assert.equal(stageResult([], 0, null).io, null, "an empty trace has no I/O event");
 });
 
 test("an empty print still contributes its newline", () => {
@@ -205,6 +254,7 @@ test("an empty trace has no stage facts", () => {
     index: 0,
     atEnd: false,
     output: "",
+    io: null,
     lastReturn: null,
     ending: null,
   });

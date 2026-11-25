@@ -592,7 +592,24 @@ export function structureOf(objects, plan = null) {
  * @param {Object|null} plan a plan from `planMotion`
  * @returns {{kind: string, text: string}|null}
  */
-export function operationFeedback(plan) {
+/** A recorded chunk as a headline shows it: quoted, with control characters visible. */
+function quotedText(text) {
+  return JSON.stringify(typeof text === "string" ? text : "");
+}
+
+/**
+ * The headline for one step.
+ *
+ * `io` is the event at this exact cursor from `stageResult`. A print or an
+ * input read is a real step even though it changes no variable: it gets its own
+ * sentence instead of "no data change", and the input prompt is named as the
+ * recording wrote it.
+ *
+ * @param {Object|null} plan
+ * @param {{kind: string, text: string, prompt: string|null, line: number|null}|null} [io]
+ * @returns {{kind: string, text: string, explanation?: string}|null}
+ */
+export function operationFeedback(plan, io = null) {
   if (!plan) return null;
   // A raised error is the step's meaning, whatever else it changed.
   const error = errorFeedback(plan);
@@ -602,6 +619,32 @@ export function operationFeedback(plan) {
   const comparison = comparisonOf(plan);
   if (comparison) {
     return { kind: "compare", text: comparison.text, explanation: comparison.explanation };
+  }
+  // Recorded I/O is also its own step. An input prompt is part of the event,
+  // so it stays visible even after the echoed value joins the output buffer.
+  if (io?.kind === "input") {
+    const value = quotedText(io.text);
+    if (io.prompt) {
+      const prompt = quotedText(io.prompt);
+      return {
+        kind: "input",
+        text: `input ${prompt} → ${value}`,
+        explanation: `The program asked ${prompt} and read ${value}.`,
+      };
+    }
+    return {
+      kind: "input",
+      text: `input → ${value}`,
+      explanation: `The program read ${value} from its input.`,
+    };
+  }
+  if (io?.kind === "output") {
+    const chunk = quotedText(io.text);
+    return {
+      kind: "output",
+      text: `output ${chunk}`,
+      explanation: `The program wrote ${chunk} to its output.`,
+    };
   }
   const operations = Array.isArray(plan.feedbackOperations)
     ? plan.feedbackOperations
@@ -780,11 +823,11 @@ export function motionView(plan, stage = null) {
   const previousNodes = plan.previousState ? motionNodes(plan.previousState) : null;
   const previous = flatten(previousNodes);
   const flags = flagsFor(plan);
-  const feedback = operationFeedback(plan);
   const returned = returnOf(plan);
   const scalars = scalarTiles(plan, flags, previous);
   const texts = textCards(scalars.scalars);
   const result = stageResult(stage?.trace, plan.index, stage?.result ?? null);
+  const feedback = operationFeedback(plan, result.io);
   const objects = plan.nodes.objects.map((object) => objectView(object, flags));
 
   // A seek, reset, hold or reduced-motion presentation renders the exact
@@ -836,6 +879,8 @@ export function motionView(plan, stage = null) {
     textScalarKeys: [...texts.scalarKeys],
     lastReturn: result.lastReturn,
     output: result.output,
+    // The current step's own I/O event, not the whole printed buffer.
+    io: result.io,
     ending: result.ending,
     objects,
     // A recorded shape (chain, tree, graph) is drawn as one composition; its

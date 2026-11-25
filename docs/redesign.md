@@ -69,7 +69,7 @@ construct must say so.
 | Strings | One scalar tile | Indexed character cells for 2–60 character strings; full text tile otherwise |
 | Nested containers | Inline preview plus a separate card (verified) | Keep the preview, mark the inner change when a verified action names it |
 | Opaque values | `other` pill | Card with class, repr and an honest "not further inspected" |
-| I/O and errors | Output/status area | First-class stage events, including input prompts |
+| I/O and errors | Output/status area | Done: the current output chunk or `prompt → value` read is a step fact; errors stay first-class |
 | Statement shapes | Swap/shift/insert/pop/dict/object | Strings, slices, augmented/multi-target, nested writes, comprehension writes |
 | Blank steps | Several honest but empty notes | A step line + operation + state, always |
 
@@ -92,8 +92,8 @@ construct must say so.
 |---|---|---|
 | 0 | Spec v2, this contract, roadmap/progress | done |
 | 1 | Design foundation: tokens, primitives, shell | next |
-| 2 | Focus workspace (editor + stage + transport, Studio toggle) | in progress |
-| 3 | Universal stage coverage (strings, nested, opaque, I/O) | partly: measured coverage guard landed; value kinds pending |
+| 2 | Focus workspace (editor + stage + transport, Studio toggle) | done |
+| 3 | Universal stage coverage (strings, nested, opaque, I/O) | value kinds done, including I/O; richer opaque card still open |
 | 4 | Diff/motion completeness + performance | pending |
 | 5 | Site-wide redesign | pending |
 | 6 | Python breadth audit; multi-language adapter boundary | pending |

@@ -1,7 +1,8 @@
 # Animation visualizer: progress
 
-**Current phase:** Next-level redesign — Phase 0 (contract) done, Phase 2 (Focus
-surface) in progress. The historical Phase 1 diff-engine work is done through task 6.
+**Current phase:** Next-level redesign — Phases 0, 2 and 3 (universal value kinds)
+done; Phase 1 (design foundation) is next. The historical Phase 1 diff-engine work is
+done through task 6.
 **Current milestone:** Focus is the default visualizer; Studio keeps every existing
 canvas and inspector behind one toggle. See `docs/redesign.md`.
 **Last updated:** 2026-11-25
@@ -75,7 +76,23 @@ canvas and inspector behind one toggle. See `docs/redesign.md`.
 - **Verification for smoother motion.** In headless Chrome: a string card entered with the
   two-frame rise at a 16ms stagger, a changed scalar ran the 3-keyframe 180ms pulse with
   `fill: both`, and a bubble-sort swap ran three keyframes bowing 16px; no console errors.
-- **Counts after this slice:** 136 Python tests, **908 JS tests**, lint and build clean.
+- **I/O became first-class step facts (Phase 3b complete).** `stageResult` now returns an
+  `io` fact read only from the cursor's own event: an `output` step carries the chunk it
+  wrote, and an `input` step carries the prompt and the supplied value, each with its
+  line. `motionView` exposes it and `operationFeedback` gives those steps their own
+  headline (`output "..."`, `input "Your name? " → "Asha"`) instead of "no data
+  change". Coverage counts the I/O event as visual evidence. Quoting is JSON-style, so
+  spaces, tabs and newlines in a prompt stay visible. Nothing is read from a later event,
+  so an earlier cursor can never show a prompt that has not happened.
+- **Verification for I/O.** Four new tests across `stageResult`, `view` and `coverage`,
+  using the real `io-input` and `io-two-inputs` fixtures. A headless-Chrome run of
+  `name = input('Your name? ')` with `Asha` supplied showed `line 1 input "Your name? " →
+  "Asha"` at step 4/11, the prompt still in Output, both themes inspected
+  (`io-input-light.png`, `io-input-dark.png`), and no console errors.
+- **Still open in the redesign table:** an opaque value is still a scalar tile with its
+  class and repr; the richer "not further inspected" card is not built. Phase 3's listed
+  value kinds are otherwise done.
+- **Counts after this slice:** 136 Python tests, **912 JS tests**, lint and build clean.
 
 ## Phase checklist
 - [x] 0 Audit

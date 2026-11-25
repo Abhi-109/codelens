@@ -84,6 +84,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Reading input is an event of its own: the prompt and the supplied value are
+ * recorded facts, so they stay in the step headline rather than only in stdout. */
+.motion-event.is-input {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
 /* A raised error is a stop, not a data change. */
 .motion-event.is-error {
   color: var(--danger);

@@ -47,6 +47,34 @@ test("a line and a sentence are covered but not visual; values are visual", () =
   assert.ok(withValues.parts.includes(COVERAGE_PART.values));
 });
 
+test("a recorded input event is visual evidence of its own", () => {
+  const synthetic = coverageOf(
+    {},
+    {
+      line: 1,
+      feedback: { text: 'input "Your name? " → "Asha"' },
+      io: { kind: "input", text: "Asha", prompt: "Your name? ", line: 1 },
+      frames: [],
+      scalars: [],
+      objects: [],
+    },
+  );
+  assert.equal(synthetic.visual, true);
+  assert.ok(synthetic.parts.includes(COVERAGE_PART.io));
+
+  const entry = CORPUS["io-input"];
+  const inputAt = entry.trace.findIndex((event) => event.event === "input");
+  const plan = planMotion(entry.trace, inputAt, {
+    source: entry.source,
+    previousIndex: inputAt - 1,
+  });
+  const view = motionView(plan, { trace: entry.trace, result: entry.result });
+  const coverage = coverageOf(plan, view);
+  assert.equal(view.io.kind, "input");
+  assert.equal(view.io.prompt, "Your name? ");
+  assert.ok(coverage.parts.includes(COVERAGE_PART.io));
+});
+
 test("summarizeCoverage counts text-only, visual, blank and unanchored steps", () => {
   const summary = summarizeCoverage([
     { covered: true, visual: true, anchor: true },

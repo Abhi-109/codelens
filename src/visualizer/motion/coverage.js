@@ -15,6 +15,7 @@ export const COVERAGE_PART = Object.freeze({
   values: "values",
   frames: "frames",
   output: "output",
+  io: "io",
   return: "return",
   ending: "ending",
   intro: "intro",
@@ -25,6 +26,7 @@ const VISUAL_PARTS = new Set([
   COVERAGE_PART.values,
   COVERAGE_PART.frames,
   COVERAGE_PART.output,
+  COVERAGE_PART.io,
   COVERAGE_PART.return,
   COVERAGE_PART.ending,
   COVERAGE_PART.intro,
@@ -60,6 +62,9 @@ export function coverageOf(plan, view) {
   }
   if ((view.frames?.length ?? 0) > 0) parts.push(COVERAGE_PART.frames);
   if (view.output) parts.push(COVERAGE_PART.output);
+  // The event at this cursor: an input read (with its prompt) is evidence even
+  // before the echoed value reaches the output buffer.
+  if (view.io) parts.push(COVERAGE_PART.io);
   if (view.lastReturn) parts.push(COVERAGE_PART.return);
   if (view.ending) parts.push(COVERAGE_PART.ending);
   if (view.intro) parts.push(COVERAGE_PART.intro);
@@ -69,7 +74,9 @@ export function coverageOf(plan, view) {
     covered,
     parts,
     visual: parts.some((part) => VISUAL_PARTS.has(part)),
-    blankReason: covered ? null : "the recording has no line, operation, value, frame, output or ending to draw",
+    blankReason: covered
+      ? null
+      : "the recording has no line, operation, value, frame, output, I/O event or ending to draw",
   };
 }
 

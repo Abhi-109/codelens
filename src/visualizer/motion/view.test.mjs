@@ -791,7 +791,10 @@ test("value changes, calls and returns say exactly what the trace proves", () =>
 test("a step that changed nothing says so, and no change is ever called a swap", () => {
   const held = findPlan(
     "bubble-sort",
-    (candidate) => candidate.index > 0 && candidate.operations.length === 0,
+    (candidate) =>
+      candidate.index > 0 &&
+      candidate.operations.length === 0 &&
+      !["output", "input"].includes(candidate.event),
   );
   const view = motionView(held.plan);
   assert.equal(view.feedback.kind, "neutral");
@@ -811,6 +814,35 @@ test("a step that changed nothing says so, and no change is ever called a swap",
       );
     }
   }
+});
+
+test("a recorded I/O step gets its own headline and its own event fact", () => {
+  const p = program("io-input");
+  const inputAt = p.trace.findIndex((event) => event.event === "input");
+  assert.ok(inputAt > 0);
+
+  const inputView = motionView(planAt(p, inputAt), p);
+  assert.equal(inputView.feedback.kind, "input");
+  assert.equal(inputView.feedback.text, 'input "Your name? " → "Asha"');
+  assert.equal(inputView.feedback.explanation, 'The program asked "Your name? " and read "Asha".');
+  assert.deepEqual(inputView.io, {
+    kind: "input",
+    text: "Asha",
+    prompt: "Your name? ",
+    line: 1,
+  });
+
+  const outputView = motionView(planAt(p, inputAt - 1), p);
+  assert.equal(outputView.feedback.kind, "output");
+  assert.equal(outputView.feedback.text, 'output "Your name? "');
+  assert.equal(outputView.feedback.explanation, 'The program wrote "Your name? " to its output.');
+
+  const lineAt = p.trace.findIndex((event, index) => index > inputAt && event.event === "line");
+  assert.ok(lineAt > inputAt);
+  assert.equal(motionView(planAt(p, lineAt), p).io, null);
+
+  const start = motionView(planAt(p, 0), p);
+  assert.equal(start.io, null, "the first position cannot show a prompt that has not happened");
 });
 
 test("the view carries the source line that ran, verbatim", () => {

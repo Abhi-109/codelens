@@ -16,10 +16,11 @@ over one execution session:
       Studio reachable by one toggle and Ctrl/Cmd+.; no view deleted.
 - [x] **Phase 3a — coverage guard.** Pure per-step coverage report; every step of
       all 122 fixture programs checked for a blank or unanchored stage.
-- [ ] **Phase 3b — value kinds.** `def`/`class`/`import` names are visible
+- [x] **Phase 3b — value kinds.** `def`/`class`/`import` names are visible
       values, recorded strings draw as character cells, and nested containers
-      keep their recorded inline preview beside their own card. Remaining: I/O
-      events as first-class stage facts.
+      keep their recorded inline preview beside their own card. Output and input
+      steps are now first-class stage facts: the current chunk, or the recorded
+      prompt and supplied value, with its line.
 - [ ] **Phase 4 — diff/motion completeness.** String/slice/augmented/multi-target
       shapes, nested writes, memoised diffs, measured budgets.
 - [ ] **Phase 5 — site-wide redesign.** Home, Learn, Docs, lab and shell.
