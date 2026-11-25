@@ -139,6 +139,14 @@ const near = (a, b, tolerance) => Math.abs(a - b) <= tolerance;
 
 const CELLS = ".motion-object.is-sequence .motion-slot.motion-cell";
 
+// The Focus transport and the Studio transport label the same actions
+// differently. A selector list matches whichever surface is mounted.
+const NEXT = 'button[aria-label="Next step"], button[aria-label="Step forward"]';
+const PREV =
+  'button[aria-label="Previous step"], button[aria-label="Step back"]';
+const FIRST =
+  'button[aria-label="Restart from the first step"], button[aria-label="First step"]';
+
 function readStage(browser) {
   return browser.evaluate(`(() => {
     const stage = document.querySelector(".motion-stage");
@@ -169,10 +177,17 @@ function readStage(browser) {
       max: Number(document.querySelector('input[aria-label="Step"]').max),
       cells,
       head: stage.querySelector(".motion-stage-head")?.innerText.replace(/\\n/g, " | ") ?? null,
+      event: stage.querySelector(".motion-event")?.textContent ?? null,
+      eventKind: stage.querySelector(".motion-event")?.className.match(/is-(\\w+)/)?.[1] ?? null,
       explanation: explain?.textContent ?? null,
       explainTop: explain ? Math.round(explain.getBoundingClientRect().top) : null,
       rowBottom: row ? Math.round(row.getBoundingClientRect().bottom) : null,
       stageBottom: Math.round(stage.getBoundingClientRect().bottom),
+      stageLeft: Math.round(stage.getBoundingClientRect().left),
+      stageRight: Math.round(stage.getBoundingClientRect().right),
+      stageScrolls: stage.scrollWidth > stage.clientWidth + 1,
+      stageScrollWidth: stage.scrollWidth,
+      stageClientWidth: stage.clientWidth,
       rowScrolls: row ? row.scrollWidth > row.clientWidth + 1 : false,
       rowScrollWidth: row?.scrollWidth ?? null,
       rowClientWidth: row?.clientWidth ?? null,
@@ -237,9 +252,25 @@ async function seek(browser, index) {
   await sleep(350);
 }
 
-/** Open a fresh program in the workspace and show its motion canvas. */
-async function openProgram(browser, source) {
-  // After a run the code pane shows the executed lines instead of the editor.
+/** The execution state as the visible header chip, on either surface. */
+const runStatus = (browser) =>
+  browser.evaluate(`document.querySelector(".focus-status")?.textContent.trim() ??
+    document.querySelector(".tb-state")?.textContent.trim() ?? null`);
+
+/** Focus is the default surface; bring it back after a Studio-only section. */
+async function ensureFocus(browser) {
+  if (await browser.evaluate('Boolean(document.querySelector(".focus"))')) return;
+  await browser.click(".tb-focus");
+  await browser.waitFor('document.querySelector(".focus")', 15000, "the Focus surface");
+}
+
+/**
+ * Run a program on the Focus surface, the one a learner lands on. `values`
+ * fills the input() box before Run; the source decides whether that box shows.
+ */
+async function openProgram(browser, source, values = "") {
+  await ensureFocus(browser);
+  // After a run the editor is read-only; Edit returns to the source.
   await browser.evaluate(`(() => {
     const edit = [...document.querySelectorAll("button")].find(
       (button) => button.textContent.trim() === "Edit",
@@ -248,35 +279,66 @@ async function openProgram(browser, source) {
     return Boolean(edit);
   })()`);
   await browser.waitFor(
-    `document.querySelector('textarea[aria-label="Your Python code"]')`,
+    `(() => {
+      const input = document.querySelector(".focus-input");
+      return Boolean(input) && !input.readOnly;
+    })()`,
     15000,
-    "the code editor",
+    "the Focus editor",
   );
-  await browser.setValue(
-    'textarea[aria-label="Your Python code"]',
-    source,
-    "HTMLTextAreaElement",
-  );
-  await browser.click("button.run");
-  await browser.waitFor(
-    `!document.querySelector('textarea[aria-label="Your Python code"]')`,
-    120000,
-    "the code pane to switch to the executed trace",
-  );
+  await browser.setValue(".focus-input", source, "HTMLTextAreaElement");
+  if (source.includes("input(")) {
+    await browser.waitFor(
+      'document.querySelector(".focus-inputs textarea")',
+      5000,
+      "the input() values box",
+    );
+    if (values) {
+      await browser.setValue(
+        ".focus-inputs textarea",
+        values,
+        "HTMLTextAreaElement",
+      );
+    }
+  }
+  await browser.click("button.focus-run");
   await browser.waitFor(
     `(() => {
-      const input = document.querySelector('input[aria-label="Step"]');
-      return Boolean(input) && !input.disabled;
+      const status = document.querySelector(".focus-status");
+      if (!status) return false;
+      const done =
+        status.classList.contains("is-completed") || status.classList.contains("is-error");
+      return (
+        done &&
+        Boolean(document.querySelector(".motion-stage") || document.querySelector(".focus-error-card"))
+      );
     })()`,
     120000,
-    "a steppable trace",
+    "the Focus run to finish",
   );
-  await browser.clickText("Motion");
   await sleep(400);
 }
 
-/** Open a fresh program without touching the canvas strip. */
+/** Studio is where the planner's why-line lives, so that section opens it. */
+async function ensureStudio(browser) {
+  if (!(await browser.evaluate('Boolean(document.querySelector(".focus"))'))) return;
+  await browser.evaluate(`(() => {
+    const studio = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent.trim().startsWith("Studio"),
+    );
+    if (studio) studio.click();
+    return Boolean(studio);
+  })()`);
+  await browser.waitFor(
+    `document.querySelector('textarea[aria-label="Your Python code"]')`,
+    15000,
+    "the Studio editor",
+  );
+}
+
+/** Open a fresh program in the Studio workspace. */
 async function openPlanned(browser, source) {
+  await ensureStudio(browser);
   await browser.evaluate(`(() => {
     const edit = [...document.querySelectorAll("button")].find(
       (button) => button.textContent.trim() === "Edit",
@@ -487,7 +549,7 @@ async function interruption(browser) {
   // Normal speed: start the first swap, interrupt it with the second.
   await seek(browser, first - 1);
   await startSampler(browser, 800);
-  await browser.click('button[aria-label="Step forward"]');
+  await browser.click(NEXT);
   const progress = await waitForProgress(browser, 18);
   const mid = await readStage(browser);
   check(mid.index === first, "the first swap is in flight", String(mid.index));
@@ -497,7 +559,7 @@ async function interruption(browser) {
     `${Math.round(progress.travelled)}px of ${Math.round(progress.slot)}px`,
   );
 
-  await browser.click('button[aria-label="Step forward"]');
+  await browser.click(NEXT);
   await sleep(700);
   const run = await samples(browser);
   const atFirst = run.filter((sample) => sample.index === first);
@@ -559,14 +621,14 @@ async function interruption(browser) {
   // Back mid-move: the result must match an undisturbed Back exactly. A stale
   // ring or sentence would show up as a difference from this reference.
   await seek(browser, first);
-  await browser.click('button[aria-label="Step back"]');
+  await browser.click(PREV);
   await sleep(600);
   const reference = await readStage(browser);
 
   await seek(browser, first - 1);
-  await browser.click('button[aria-label="Step forward"]');
+  await browser.click(NEXT);
   await sleep(70);
-  await browser.click('button[aria-label="Step back"]');
+  await browser.click(PREV);
   await sleep(600);
   const back = await readStage(browser);
   check(back.index === first - 1, "Back mid-move returns to the previous step", String(back.index));
@@ -594,7 +656,7 @@ async function interruption(browser) {
 
   // Slider seek mid-move: jump far ahead and land exactly there.
   await seek(browser, first - 1);
-  await browser.click('button[aria-label="Step forward"]');
+  await browser.click(NEXT);
   await sleep(70);
   const target = Math.min(max, second + 2);
   await browser.setValue('input[aria-label="Step"]', target);
@@ -613,7 +675,7 @@ async function interruption(browser) {
   );
 
   // Reset: first step clears every mark.
-  await browser.click('button[aria-label="First step"]');
+  await browser.click(FIRST);
   await sleep(500);
   const reset = await readStage(browser);
   check(reset.index === 0, "reset returns to step 0", String(reset.index));
@@ -634,9 +696,9 @@ async function interruption(browser) {
   await sleep(100);
   await seek(browser, first - 1);
   await startSampler(browser, 700);
-  await browser.click('button[aria-label="Step forward"]');
+  await browser.click(NEXT);
   const fastProgress = await waitForProgress(browser, 5);
-  await browser.click('button[aria-label="Step forward"]');
+  await browser.click(NEXT);
   await sleep(700);
   const fastRun = await samples(browser);
   const fastMid = await readStage(browser);
@@ -732,7 +794,7 @@ async function bubbleSort(browser) {
   // Swap 6 -> 7: blue pair, values attached, sentence from the first frame.
   await seek(browser, 6);
   await startSampler(browser, 800);
-  await browser.click('button[aria-label="Step forward"]');
+  await browser.click(NEXT);
   await sleep(800);
   const run = await samples(browser);
   const swapRun = run.filter((sample) => sample.index === 7);
@@ -791,7 +853,7 @@ async function bubbleSort(browser) {
   // Backward playback across the swap.
   await seek(browser, 7);
   await startSampler(browser, 700);
-  await browser.click('button[aria-label="Step back"]');
+  await browser.click(PREV);
   await sleep(700);
   const backRun = await samples(browser);
   const backMoving = backRun.filter((sample) => sample.cells.some(moved));
@@ -811,7 +873,7 @@ async function bubbleSort(browser) {
 
   // Persistent green: layered with the operation ring, then with a comparison.
   await seek(browser, 17);
-  await browser.click('button[aria-label="Step forward"]');
+  await browser.click(NEXT);
   await sleep(500);
   const layered = await readStage(browser);
   const both = layered.cells.filter(
@@ -895,7 +957,7 @@ async function playbackAndLayout(browser) {
   // 4x speed: fewer moving frames than 1x, and it settles quickly.
   await seek(browser, 6);
   await startSampler(browser, 700);
-  await browser.click('button[aria-label="Step forward"]');
+  await browser.click(NEXT);
   await sleep(700);
   const normal = (await samples(browser)).filter((sample) => sample.cells.some(moved));
   await browser.setValue('select[aria-label="Playback speed"]', "4", "HTMLSelectElement");
@@ -906,7 +968,7 @@ async function playbackAndLayout(browser) {
   check(speed === "4", "playback speed is set to 4x", speed);
   await seek(browser, 6);
   await startSampler(browser, 700);
-  await browser.click('button[aria-label="Step forward"]');
+  await browser.click(NEXT);
   await sleep(700);
   const fast = (await samples(browser)).filter((sample) => sample.cells.some(moved));
   check(fast.length > 0, "4x still animates the swap", `${fast.length} frames`);
@@ -927,7 +989,7 @@ async function playbackAndLayout(browser) {
   await seek(browser, 6);
   const burstStart = 6;
   for (let i = 0; i < 12; i += 1) {
-    await browser.click('button[aria-label="Step forward"]');
+    await browser.click(NEXT);
   }
   const during = await readStage(browser);
   check(
@@ -989,7 +1051,7 @@ async function playbackAndLayout(browser) {
   });
   await sleep(300);
   await seek(browser, 6);
-  await browser.click('button[aria-label="Step forward"]');
+  await browser.click(NEXT);
   await sleep(150);
   const reduced = await readStage(browser);
   check(reduced.reduced, "reduced-motion preference is live", String(reduced.reduced));
@@ -1020,10 +1082,13 @@ async function playbackAndLayout(browser) {
   const tops = new Set(long.cells.map((cell) => cell.top));
   check(long.cells.length >= 20, "a long list renders many cells", `${long.cells.length}`);
   check(tops.size === 1, "a long list stays on one row", `tops ${[...tops].join(",")}`);
+  const longInside = long.cells.every(
+    (cell) => cell.left >= long.stageLeft && cell.left + cell.width <= long.stageRight + 1,
+  );
   check(
-    long.rowScrolls,
-    "a long list scrolls horizontally",
-    `${long.rowClientWidth}/${long.rowScrollWidth}`,
+    long.rowScrolls || long.stageScrolls || longInside,
+    "a long list scrolls inside its pane or fits it",
+    `${long.stageClientWidth}/${long.stageScrollWidth} | inside ${longInside}`,
   );
   check(!long.bodyOverflow, "a long list does not overflow the page");
   await browser.screenshot("long-array");
@@ -1345,6 +1410,67 @@ async function fallbacks(browser) {
   await browser.screenshot("greet-mobile");
   await browser.send("Emulation.clearDeviceMetricsOverride");
   await sleep(200);
+}
+
+// --- D2. input() steps on the Focus surface --------------------------------
+
+const INPUT = `name = input("Your name? ")\nprint("Hello, " + name)\n`;
+
+async function inputSteps(browser) {
+  console.log("\n--- input() steps on Focus ---");
+  await openProgram(browser, INPUT, "Asha");
+
+  check(
+    await browser.evaluate('Boolean(document.querySelector(".focus-inputs textarea"))'),
+    "the Focus editor offers an input() values box",
+  );
+  const typed = await browser.evaluate(
+    'document.querySelector(".focus-inputs textarea").value',
+  );
+  check(typed === "Asha", "the supplied value reaches the run", typed);
+
+  const max = (await readStage(browser)).max;
+  let input = null;
+  for (let index = 0; index <= max && input === null; index += 1) {
+    await seek(browser, index);
+    const state = await readStage(browser);
+    if (state.eventKind === "input") input = { index, ...state };
+  }
+  check(input !== null, "the stage marks the recorded input step");
+  check(
+    input?.event === 'input "Your name? " \u2192 "Asha"',
+    "the input step names the prompt and the supplied value",
+    String(input?.event),
+  );
+
+  // Nothing before that step may show the prompt: an earlier cursor cannot
+  // know about an event that has not happened yet.
+  await seek(browser, Math.max(0, (input?.index ?? 1) - 1));
+  const before = await readStage(browser);
+  check(
+    before.eventKind !== "input",
+    "the step before the read does not show its prompt",
+    String(before.event),
+  );
+
+  await seek(browser, max);
+  const end = await readStage(browser);
+  check(
+    (end.output ?? "").includes("Your name? ") && /Hello, Asha/.test(end.output ?? ""),
+    "the printed output keeps the prompt and the greeting",
+    JSON.stringify(end.output),
+  );
+
+  await browser.click(FIRST);
+  await sleep(400);
+  const reset = await readStage(browser);
+  check(reset.index === 0, "restart returns the input run to step 0", String(reset.index));
+  check(
+    reset.eventKind !== "input" && reset.output === null,
+    "restart clears the input prompt and its output",
+    JSON.stringify({ event: reset.event, output: reset.output }),
+  );
+  await browser.screenshot("input-step");
 }
 
 // --- E. data-structure lab, lessons, narrow screen and keyboard -------------
@@ -2300,9 +2426,9 @@ async function releaseRegressions(browser) {
   await openProgram(browser, BIG_ARRAY);
   const big = await readStage(browser);
   check(
-    (await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()')) === "Completed",
+    (await runStatus(browser)) === "Completed",
     "a successful run reads Completed",
-    await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()'),
+    await runStatus(browser),
   );
 
   // Hundreds of elements: a bounded strip, a truthful count, no page overflow.
@@ -2314,10 +2440,17 @@ async function releaseRegressions(browser) {
     "a 200-element list draws a bounded strip",
     `${bigEnd.cells.length} cells`,
   );
+  const bigInside = bigEnd.cells.every(
+    (cell) => cell.left >= bigEnd.stageLeft && cell.left + cell.width <= bigEnd.stageRight + 1,
+  );
   check(
-    bigEnd.rowScrolls && !bigEnd.bodyOverflow,
-    "the long list scrolls inside its own row, not the page",
-    JSON.stringify({ rowScrolls: bigEnd.rowScrolls, page: bigEnd.bodyOverflow }),
+    (bigEnd.rowScrolls || bigEnd.stageScrolls || bigInside) && !bigEnd.bodyOverflow,
+    "the long list stays inside its pane, not the page",
+    JSON.stringify({
+      stageScrolls: bigEnd.stageScrolls,
+      inside: bigInside,
+      page: bigEnd.bodyOverflow,
+    }),
   );
   check(
     /170 more/.test(bigEnd.head ?? "") || /170 more/.test(more ?? ""),
@@ -2342,10 +2475,9 @@ async function releaseRegressions(browser) {
   await openProgram(browser, RUNAWAY);
   const runawayMax = (await readStage(browser)).max;
   check(
-    (await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()')) ===
-      "Runtime error",
+    (await runStatus(browser)) === "Runtime error",
     "runaway recursion reports a runtime error",
-    await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()'),
+    await runStatus(browser),
   );
   // The last step is the error itself; the step before it holds the deep stack.
   await seek(browser, runawayMax - 1);
@@ -2382,15 +2514,16 @@ async function releaseRegressions(browser) {
   await seek(browser, caughtMax);
   const caught = await readStage(browser);
   check(
-    (await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()')) === "Completed",
+    (await runStatus(browser)) === "Completed",
     "a caught exception still completes",
-    await browser.evaluate('document.querySelector(".tb-state")?.textContent.trim()'),
+    await runStatus(browser),
   );
   await browser.evaluate(`document.querySelector('[data-tabid="output"]')?.click()`);
   await sleep(300);
+  // Studio has an output tab; Focus prints the same output inside the stage.
   const printed = await browser.evaluate(
     `(() => document.querySelector(".output-console")?.textContent ?? "")()`,
-  );
+  ) || caught.output || "";
   check(/after/.test(printed), "the program keeps running after a caught exception", printed.slice(0, 80));
   check(
     caught.result === "Completed" && /caught/.test(caught.output ?? "") && /after/.test(caught.output ?? ""),
@@ -2512,6 +2645,7 @@ async function main() {
     await playbackAndLayout(browser);
     await dataShapes(browser);
     await fallbacks(browser);
+    await inputSteps(browser);
     await productPages(browser);
     await releaseRegressions(browser);
     await consoleIsClean(browser);

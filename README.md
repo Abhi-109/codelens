@@ -281,8 +281,9 @@ claims an algorithm its evidence does not prove, or the planner stops being
 deterministic. It then runs the same corpus through the AI validator with a
 scripted mock — that measures validation and rejection, not a model.
 
-`check:browser` starts its own dev server and headless Chrome, then checks the motion
-canvas against real layout: consecutive swaps, an interrupted swap at 1x and 4x, mid-move
+`check:browser` starts its own dev server and headless Chrome, then drives the Focus
+surface (editor, input() values, Run and transport) and checks the motion canvas against
+real layout: consecutive swaps, an interrupted swap at 1x and 4x, mid-move
 Back and slider seeks, a burst of steps, comparisons, persistent green positions, themes,
 reduced motion, and short and long arrays. It also checks the recorded compositions: a
 chain of references drawn as one linked list, left/right references as a tree, a cycle as

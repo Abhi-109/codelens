@@ -33,9 +33,15 @@ canvas and inspector behind one toggle. See `docs/redesign.md`.
   `.motion-explain` selector, whose orphan declarations broke `vite build` (lightningcss
   rejected the stray token); the rule is restored. The latter was pre-existing and is
   stated here rather than hidden.
-- **Opt-in browser harness:** `check:browser` still drives the old Studio selectors. It
-  was not re-run; the Focus surface needs its own section there in a follow-up. This is a
-  limitation, not a pass.
+- **The opt-in browser harness now drives Focus.** `check:browser` opens and runs every
+  program through the Focus surface a learner lands on: `.focus-input`, the input()
+  values box, `.focus-run`, and the Focus status chip. Its transport actions accept both
+  label sets, so the Studio-only planner section still works, and the long-list checks
+  accept the Focus stage's own horizontal scroll instead of assuming the Studio row
+  scrolls. A new `input()` section supplies `Asha`, finds the recorded input step, and
+  asserts the prompt and value (`input "Your name? " → "Asha"`), that the step before the
+  read shows no prompt, that the output keeps both prompt and greeting, and that Restart
+  clears them. All 258 checks pass; no console errors.
 - **Universal coverage is measured (Phase 3a).** `src/visualizer/motion/coverage.js`
   classifies what one rendered step actually carries: line, operation, values, frames,
   output, return, ending, intro. `coverage.test.mjs` walks **every step of all 122 fixture
